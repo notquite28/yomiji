@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
@@ -17,13 +17,33 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'> & {
   syncRevision?: number;
 };
 
+type StudyActionTheme = {
+  surfaceColor: string;
+  borderColor: string;
+  pillColor: string;
+  mutedColor: string;
+  rippleColor: string;
+};
+
 export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, lifecycleSyncError, syncRevision }: Props) {
   const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { width } = useWindowDimensions();
+  const isCompact = width < 390;
+  const styles = makeStyles(theme, isCompact);
+  const entrance = useRef(new Animated.Value(0)).current;
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
 
   const refreshSummary = useCallback(async () => {
     const db = await openAppDatabase();
@@ -50,67 +70,116 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   };
 
   const isVacation = Boolean(summary?.vacationStartedAt);
+  const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
+  const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
+  const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
+  const srsRows = [
+    { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice },
+    { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru },
+    { label: 'Master', count: summary?.master ?? 0, color: theme.colors.master },
+    { label: 'Enlightened', count: summary?.enlightened ?? 0, color: theme.colors.enlightened },
+    { label: 'Burned', count: summary?.burned ?? 0, color: theme.colors.burned },
+  ];
+  const totalSrs = srsRows.reduce((total, row) => total + row.count, 0);
+  const maxSrsCount = Math.max(1, ...srsRows.map((row) => row.count));
+  const actionCardTheme: StudyActionTheme = {
+    surfaceColor: theme.isDark ? '#15141a' : '#fffdf8',
+    borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+    pillColor: theme.isDark ? '#201e26' : '#f2eee8',
+    mutedColor: theme.colors.mutedText,
+    rippleColor: theme.isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(32, 26, 36, 0.05)',
+  };
+  const entranceStyle = {
+    opacity: entrance,
+    transform: [
+      {
+        translateY: entrance.interpolate({
+          inputRange: [0, 1],
+          outputRange: [16, 0],
+        }),
+      },
+    ],
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefreshing} tintColor={theme.colors.kanji} onRefresh={sync} />}
       >
-        <View style={styles.headerRow}>
-          <View>
+        <Animated.View style={[styles.header, entranceStyle]}>
+          <View style={styles.headerCopy}>
             <Text style={styles.kicker}>Yomichi</Text>
             <Text style={styles.title}>{summary?.username ?? 'Local cache'}</Text>
-            <Text style={styles.subtitle}>{summary?.level ? `Level ${summary.level}` : 'Sync WaniKani to populate the dashboard.'}</Text>
+            <View style={styles.metaRow}>
+              <View style={styles.metaPill}>
+                <Text style={styles.metaPillText}>{levelText}</Text>
+              </View>
+              <View style={styles.metaPill}>
+                <Text style={styles.metaPillText}>{summary?.cachedSubjects ?? 0} cached</Text>
+              </View>
+            </View>
           </View>
-          <Pressable onPress={() => navigation.navigate('Settings')} style={styles.settingsButton}>
-            <Text style={styles.settingsText}>Settings</Text>
+          <Pressable onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
+            <SettingsIcon color={theme.colors.text} />
           </Pressable>
-        </View>
+        </Animated.View>
 
-        {isVacation ? <Text style={styles.vacationBanner}>Vacation mode is active. Reviews, lessons, notifications, and badges stay quiet.</Text> : null}
+        {isVacation ? <Text style={styles.vacationBanner}>Vacation mode active</Text> : null}
 
-        <View style={styles.actionStack}>
+        <Animated.View key={theme.isDark ? 'dark-actions' : 'light-actions'} style={[styles.actionStack, entranceStyle]}>
           <StudyAction
-            label="Advanced Lessons"
+            label="Lessons"
+            hint="Unlocked pool"
             value={summary?.availableLessons ?? 0}
             color={theme.colors.radical}
+            cardTheme={actionCardTheme}
+            isCompact={isCompact}
             disabled={isVacation}
             featured
             onPress={() => navigation.navigate('LessonSession')}
           />
           <StudyAction
             label="Reviews"
+            hint="Due now"
             value={summary?.availableReviews ?? 0}
             color={theme.colors.kanji}
+            cardTheme={actionCardTheme}
+            isCompact={isCompact}
             disabled={isVacation}
             onPress={() => navigation.navigate('ReviewSession')}
           />
-        </View>
-
-        <Text style={styles.lessonFootnote}>
-          WaniKani's recommended daily lesson queue is separate from the unlocked Advanced lesson pool. The API-backed count shown here is unlocked lessons.
-        </Text>
+        </Animated.View>
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>SRS Stack</Text>
-            <Text style={styles.panelMeta}>{summary?.cachedSubjects ?? 0} subjects cached</Text>
+            <Text style={styles.panelTitle}>SRS</Text>
+            <Text style={styles.panelMeta}>{totalSrs} active</Text>
           </View>
-          <SrsRow label="Apprentice" count={summary?.apprentice ?? 0} color={theme.colors.apprentice} textColor={theme.colors.text} mutedColor={theme.colors.mutedText} />
-          <SrsRow label="Guru" count={summary?.guru ?? 0} color={theme.colors.guru} textColor={theme.colors.text} mutedColor={theme.colors.mutedText} />
-          <SrsRow label="Master" count={summary?.master ?? 0} color={theme.colors.master} textColor={theme.colors.text} mutedColor={theme.colors.mutedText} />
-          <SrsRow label="Enlightened" count={summary?.enlightened ?? 0} color={theme.colors.enlightened} textColor={theme.colors.text} mutedColor={theme.colors.mutedText} />
-          <SrsRow label="Burned" count={summary?.burned ?? 0} color={theme.colors.burned} textColor={theme.colors.text} mutedColor={theme.colors.mutedText} />
+          {srsRows.map((row) => (
+            <SrsRow
+              key={row.label}
+              label={row.label}
+              count={row.count}
+              color={row.color}
+              maxCount={maxSrsCount}
+              textColor={theme.colors.text}
+              mutedColor={theme.colors.mutedText}
+              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+            />
+          ))}
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Sync Foundation</Text>
-          <Text style={styles.bodyText}>{syncProgress?.label ?? lifecycleSyncProgress?.label ?? 'Pull to refresh or run sync to update the local SQLite cache.'}</Text>
-          <Text style={styles.bodyText}>Last sync: {summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'not yet synced'}</Text>
+          <View style={styles.panelHeader}>
+            <Text style={styles.panelTitle}>Sync</Text>
+            <Text style={styles.panelMeta}>{lastSyncedText}</Text>
+          </View>
+          <Text style={styles.bodyText}>{syncStatus}</Text>
           {error || lifecycleSyncError ? <Text style={styles.errorText}>{error ?? lifecycleSyncError}</Text> : null}
           <Pressable disabled={isRefreshing} onPress={sync} style={({ pressed }) => [styles.primaryButton, (pressed || isRefreshing) && styles.pressed]}>
-            <Text style={styles.primaryButtonText}>{isRefreshing ? 'Syncing...' : 'Run Sync'}</Text>
+            <Text style={styles.primaryButtonText}>{isRefreshing ? 'Syncing...' : 'Sync now'}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -120,46 +189,109 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
 
 function StudyAction({
   label,
+  hint,
   value,
   color,
+  cardTheme,
+  isCompact,
   disabled,
   featured = false,
   onPress,
 }: {
   label: string;
+  hint: string;
   value: number;
   color: string;
+  cardTheme: StudyActionTheme;
+  isCompact: boolean;
   disabled: boolean;
   featured?: boolean;
   onPress: () => void;
 }) {
   const isDisabled = disabled || value <= 0;
+  const iconColor = isDisabled ? cardTheme.mutedColor : color;
   return (
     <Pressable
       disabled={isDisabled}
       onPress={onPress}
+      android_ripple={{ color: cardTheme.rippleColor }}
       style={({ pressed }) => [
         actionStyles.card,
         featured ? actionStyles.featuredCard : actionStyles.secondaryCard,
-        { backgroundColor: color, opacity: isDisabled ? 0.45 : pressed ? 0.72 : 1 },
+        isCompact && actionStyles.compactCard,
+        {
+          backgroundColor: cardTheme.surfaceColor,
+          borderColor: cardTheme.borderColor,
+          opacity: isDisabled ? 0.5 : pressed ? 0.8 : 1,
+        },
       ]}
     >
-      <Text style={[actionStyles.value, featured && actionStyles.featuredValue]}>{value}</Text>
-      <View>
-        <Text style={[actionStyles.label, featured && actionStyles.featuredLabel]}>{label}</Text>
-        {featured ? <Text style={actionStyles.featuredHint}>Unlocked lesson pool</Text> : null}
-        {!featured ? <Text style={actionStyles.secondaryHint}>Start session</Text> : null}
+      <View pointerEvents="none" style={[actionStyles.accentMark, { backgroundColor: color }]} />
+      <Text style={[actionStyles.label, { color: cardTheme.mutedColor }]}>{label}</Text>
+      <View style={[actionStyles.statusPill, { backgroundColor: cardTheme.pillColor }]}>
+        <ArrowIcon color={iconColor} />
+      </View>
+      <View style={actionStyles.actionBody}>
+        <Text
+          numberOfLines={1}
+          style={[actionStyles.value, featured && actionStyles.featuredValue, { color }]}
+        >
+          {value}
+        </Text>
+        <Text style={[actionStyles.hint, { color: cardTheme.mutedColor }]}>{hint}</Text>
       </View>
     </Pressable>
   );
 }
 
-function SrsRow({ label, count, color, textColor, mutedColor }: { label: string; count: number; color: string; textColor: string; mutedColor: string }) {
+function ArrowIcon({ color }: { color: string }) {
+  return (
+    <View style={actionStyles.arrowIcon}>
+      <View style={[actionStyles.arrowStem, { backgroundColor: color }]} />
+      <View style={[actionStyles.arrowHeadTop, { backgroundColor: color }]} />
+      <View style={[actionStyles.arrowHeadBottom, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function SettingsIcon({ color }: { color: string }) {
+  return (
+    <View style={actionStyles.settingsIcon}>
+      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 16 }]} />
+      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 11 }]} />
+      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 14 }]} />
+    </View>
+  );
+}
+
+function SrsRow({
+  label,
+  count,
+  color,
+  maxCount,
+  textColor,
+  mutedColor,
+  trackColor,
+}: {
+  label: string;
+  count: number;
+  color: string;
+  maxCount: number;
+  textColor: string;
+  mutedColor: string;
+  trackColor: string;
+}) {
+  const fillWidth = `${Math.round((count / maxCount) * 100)}%` as `${number}%`;
   return (
     <View style={actionStyles.srsRow}>
-      <View style={[actionStyles.dot, { backgroundColor: color }]} />
-      <Text style={[actionStyles.srsLabel, { color: mutedColor }]}>{label}</Text>
-      <Text style={[actionStyles.srsCount, { color: textColor }]}>{count}</Text>
+      <View style={actionStyles.srsTextRow}>
+        <View style={[actionStyles.dot, { backgroundColor: color }]} />
+        <Text style={[actionStyles.srsLabel, { color: mutedColor }]}>{label}</Text>
+        <Text style={[actionStyles.srsCount, { color: textColor }]}>{count}</Text>
+      </View>
+      <View style={[actionStyles.srsTrack, { backgroundColor: trackColor }]}>
+        <View style={[actionStyles.srsFill, { backgroundColor: color, width: fillWidth }]} />
+      </View>
     </View>
   );
 }
@@ -170,53 +302,110 @@ function formatDate(value: string) {
 
 const actionStyles = StyleSheet.create({
   card: {
-    borderRadius: 28,
-    justifyContent: 'center',
-    padding: 20,
+    overflow: 'hidden',
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 18,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
   featuredCard: {
     flex: 1.65,
-    minHeight: 164,
-    borderRadius: 32,
+    minHeight: 172,
+    borderRadius: 28,
   },
   secondaryCard: {
     flex: 1,
-    minHeight: 164,
+    minHeight: 172,
   },
-  value: {
-    color: '#ffffff',
-    fontSize: 34,
-    fontWeight: '900',
+  compactCard: {
+    flex: 0,
+    minHeight: 150,
   },
-  featuredValue: {
-    fontSize: 66,
+  accentMark: {
+    position: 'absolute',
+    left: 18,
+    bottom: 18,
+    width: 28,
+    height: 3,
+    borderRadius: 999,
   },
   label: {
-    color: '#ffffff',
-    fontSize: 16,
+    position: 'absolute',
+    top: 22,
+    left: 18,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: 0.9,
+    lineHeight: 14,
     textTransform: 'uppercase',
   },
-  featuredLabel: {
-    fontSize: 18,
+  statusPill: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
   },
-  featuredHint: {
-    marginTop: 8,
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-    opacity: 0.84,
+  arrowIcon: {
+    width: 15,
+    height: 12,
+    justifyContent: 'center',
   },
-  secondaryHint: {
-    marginTop: 4,
-    color: '#ffffff',
+  arrowStem: {
+    width: 15,
+    height: 2,
+    borderRadius: 999,
+  },
+  arrowHeadTop: {
+    position: 'absolute',
+    right: -1,
+    top: 2,
+    width: 8,
+    height: 2,
+    borderRadius: 999,
+    transform: [{ rotate: '45deg' }],
+  },
+  arrowHeadBottom: {
+    position: 'absolute',
+    right: -1,
+    bottom: 2,
+    width: 8,
+    height: 2,
+    borderRadius: 999,
+    transform: [{ rotate: '-45deg' }],
+  },
+  actionBody: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingTop: 50,
+    paddingBottom: 12,
+  },
+  value: {
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: -1.6,
+    lineHeight: 48,
+  },
+  featuredValue: {
+    fontSize: 68,
+    lineHeight: 74,
+  },
+  hint: {
     fontSize: 13,
-    fontWeight: '800',
-    opacity: 0.82,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   srsRow: {
-    minHeight: 42,
+    gap: 8,
+  },
+  srsTextRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -235,50 +424,94 @@ const actionStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
+  srsTrack: {
+    overflow: 'hidden',
+    height: 8,
+    borderRadius: 999,
+  },
+  srsFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  settingsIcon: {
+    width: 18,
+    gap: 4,
+    alignItems: 'flex-end',
+  },
+  settingsLine: {
+    height: 2,
+    borderRadius: 999,
+  },
 });
 
-function makeStyles(theme: AppTheme) {
+function makeStyles(theme: AppTheme, isCompact: boolean) {
   return StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
     },
     content: {
-      padding: 20,
-      gap: 18,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 28,
+      gap: 14,
     },
-    headerRow: {
+    header: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
       gap: 16,
+      paddingHorizontal: 2,
+      paddingTop: 6,
+      paddingBottom: 4,
+    },
+    headerCopy: {
+      flex: 1,
     },
     kicker: {
-      color: theme.colors.vocabulary,
+      color: theme.colors.mutedText,
       fontSize: 12,
-      fontWeight: '900',
-      letterSpacing: 1.4,
+      fontWeight: '800',
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
     },
     title: {
-      marginTop: 4,
+      marginTop: 6,
       color: theme.colors.text,
       fontSize: 34,
+      lineHeight: 39,
       fontWeight: '900',
+      letterSpacing: -1.2,
     },
-    subtitle: {
-      marginTop: 4,
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      fontWeight: '700',
+    metaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 10,
+    },
+    metaPill: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
+      borderWidth: 1,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
+    },
+    metaPillText: {
+      color: theme.colors.text,
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.4,
     },
     settingsButton: {
       borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: theme.colors.surface,
+      width: 42,
+      height: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
     },
     settingsText: {
       color: theme.colors.text,
@@ -288,29 +521,30 @@ function makeStyles(theme: AppTheme) {
     vacationBanner: {
       overflow: 'hidden',
       borderRadius: 18,
-      padding: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 13,
       backgroundColor: theme.colors.warning,
       color: theme.isDark ? '#1d1200' : '#ffffff',
       fontSize: 14,
       fontWeight: '900',
+      letterSpacing: 0.3,
     },
     actionStack: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    lessonFootnote: {
-      marginTop: -8,
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      lineHeight: 18,
+      flexDirection: isCompact ? 'column' : 'row',
+      gap: 14,
     },
     panel: {
-      borderRadius: 28,
-      padding: 20,
-      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      gap: 10,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+      gap: 14,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.16 : 0.05,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
     panelHeader: {
       flexDirection: 'row',
@@ -320,18 +554,20 @@ function makeStyles(theme: AppTheme) {
     },
     panelTitle: {
       color: theme.colors.text,
-      fontSize: 20,
+      fontSize: 21,
       fontWeight: '900',
+      letterSpacing: -0.3,
     },
     panelMeta: {
       color: theme.colors.mutedText,
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: '800',
     },
     bodyText: {
       color: theme.colors.mutedText,
       fontSize: 15,
-      lineHeight: 22,
+      lineHeight: 21,
+      fontWeight: '700',
     },
     errorText: {
       color: theme.colors.danger,
@@ -340,19 +576,26 @@ function makeStyles(theme: AppTheme) {
       fontWeight: '700',
     },
     primaryButton: {
-      minHeight: 52,
+      minHeight: 54,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 18,
+      borderRadius: 20,
       backgroundColor: theme.colors.kanji,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.2 : 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
     },
     primaryButtonText: {
       color: '#ffffff',
       fontSize: 16,
       fontWeight: '900',
+      letterSpacing: 0.2,
     },
     pressed: {
       opacity: 0.7,
+      transform: [{ scale: 0.99 }],
     },
   });
 }

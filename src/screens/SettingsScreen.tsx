@@ -39,22 +39,25 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>This first slice wires the sections that need secure storage, local data reset, and future setting persistence.</Text>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Appearance and Notifications</Text>
-          <Text style={styles.bodyText}>Light, dark, system appearance, local notifications, and badges are scaffolded in the product model and will get full controls next.</Text>
+        <View style={styles.headerBlock}>
+          <Text style={styles.kicker}>Yomichi</Text>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Account, appearance, and local data.</Text>
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Lessons and Reviews</Text>
-          <Text style={styles.bodyText}>Default Tsurukame review order, batching, Anki mode, typo handling, and audio settings are represented in TypeScript settings.</Text>
+          <Text style={styles.panelTitle}>Appearance</Text>
+          <Text style={styles.bodyText}>Theme and notification controls are scaffolded.</Text>
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Study</Text>
+          <Text style={styles.bodyText}>Review order, batching, typo handling, and audio settings.</Text>
         </View>
 
         <View style={styles.dangerPanel}>
           <Text style={styles.panelTitle}>Log Out</Text>
-          <Text style={styles.bodyText}>Clears the secure token and local SQLite cache, including pending queues.</Text>
+          <Text style={styles.bodyText}>Clears token, cache, and pending queues.</Text>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           <Pressable disabled={isLoggingOut} onPress={logout} style={({ pressed }) => [styles.logoutButton, (pressed || isLoggingOut) && styles.pressed]}>
             <Text style={styles.logoutText}>{isLoggingOut ? 'Logging out...' : 'Log Out and Clear Cache'}</Text>
@@ -69,71 +72,107 @@ function makeStyles(theme: AppTheme) {
   return StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
     },
     content: {
-      padding: 20,
-      gap: 16,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 28,
+      gap: 14,
     },
     backButton: {
       alignSelf: 'flex-start',
       borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: theme.colors.surface,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
     },
     backText: {
       color: theme.colors.text,
       fontWeight: '900',
     },
+    headerBlock: {
+      paddingHorizontal: 2,
+      paddingTop: 14,
+      paddingBottom: 6,
+    },
+    kicker: {
+      color: theme.colors.mutedText,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
     title: {
+      marginTop: 6,
       color: theme.colors.text,
-      fontSize: 36,
+      fontSize: 40,
+      lineHeight: 46,
       fontWeight: '900',
+      letterSpacing: -1.4,
     },
     subtitle: {
+      marginTop: 10,
       color: theme.colors.mutedText,
       fontSize: 16,
-      lineHeight: 23,
+      lineHeight: 22,
+      fontWeight: '700',
     },
     panel: {
-      borderRadius: 28,
-      padding: 20,
-      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      gap: 8,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+      gap: 10,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.16 : 0.05,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
     dangerPanel: {
-      borderRadius: 28,
-      padding: 20,
-      backgroundColor: theme.colors.surfaceElevated,
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
       borderColor: theme.colors.danger,
       gap: 12,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.16 : 0.05,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
     },
     panelTitle: {
       color: theme.colors.text,
-      fontSize: 20,
+      fontSize: 21,
       fontWeight: '900',
+      letterSpacing: -0.3,
     },
     bodyText: {
       color: theme.colors.mutedText,
       fontSize: 15,
-      lineHeight: 22,
+      lineHeight: 21,
+      fontWeight: '700',
     },
     errorText: {
       color: theme.colors.danger,
       fontWeight: '800',
     },
     logoutButton: {
-      minHeight: 52,
+      minHeight: 54,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 18,
+      borderRadius: 20,
       backgroundColor: theme.colors.danger,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.2 : 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
     },
     logoutText: {
       color: '#ffffff',
@@ -142,6 +181,7 @@ function makeStyles(theme: AppTheme) {
     },
     pressed: {
       opacity: 0.72,
+      transform: [{ scale: 0.99 }],
     },
   });
 }
