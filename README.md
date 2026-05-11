@@ -161,7 +161,7 @@ src/
   domain/           # Pure logic layer — no React, no UI imports
     answers/        # Answer checking, romaji-to-kana conversion
     api/            # WaniKani v2 REST client (WaniKaniClient.ts) + types
-    db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts)
+    db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts, subjectRepository.ts, assignmentRepository.ts, studyMaterialRepository.ts)
     dashboard/      # Dashboard query aggregation
     settings/       # AppSettings, load/save via AsyncStorage
     storage/        # Secure token storage (expo-secure-store)

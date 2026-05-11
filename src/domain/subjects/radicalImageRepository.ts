@@ -1,19 +1,12 @@
-import { SubjectData } from '../api/types';
 import { SubjectAnswerData } from '../answers/answerChecker';
 import { AppDatabase } from '../db/database';
-import { getCharacterImageUrl, isCharacterImageSvg } from '../study/studyRepository';
-
-type SubjectResource = {
-  id: number;
-  object: string;
-  data: SubjectData;
-};
-
-type RadicalImageRow = {
-  id: number;
-  level: number;
-  payload: string;
-};
+import {
+  getCharacterImageUrl,
+  getImageOnlyRadicals,
+  isCharacterImageSvg,
+  parseSubjectResource,
+  RadicalImageRow,
+} from '../db/subjectRepository';
 
 export type RadicalImagePreviewItem = {
   id: number;
@@ -26,21 +19,12 @@ export type RadicalImagePreviewItem = {
 };
 
 export async function getRadicalImagePreviewItems(db: AppDatabase, limit = 100) {
-  const rows = await db.getAllAsync<RadicalImageRow>(
-    `SELECT id, level, payload
-     FROM subjects
-     WHERE subject_type = 'radical'
-       AND (japanese IS NULL OR japanese = '')
-     ORDER BY level ASC, id ASC
-     LIMIT ?`,
-    limit,
-  );
-
+  const rows = await getImageOnlyRadicals(db, limit);
   return rows.map(rowToPreviewItem).filter((item) => item.imageUrl);
 }
 
 function rowToPreviewItem(row: RadicalImageRow): RadicalImagePreviewItem {
-  const subject = JSON.parse(row.payload) as SubjectResource;
+  const subject = parseSubjectResource(row.payload);
   const imageUrl = getCharacterImageUrl(subject.data);
   const images = subject.data.character_images ?? [];
   return {

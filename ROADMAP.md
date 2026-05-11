@@ -32,13 +32,13 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M0: Architecture Hardening
 
-- [ ] Document the SQLite schema mapping versus the original protobuf model.
+- [x] Document the SQLite schema mapping versus the original protobuf model.
 - [x] Add migration tests for schema creation and future migrations.
 - [x] Add sanitized error logging helpers and wire API/sync failures into `error_log`.
 - [x] Add a diagnostics screen for app version, sync state, pending queue counts, and sanitized export.
 - [x] Add a radical image diagnostics preview for cached image-only radicals.
 - [x] Add network-state awareness so sync errors distinguish offline, timeout, auth, and rate-limit states.
-- [ ] Add a simple local repository layer boundary for subjects, assignments, study materials, and review stats.
+- [x] Add a simple local repository layer boundary for subjects, assignments, study materials, and review stats.
 
 ## M1: Sync Reliability
 

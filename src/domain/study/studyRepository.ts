@@ -1,18 +1,18 @@
-import { AssignmentData, StudyMaterialData, SubjectData } from '../api/types';
+import { AssignmentData, StudyMaterialData } from '../api/types';
 import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChecker';
+import { clearAssignmentAvailableAt, markAssignmentStarted } from '../db/assignmentRepository';
 import { AppDatabase } from '../db/database';
+import { upsertWithSynonyms } from '../db/studyMaterialRepository';
+import {
+  normalizeSubjectType,
+  parseSubjectPayload,
+} from '../db/subjectRepository';
 import { StudyMaterialPayload } from '../api/types';
 import { AppSettings, SubjectType } from '../settings/settings';
 
 type AssignmentResource = {
   id: number;
   data: AssignmentData;
-};
-
-type SubjectResource = {
-  id: number;
-  object: string;
-  data: SubjectData;
 };
 
 type StudyMaterialResource = {
@@ -177,7 +177,7 @@ export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
       }),
       createdAt,
     );
-    await db.runAsync('UPDATE assignments SET available_at = NULL WHERE id = ?', result.assignmentId);
+    await clearAssignmentAvailableAt(db, result.assignmentId);
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
@@ -196,7 +196,7 @@ export async function queueLessonStart(db: AppDatabase, assignmentId: number) {
       JSON.stringify({ assignmentId, startedAt }),
       startedAt,
     );
-    await db.runAsync('UPDATE assignments SET started_at = ?, srs_stage = 1 WHERE id = ?', startedAt, assignmentId);
+    await markAssignmentStarted(db, assignmentId, startedAt);
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
@@ -216,43 +216,7 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
       JSON.stringify(payload),
       createdAt,
     );
-
-    const existing = await db.getFirstAsync<{ id: number; payload: string }>(
-      'SELECT id, payload FROM study_materials WHERE subject_id = ?',
-      payload.subjectId,
-    );
-
-    if (existing) {
-      const parsed = JSON.parse(existing.payload) as { data: Record<string, unknown> };
-      if (payload.meaningSynonyms !== undefined) {
-        parsed.data.meaning_synonyms = payload.meaningSynonyms;
-      }
-      await db.runAsync(
-        'UPDATE study_materials SET payload = ? WHERE id = ?',
-        JSON.stringify(parsed),
-        existing.id,
-      );
-    } else {
-      const localId = -payload.subjectId;
-      await db.runAsync(
-        `INSERT INTO study_materials (id, subject_id, payload, updated_at)
-         VALUES (?, ?, ?, ?)`,
-        localId,
-        payload.subjectId,
-        JSON.stringify({
-          id: localId,
-          object: 'study_material',
-          data: {
-            subject_id: payload.subjectId,
-            meaning_synonyms: payload.meaningSynonyms ?? [],
-            meaning_note: payload.meaningNote ?? '',
-            reading_note: payload.readingNote ?? '',
-          },
-        }),
-        createdAt,
-      );
-    }
-
+    await upsertWithSynonyms(db, payload);
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
@@ -262,48 +226,17 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
 
 function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
   const assignment = JSON.parse(row.assignment_payload) as AssignmentResource;
-  const subject = JSON.parse(row.subject_payload) as SubjectResource;
   const studyMaterial = row.study_material_payload ? (JSON.parse(row.study_material_payload) as StudyMaterialResource) : undefined;
-  const subjectType = normalizeSubjectType(subject.object || row.subject_type || assignment.data.subject_type);
+  const parsed = parseSubjectPayload(row.subject_id, row.subject_payload);
+  const subjectType = normalizeSubjectType(row.subject_type || assignment.data.subject_type);
 
   return {
     assignmentId: row.assignment_id,
     subjectId: row.subject_id,
     subjectType,
-    level: row.level ?? subject.data.level,
+    level: row.level ?? undefined,
     srsStage: row.srs_stage,
-    subject: {
-      id: row.subject_id,
-      type: subjectType,
-      japanese: subject.data.characters ?? '',
-      characterImageUrl: getCharacterImageUrl(subject.data),
-      characterImageIsSvg: isCharacterImageSvg(subject.data),
-      meanings: [
-        ...(subject.data.meanings ?? []).map((meaning) => ({
-          meaning: meaning.meaning,
-          type: meaning.primary ? 'primary' : 'secondary',
-          acceptedAnswer: meaning.accepted_answer ?? true,
-        })),
-        ...(subject.data.auxiliary_meanings ?? []).map((meaning) => ({
-          meaning: meaning.meaning,
-          type: meaning.type === 'blacklist' ? 'blacklist' : 'auxiliary_whitelist',
-          acceptedAnswer: meaning.type !== 'blacklist',
-        })),
-      ],
-      readings: (subject.data.readings ?? []).map((reading) => ({
-        reading: reading.reading,
-        primary: reading.primary ?? reading.accepted_answer ?? false,
-        acceptedAnswer: reading.accepted_answer ?? reading.primary ?? true,
-      })),
-      componentSubjectIds: subject.data.component_subject_ids ?? [],
-      meaningMnemonic: subject.data.meaning_mnemonic,
-      meaningHint: subject.data.meaning_hint,
-      readingMnemonic: subject.data.reading_mnemonic,
-      readingHint: subject.data.reading_hint,
-      contextSentences: subject.data.context_sentences,
-      partsOfSpeech: subject.data.parts_of_speech,
-      amalgamationSubjectIds: subject.data.amalgamation_subject_ids ?? [],
-    },
+    subject: parsed,
     studyMaterials: studyMaterial
       ? {
           meaningSynonyms: studyMaterial.data.meaning_synonyms ?? [],
@@ -314,9 +247,7 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
 }
 
 export async function getSubjectsByIds(db: AppDatabase, ids: number[]): Promise<Map<number, SubjectAnswerData>> {
-  if (ids.length === 0) {
-    return new Map();
-  }
+  if (ids.length === 0) return new Map();
 
   const placeholders = ids.map(() => '?').join(',');
   const rows = await db.getAllAsync<{ id: number; payload: string }>(
@@ -326,38 +257,10 @@ export async function getSubjectsByIds(db: AppDatabase, ids: number[]): Promise<
 
   const result = new Map<number, SubjectAnswerData>();
   for (const row of rows) {
-    const resource = JSON.parse(row.payload) as SubjectResource;
-    const subjectType = normalizeSubjectType(resource.object);
-    result.set(row.id, {
-      id: row.id,
-      type: subjectType,
-      japanese: resource.data.characters ?? '',
-      characterImageUrl: getCharacterImageUrl(resource.data),
-      characterImageIsSvg: isCharacterImageSvg(resource.data),
-      meanings: [
-        ...(resource.data.meanings ?? []).map((meaning) => ({
-          meaning: meaning.meaning,
-          type: meaning.primary ? 'primary' : 'secondary',
-          acceptedAnswer: meaning.accepted_answer ?? true,
-        })),
-        ...(resource.data.auxiliary_meanings ?? []).map((meaning) => ({
-          meaning: meaning.meaning,
-          type: meaning.type === 'blacklist' ? 'blacklist' : 'auxiliary_whitelist',
-          acceptedAnswer: meaning.type !== 'blacklist',
-        })),
-      ],
-      readings: (resource.data.readings ?? []).map((reading) => ({
-        reading: reading.reading,
-        primary: reading.primary ?? reading.accepted_answer ?? false,
-        acceptedAnswer: reading.accepted_answer ?? reading.primary ?? true,
-      })),
-    });
+    const parsed = parseSubjectPayload(row.id, row.payload);
+    if (parsed) result.set(row.id, parsed);
   }
   return result;
-}
-
-function normalizeSubjectType(subjectType: string) {
-  return subjectType === 'kana_vocabulary' ? 'vocabulary' : subjectType;
 }
 
 function hasPrompt(item: StudyQueueItem) {
@@ -384,48 +287,4 @@ function shuffleArray<T>(array: T[]): void {
   }
 }
 
-export function getCharacterImageUrl(subject: SubjectData) {
-  const images = subject.character_images ?? [];
-
-  const svgWithInlineStyles = images.find(
-    (image) => image.content_type === 'image/svg+xml' && image.metadata?.inline_styles === true,
-  );
-  if (svgWithInlineStyles?.url) {
-    return svgWithInlineStyles.url;
-  }
-
-  const pngs = images.filter((image) => image.content_type === 'image/png');
-  return (
-    pngs.find((image) => image.metadata?.style_name === 'original')?.url ??
-    pngs[0]?.url ??
-    images.find((image) => image.content_type === 'image/svg+xml')?.url
-  );
-}
-
-function isDarkImageColor(color?: string) {
-  if (!color) {
-    return false;
-  }
-  const normalized = color.replace('#', '').toLowerCase();
-  if (normalized.length !== 6) {
-    return false;
-  }
-  const red = Number.parseInt(normalized.slice(0, 2), 16);
-  const green = Number.parseInt(normalized.slice(2, 4), 16);
-  const blue = Number.parseInt(normalized.slice(4, 6), 16);
-  if (!Number.isFinite(red) || !Number.isFinite(green) || !Number.isFinite(blue)) {
-    return false;
-  }
-  return red * 0.299 + green * 0.587 + blue * 0.114 < 180;
-}
-
-export function isCharacterImageSvg(subject: SubjectData) {
-  const images = subject.character_images ?? [];
-  const url = getCharacterImageUrl(subject);
-  if (!url) {
-    return false;
-  }
-  return images.some(
-    (image) => image.url === url && image.content_type === 'image/svg+xml',
-  );
-}
+export { getCharacterImageUrl, isCharacterImageSvg } from '../db/subjectRepository';
