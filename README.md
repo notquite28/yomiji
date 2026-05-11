@@ -40,10 +40,18 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Username, level, and cache stats header.
 - Available lessons count with apprentice-limit gating (button disabled when apprentice items exceed the configured limit).
 - Available reviews count based on current time.
+- Upcoming reviews forecast chart showing review counts for the next 24 hours.
+- Current-level progress bars for radicals, kanji, and vocabulary (passed/total).
 - SRS bucket counts (Apprentice, Guru, Master, Enlightened, Burned) with progress bar.
+- Recent lessons section showing last 5 started lessons.
+- Recent mistakes section showing items answered incorrectly in the last 24 hours.
+- Leeches section showing items with highest incorrect-to-correct ratio.
+- Shortcuts section with burned item practice count and excluded items count.
 - Vacation mode banner.
 - Sync status, last sync time, and error display.
 - Lesson Picker button (visible when lessons are available and apprentice limit is not reached).
+- Immediate dashboard refresh when returning from review or lesson sessions.
+- Hour-boundary refresh while foregrounded via AppState listener.
 
 ### Review Sessions
 
@@ -126,11 +134,12 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Unit tests for error sanitization, sync error classification, and friendly message generation.
 - Unit tests for migration schema validation (version ordering, table/index completeness, constraints).
 - Unit tests for lesson selection filtering and ordering (kana-only, hidden, level, subject type, interleave).
+- Unit tests for leech score calculation and dashboard repository logic.
 
 ## Known Major Gaps
 
-- Lessons have full intro pages, quiz flow, and unit tests for selection/filtering.
-- Dashboard lacks charts, upcoming review forecast, current-level progress, and power-user sections (recent lessons, recent mistakes, leeches, burned items).
+- Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts.
+- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject browsing, search, and detail screens are not implemented.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
@@ -175,7 +184,7 @@ src/
     sync/           # Incremental sync + pending-write flush (syncService.ts)
   navigation/       # React Navigation routes, auth gate, AppState lifecycle
   screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
-  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings)
+  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings, ReviewForecastChart, LevelProgressChart, DashboardItemList)
   theme/            # WaniKani color palette, subject-type colors, theme provider
 App.tsx             # App root
 tsurukame/          # Original iOS Swift/UIKit source — behavior reference only

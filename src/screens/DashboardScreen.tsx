@@ -1,14 +1,32 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
-import { DashboardSummary, getDashboardSummary } from '../domain/dashboard/dashboardRepository';
+import {
+  getBurnedItemCount,
+  getCurrentLevelProgress,
+  getExcludedItemCount,
+  getLeechedItems,
+  getRecentLessons,
+  getRecentMistakes,
+  getReviewForecast,
+  DashboardSummary,
+  getDashboardSummary,
+  LevelProgress,
+  LeechedItem,
+  RecentItem,
+  ReviewForecastHour,
+} from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
 import { describeSyncError } from '../domain/db/errorLog';
 import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import { isSyncAuthError, runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
+import { RecentItemList, LeechItemList } from '../components/DashboardItemList';
+import { LevelProgressChart } from '../components/LevelProgressChart';
+import { ReviewForecastChart } from '../components/ReviewForecastChart';
 import { SrsBar } from '../components/SrsBar';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
@@ -36,6 +54,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const styles = makeStyles(theme, isCompact);
   const entrance = useRef(new Animated.Value(0)).current;
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [forecast, setForecast] = useState<ReviewForecastHour[]>([]);
+  const [levelProgress, setLevelProgress] = useState<LevelProgress[]>([]);
+  const [recentLessons, setRecentLessons] = useState<RecentItem[]>([]);
+  const [recentMistakes, setRecentMistakes] = useState<RecentItem[]>([]);
+  const [apprenticeLeeches, setApprenticeLeeches] = useState<LeechedItem[]>([]);
+  const [allLeeches, setAllLeeches] = useState<LeechedItem[]>([]);
+  const [burnedCount, setBurnedCount] = useState(0);
+  const [excludedCount, setExcludedCount] = useState(0);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,12 +82,56 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
 
   const refreshSummary = useCallback(async () => {
     const db = await openAppDatabase();
-    setSummary(await getDashboardSummary(db));
+    const [s, f, lp, rl, rm, al, allL, bc, ec] = await Promise.all([
+      getDashboardSummary(db),
+      getReviewForecast(db, 24),
+      getCurrentLevelProgress(db),
+      getRecentLessons(db, 5),
+      getRecentMistakes(db, 5),
+      getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
+      getLeechedItems(db, { limit: 5 }),
+      getBurnedItemCount(db),
+      getExcludedItemCount(db),
+    ]);
+    setSummary(s);
+    setForecast(f);
+    setLevelProgress(lp);
+    setRecentLessons(rl);
+    setRecentMistakes(rm);
+    setApprenticeLeeches(al);
+    setAllLeeches(allL);
+    setBurnedCount(bc);
+    setExcludedCount(ec);
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshSummary().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+    }, [refreshSummary]),
+  );
+
+  const prevSyncRevision = useRef(syncRevision);
   useEffect(() => {
-    refreshSummary().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+    if (syncRevision !== prevSyncRevision.current) {
+      prevSyncRevision.current = syncRevision;
+      refreshSummary().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
+    }
   }, [refreshSummary, syncRevision]);
+
+  useEffect(() => {
+    if (!summary?.level) return;
+
+    let lastHour = new Date().getHours();
+    const interval = setInterval(() => {
+      const currentHour = new Date().getHours();
+      if (currentHour !== lastHour) {
+        lastHour = currentHour;
+        refreshSummary().catch(() => {});
+      }
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, [summary?.level, refreshSummary]);
 
   const sync = async () => {
     setError(null);
@@ -173,6 +243,37 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
           </Animated.View>
         ) : null}
 
+        {forecast.length > 0 ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Upcoming Reviews</Text>
+            </View>
+            <ReviewForecastChart
+              hours={forecast}
+              barColor={theme.colors.kanji}
+              textColor={theme.colors.text}
+              mutedColor={theme.colors.mutedText}
+              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+            />
+          </View>
+        ) : null}
+
+        {levelProgress.length > 0 ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Current Level</Text>
+              <Text style={styles.panelMeta}>Level {summary?.level}</Text>
+            </View>
+            <LevelProgressChart
+              progress={levelProgress}
+              colors={theme.colors}
+              textColor={theme.colors.text}
+              mutedColor={theme.colors.mutedText}
+              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
             <Text style={styles.panelTitle}>SRS</Text>
@@ -185,6 +286,54 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
           />
         </View>
+
+        {recentLessons.length > 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Recent Lessons</Text>
+            <RecentItemList items={recentLessons} colors={theme.colors} />
+          </View>
+        ) : null}
+
+        {recentMistakes.length > 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Recent Mistakes</Text>
+            <RecentItemList items={recentMistakes} colors={theme.colors} />
+          </View>
+        ) : null}
+
+        {allLeeches.length > 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Leeches</Text>
+            <LeechItemList items={allLeeches} colors={theme.colors} />
+          </View>
+        ) : null}
+
+        {apprenticeLeeches.length > 0 && allLeeches.length === 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Apprentice Leeches</Text>
+            <LeechItemList items={apprenticeLeeches} colors={theme.colors} />
+          </View>
+        ) : null}
+
+        {burnedCount > 0 || excludedCount > 0 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Shortcuts</Text>
+            {burnedCount > 0 ? (
+              <View style={[styles.shortcutRow, { opacity: 0.6 }]}>
+                <View style={[styles.typeDot, { backgroundColor: theme.colors.burned }]} />
+                <Text style={[styles.shortcutLabel, { color: theme.colors.mutedText }]}>Burned Item Practice</Text>
+                <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{burnedCount}</Text>
+              </View>
+            ) : null}
+            {excludedCount > 0 ? (
+              <View style={[styles.shortcutRow, { opacity: 0.6 }]}>
+                <View style={[styles.typeDot, { backgroundColor: theme.colors.mutedText }]} />
+                <Text style={[styles.shortcutLabel, { color: theme.colors.mutedText }]}>Excluded Items</Text>
+                <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{excludedCount}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
@@ -563,6 +712,28 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       fontSize: 14,
       fontWeight: '900',
       letterSpacing: 0.3,
+    },
+    shortcutRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(128, 128, 128, 0.08)',
+    },
+    typeDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 999,
+    },
+    shortcutLabel: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    shortcutMeta: {
+      fontSize: 12,
+      fontWeight: '700',
     },
   });
 }

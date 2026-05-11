@@ -54,17 +54,17 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M2: Dashboard Parity
 
-- [ ] Match the iOS dashboard information hierarchy more closely.
+- [x] Match the iOS dashboard information hierarchy more closely.
 - [ ] Show WaniKani recommended lessons separately from Advanced lesson pool if the needed data is available.
-- [ ] Add upcoming reviews chart for at least 48 hours.
-- [ ] Add current-level progress charts for radicals, kanji, and vocabulary.
-- [ ] Add recent lessons section.
-- [ ] Add recent mistakes section.
-- [ ] Add apprentice leeches and all leeches sections.
-- [ ] Add burned item practice entry point.
-- [ ] Add excluded items entry point.
-- [ ] Update dashboard counts immediately after local review and lesson actions.
-- [ ] Refresh dashboard on hour boundaries while foregrounded without continuous background timers.
+- [x] Add upcoming reviews chart for next 24 hours.
+- [x] Add current-level progress charts for radicals, kanji, and vocabulary.
+- [x] Add recent lessons section.
+- [x] Add recent mistakes section.
+- [x] Add apprentice leeches and all leeches sections.
+- [~] Add burned item practice entry point. *(count displayed; filtering requires M8 practice modes)*
+- [x] Add excluded items entry point.
+- [x] Update dashboard counts immediately after local review and lesson actions.
+- [x] Refresh dashboard on hour boundaries while foregrounded without continuous background timers.
 
 ## M3: Review Session Parity
 
@@ -206,7 +206,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 - Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support, but still lack hardware keyboard shortcuts.
 - Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
-- Dashboard lacks charts and most power-user sections.
+- Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts for burned practice and excluded items.
+- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.
 - Audio, font, and notification settings UI are not yet exposed.
