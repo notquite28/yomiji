@@ -28,6 +28,7 @@ import { RecentItemList, LeechItemList } from '../components/DashboardItemList';
 import { LevelProgressChart } from '../components/LevelProgressChart';
 import { ReviewForecastChart } from '../components/ReviewForecastChart';
 import { SrsBar } from '../components/SrsBar';
+import { TooltipPressable } from '../components/TooltipPressable';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
@@ -197,10 +198,15 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             <Text style={styles.title}>{summary?.username ?? 'Local cache'}</Text>
             <View style={styles.metaRow}>
               {summary?.level ? (
-                <Pressable onPress={() => navigation.navigate('SubjectCatalog', { level: summary.level ?? 1 })} style={({ pressed }) => [styles.metaPill, pressed && styles.pressed]}>
+                <TooltipPressable
+                  tooltip="Browse subjects at your level"
+                  accessibilityHint="Opens subject catalog grouped by type"
+                  onPress={() => navigation.navigate('SubjectCatalog', { level: summary.level ?? 1 })}
+                  style={({ pressed }) => [styles.metaPill, pressed && styles.pressed]}
+                >
                   <GridIcon color={theme.colors.text} />
                   <Text style={styles.metaPillText}>{levelText}</Text>
-                </Pressable>
+                </TooltipPressable>
               ) : (
                 <View style={styles.metaPill}>
                   <Text style={styles.metaPillText}>{levelText}</Text>
@@ -212,12 +218,22 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             </View>
           </View>
           <View style={styles.headerActions}>
-            <Pressable onPress={() => navigation.navigate('SubjectSearch')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            <TooltipPressable
+              tooltip="Search subjects"
+              accessibilityHint="Search by Japanese, meaning, or reading"
+              onPress={() => navigation.navigate('SubjectSearch')}
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+            >
               <SearchIcon color={theme.colors.text} />
-            </Pressable>
-            <Pressable onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+            </TooltipPressable>
+            <TooltipPressable
+              tooltip="Settings"
+              accessibilityHint="Open app settings"
+              onPress={() => navigation.navigate('Settings')}
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+            >
               <SettingsIcon color={theme.colors.text} />
-            </Pressable>
+            </TooltipPressable>
           </View>
         </Animated.View>
 
@@ -391,6 +407,9 @@ function StudyAction({
       disabled={isDisabled}
       onPress={onPress}
       android_ripple={{ color: cardTheme.rippleColor }}
+      accessibilityLabel={`${label}: ${value} available`}
+      accessibilityHint={hint}
+      accessibilityRole="button"
       style={({ pressed }) => [
         actionStyles.card,
         featured ? actionStyles.featuredCard : actionStyles.secondaryCard,
@@ -402,9 +421,9 @@ function StudyAction({
         },
       ]}
     >
-      <View pointerEvents="none" style={[actionStyles.accentMark, { backgroundColor: color }]} />
+      <View pointerEvents="none" importantForAccessibility="no" style={[actionStyles.accentMark, { backgroundColor: color }]} />
       <Text style={[actionStyles.label, { color: cardTheme.mutedColor }]}>{label}</Text>
-      <View style={[actionStyles.statusPill, { backgroundColor: cardTheme.pillColor }]}>
+      <View style={[actionStyles.statusPill, { backgroundColor: cardTheme.pillColor }]} importantForAccessibility="no">
         <ArrowIcon color={iconColor} />
       </View>
       <View style={actionStyles.actionBody}>

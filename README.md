@@ -112,7 +112,14 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - `SubjectHeroCard` for displaying Japanese characters and radical images.
 - `SrsBar` for SRS stage progress visualization.
 - `ReviewQuickSettings` modal for in-session setting toggles.
+- `TooltipPressable` and `ToastHost` for long-press help toasts on ambiguous icons and controls.
 - CSS-aware SVG rendering for image-only radicals with inline style fallbacks.
+
+### Accessibility and Help
+
+- Long-press help toasts on dashboard level browse, search, settings, and session quick-settings controls.
+- Accessibility labels and hints for icon-only buttons, lesson/review action cards, and numeric setting steppers.
+- Decorative dots, accent marks, and arrow icons are hidden from assistive technology where adjacent text already conveys the meaning.
 
 ### Image-Only Radical Support
 

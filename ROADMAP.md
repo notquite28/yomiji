@@ -28,6 +28,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
 - [x] Android-first reading input with Tsurukame-style romaji-to-kana conversion.
 - [x] CSS-aware image-only radical rendering in reviews, lessons, and diagnostics.
+- [x] Long-press help toasts and accessibility labels for ambiguous dashboard/session controls.
 - [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, study queue image selection, error sanitization/classification, and migration validation.
 
 ## M0: Architecture Hardening

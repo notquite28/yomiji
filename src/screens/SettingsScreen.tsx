@@ -336,14 +336,20 @@ function SettingStepper({
           disabled={value <= min}
           onPress={() => onChange(Math.max(min, value - step))}
           style={[styles.stepperButton, value <= min && styles.stepperDisabled]}
+          accessibilityLabel={`Decrease ${label}`}
+          accessibilityHint={`Current value: ${value}`}
+          accessibilityRole="button"
         >
           <Text style={styles.stepperButtonText}>-</Text>
         </Pressable>
-        <Text style={styles.stepperValue}>{value}</Text>
+        <Text style={styles.stepperValue} accessibilityLabel={`${label}: ${value}`}>{value}</Text>
         <Pressable
           disabled={value >= max}
           onPress={() => onChange(Math.min(max, value + step))}
           style={[styles.stepperButton, value >= max && styles.stepperDisabled]}
+          accessibilityLabel={`Increase ${label}`}
+          accessibilityHint={`Current value: ${value}`}
+          accessibilityRole="button"
         >
           <Text style={styles.stepperButtonText}>+</Text>
         </Pressable>

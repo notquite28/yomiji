@@ -26,7 +26,7 @@ export function RecentItemList({
           disabled={!onPressItem}
           style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
         >
-          <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} />
+          <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} importantForAccessibility="no" />
           <Text style={[styles.itemJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
           <Text style={[styles.itemMeta, { color: colors.mutedText }]}>L{item.level}</Text>
         </Pressable>
@@ -56,8 +56,9 @@ export function LeechItemList({
           onPress={() => onPressItem?.(item.subjectId)}
           disabled={!onPressItem}
           style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
+          accessibilityLabel={`${item.japanese || '?  '}, Level ${item.level}, ${item.score}% incorrect`}
         >
-          <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} />
+          <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} importantForAccessibility="no" />
           <Text style={[styles.itemJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
           <Text style={[styles.itemMeta, { color: colors.mutedText }]}>{item.score}%</Text>
         </Pressable>

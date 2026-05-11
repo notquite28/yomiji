@@ -3,6 +3,7 @@ import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppNavigator } from './src/navigation/AppNavigator';
+import { ToastHost } from './src/components/TooltipPressable';
 import { AppThemeProvider, useAppTheme } from './src/theme/AppThemeProvider';
 
 function navigationTheme(theme: ReturnType<typeof useAppTheme>): Theme {
@@ -30,6 +31,7 @@ function Root() {
     <NavigationContainer theme={navigationTheme(theme)}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       <AppNavigator />
+      <ToastHost />
     </NavigationContainer>
   );
 }

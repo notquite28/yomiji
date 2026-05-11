@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TooltipPressable } from './TooltipPressable';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
 export function ScreenLayout({
@@ -86,9 +87,14 @@ export function SessionHeader({
       </Pressable>
       <Text style={styles.progressText}>{progress}</Text>
       {onSettings ? (
-        <Pressable onPress={onSettings} style={styles.settingsButton}>
+        <TooltipPressable
+          tooltip="Quick settings"
+          accessibilityHint="Wrap up, end session, or change answer mode"
+          onPress={onSettings}
+          style={styles.settingsButton}
+        >
           <Text style={styles.settingsButtonText}>⚙</Text>
-        </Pressable>
+        </TooltipPressable>
       ) : (
         <View style={styles.headerSpacer} />
       )}
