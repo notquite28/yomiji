@@ -12,7 +12,7 @@ import {
   ReviewSession,
   ReviewSessionSettings,
 } from '../domain/study/reviewSession';
-import { getReviewQueue, queueReviewResult, StudyQueueItem } from '../domain/study/studyRepository';
+import { getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
@@ -53,9 +53,12 @@ export function ReviewSessionScreen({ navigation }: Props) {
       meaningFirst: defaultSettings.meaningFirst,
       minimizeReviewPenalty: defaultSettings.minimizeReviewPenalty,
       skipKanjiReadings: defaultSettings.skipKanjiReadings,
+      enableCheats: defaultSettings.enableCheats,
     }),
     [],
   );
+
+  const enableCheats = settings.enableCheats;
 
   useEffect(() => {
     let isMounted = true;
@@ -182,6 +185,82 @@ export function ReviewSessionScreen({ navigation }: Props) {
     }
   };
 
+  const handleOverrideCorrect = () => {
+    if (!session || !feedback || feedback.correct || isContinuing) {
+      return;
+    }
+
+    const result = session.overrideCorrect();
+    setLastMarkResult(result);
+    setFeedback({
+      ...feedback,
+      correct: true,
+      message: 'Correct',
+      detail: 'Answer overridden as correct.',
+      subjectFinished: result.subjectFinished,
+    });
+    setRevision((r) => r + 1);
+  };
+
+  const handleAskAgainLater = async () => {
+    if (!session || !feedback || isContinuing) {
+      return;
+    }
+
+    setIsContinuing(true);
+    setError(null);
+
+    try {
+      session.moveActiveTaskToEnd();
+      setFeedback(null);
+      setAnswer('');
+      setLastMarkResult(null);
+      session.nextTask();
+      setRevision((r) => r + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setIsContinuing(false);
+    }
+  };
+
+  const handleAddSynonym = async () => {
+    if (!session || !feedback || feedback.correct || isContinuing) {
+      return;
+    }
+    if (feedback.taskType !== 'meaning' || !answer.trim()) {
+      return;
+    }
+
+    setIsContinuing(true);
+    setError(null);
+
+    try {
+      const result = session.addSynonym(answer.trim());
+      setLastMarkResult(result);
+      setFeedback({
+        ...feedback,
+        correct: true,
+        message: 'Synonym added',
+        detail: `"${answer.trim()}" added as a meaning synonym. Answer marked correct.`,
+        subjectFinished: result.subjectFinished,
+      });
+
+      const item = session.currentItem ?? feedback.item;
+      const db = await openAppDatabase();
+      await queueStudyMaterialUpdate(db, {
+        subjectId: item.subjectId,
+        meaningSynonyms: item.studyMaterials?.meaningSynonyms ?? [answer.trim()],
+      });
+
+      setRevision((r) => r + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setIsContinuing(false);
+    }
+  };
+
   const wrapUp = () => {
     if (!session || feedback || session.wrappingUp || !session.canWrapUp) {
       return;
@@ -190,6 +269,9 @@ export function ReviewSessionScreen({ navigation }: Props) {
     session.nextTask();
     setRevision((r) => r + 1);
   };
+
+  const showCheats = enableCheats && feedback && !feedback.correct;
+  const canAddSynonym = showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0;
 
   if (isLoading) {
     return <CenteredMessage label="Loading reviews..." />;
@@ -249,7 +331,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
         spellCheck={false}
         importantForAutofill="no"
         keyboardType={displayTaskType === 'meaning' ? 'visible-password' : 'default'}
-        placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : 'Type the reading in kana'}
+        placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
         placeholderTextColor={theme.colors.mutedText}
         style={styles.input}
         returnKeyType="done"
@@ -275,6 +357,46 @@ export function ReviewSessionScreen({ navigation }: Props) {
         </View>
       ) : null}
 
+      {showCheats ? (
+        <View style={styles.cheatGroup}>
+          <Pressable
+            disabled={isContinuing}
+            onPress={handleOverrideCorrect}
+            style={({ pressed }) => [
+              styles.cheatButton,
+              { borderColor: theme.colors.border },
+              (pressed || isContinuing) && styles.pressed,
+            ]}
+          >
+            <Text style={styles.cheatButtonText}>My answer was correct</Text>
+          </Pressable>
+          <Pressable
+            disabled={isContinuing}
+            onPress={handleAskAgainLater}
+            style={({ pressed }) => [
+              styles.cheatButton,
+              { borderColor: theme.colors.border },
+              (pressed || isContinuing) && styles.pressed,
+            ]}
+          >
+            <Text style={styles.cheatButtonText}>Try again later</Text>
+          </Pressable>
+          {canAddSynonym ? (
+            <Pressable
+              disabled={isContinuing}
+              onPress={handleAddSynonym}
+              style={({ pressed }) => [
+                styles.cheatButton,
+                { borderColor: theme.colors.border },
+                (pressed || isContinuing) && styles.pressed,
+              ]}
+            >
+              <Text style={styles.cheatButtonText}>Add as synonym</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Pressable
@@ -287,7 +409,13 @@ export function ReviewSessionScreen({ navigation }: Props) {
         ]}
       >
         <Text style={styles.primaryButtonText}>
-          {feedback ? (isContinuing ? 'Saving...' : 'Continue') : 'Submit Answer'}
+          {feedback
+            ? (isContinuing
+              ? 'Saving...'
+              : feedback.correct
+                ? 'Continue'
+                : 'Got it wrong')
+            : 'Submit Answer'}
         </Text>
       </Pressable>
 
@@ -493,6 +621,23 @@ function makeStyles(theme: AppTheme) {
       fontSize: 14,
       lineHeight: 20,
       fontWeight: '700',
+    },
+    cheatGroup: {
+      gap: 10,
+    },
+    cheatButton: {
+      minHeight: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+    },
+    cheatButtonText: {
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '800',
     },
     summaryHero: {
       minHeight: 210,

@@ -11,6 +11,7 @@ export type ReviewSessionSettings = {
   meaningFirst: boolean;
   minimizeReviewPenalty: boolean;
   skipKanjiReadings: boolean;
+  enableCheats: boolean;
 };
 
 export type ReviewItem = {
@@ -384,11 +385,11 @@ export class ReviewSession {
     return { subjectFinished, correct };
   }
 
-  overrideCorrect(): void {
+  overrideCorrect(): MarkResult {
     const task = this.currentItem;
     const taskType = this.activeTaskType;
     if (!task || !taskType) {
-      return;
+      return { subjectFinished: false, correct: true };
     }
 
     if (taskType === 'meaning') {
@@ -407,6 +408,48 @@ export class ReviewSession {
 
     this._tasksAnsweredCorrectly += 1;
     task.returnDelay = 0;
+
+    return this.finalizeIfFinished(task);
+  }
+
+  addSynonym(text: string): MarkResult {
+    const task = this.currentItem;
+    if (!task) {
+      return { subjectFinished: false, correct: true };
+    }
+
+    if (!task.studyMaterials) {
+      task.studyMaterials = { meaningSynonyms: [] };
+    }
+    const existing = task.studyMaterials.meaningSynonyms ?? [];
+    task.studyMaterials.meaningSynonyms = [...existing, text];
+
+    return this.overrideCorrect();
+  }
+
+  private finalizeIfFinished(task: ReviewItem): MarkResult {
+    const answeredReading = task.answeredReading || !canAskReading(task, this._settings);
+    const subjectFinished =
+      (task.answeredMeaning || task.subject.meanings.length === 0) &&
+      answeredReading;
+
+    if (subjectFinished) {
+      if (this._settings.minimizeReviewPenalty) {
+        if (task.meaningWrong) {
+          task.meaningWrongCount = 1;
+        }
+        if (task.readingWrong) {
+          task.readingWrongCount = 1;
+        }
+      }
+
+      this._reviewsCompleted += 1;
+      this.completedReviews.push(task);
+      this.activeQueue.splice(this.activeTaskIndex, 1);
+      this.refillActiveQueue();
+    }
+
+    return { subjectFinished, correct: true };
   }
 
   moveActiveTaskToEnd(): void {

@@ -159,11 +159,17 @@ export class WaniKaniClient {
   }
 
   async upsertStudyMaterial(payload: StudyMaterialPayload) {
-    const studyMaterial: Record<string, unknown> = {
-      meaning_note: payload.meaningNote ?? '',
-      reading_note: payload.readingNote ?? '',
-      meaning_synonyms: payload.meaningSynonyms ?? [],
-    };
+    const studyMaterial: Record<string, unknown> = {};
+
+    if (payload.meaningNote !== undefined) {
+      studyMaterial.meaning_note = payload.meaningNote;
+    }
+    if (payload.readingNote !== undefined) {
+      studyMaterial.reading_note = payload.readingNote;
+    }
+    if (payload.meaningSynonyms !== undefined) {
+      studyMaterial.meaning_synonyms = payload.meaningSynonyms;
+    }
 
     let path = '/study_materials';
     let method = 'POST';

@@ -1,6 +1,7 @@
 import { AssignmentData, StudyMaterialData, SubjectData } from '../api/types';
 import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChecker';
 import { AppDatabase } from '../db/database';
+import { StudyMaterialPayload } from '../api/types';
 
 type AssignmentResource = {
   id: number;
@@ -136,6 +137,62 @@ export async function queueLessonStart(db: AppDatabase, assignmentId: number) {
       startedAt,
     );
     await db.runAsync('UPDATE assignments SET started_at = ?, srs_stage = 1 WHERE id = ?', startedAt, assignmentId);
+    await db.execAsync('COMMIT;');
+  } catch (error) {
+    await db.execAsync('ROLLBACK;');
+    throw error;
+  }
+}
+
+export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMaterialPayload) {
+  const createdAt = new Date().toISOString();
+  await db.execAsync('BEGIN TRANSACTION;');
+  try {
+    await db.runAsync(
+      `INSERT INTO pending_study_materials (id, subject_id, payload, created_at)
+       VALUES (?, ?, ?, ?)`,
+      `study-material:${payload.subjectId}:${Date.now()}`,
+      payload.subjectId,
+      JSON.stringify(payload),
+      createdAt,
+    );
+
+    const existing = await db.getFirstAsync<{ id: number; payload: string }>(
+      'SELECT id, payload FROM study_materials WHERE subject_id = ?',
+      payload.subjectId,
+    );
+
+    if (existing) {
+      const parsed = JSON.parse(existing.payload) as { data: Record<string, unknown> };
+      if (payload.meaningSynonyms !== undefined) {
+        parsed.data.meaning_synonyms = payload.meaningSynonyms;
+      }
+      await db.runAsync(
+        'UPDATE study_materials SET payload = ? WHERE id = ?',
+        JSON.stringify(parsed),
+        existing.id,
+      );
+    } else {
+      const localId = -payload.subjectId;
+      await db.runAsync(
+        `INSERT INTO study_materials (id, subject_id, payload, updated_at)
+         VALUES (?, ?, ?, ?)`,
+        localId,
+        payload.subjectId,
+        JSON.stringify({
+          id: localId,
+          object: 'study_material',
+          data: {
+            subject_id: payload.subjectId,
+            meaning_synonyms: payload.meaningSynonyms ?? [],
+            meaning_note: payload.meaningNote ?? '',
+            reading_note: payload.readingNote ?? '',
+          },
+        }),
+        createdAt,
+      );
+    }
+
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');

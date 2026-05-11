@@ -81,13 +81,14 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Add unit tests for review queue state machine in `src/domain/study/`.
 - [x] Refactor LessonSessionScreen to use shared components.
 
-### Phase 2: Completion Features (current focus)
+### Phase 2: Completion Features
 
 - [x] Add review summary screen with success rate and incorrect items grouped by level.
 - [x] Support domain-level wrap-up behavior.
 - [x] Add review UI for wrap-up mode.
-- [ ] Support skip/ask-again-later when enabled.
-- [ ] Add cheats: override correct, ask again later, add synonym, and exclude vocabulary.
+- [x] Add cheats: override correct, try again later, and add synonym.
+- [x] Queue study material synonym updates to `pending_study_materials` for WaniKani API sync.
+- [x] Show reading input placeholder in Japanese (答え).
 
 ### Phase 3: Polish
 
@@ -201,7 +202,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Current Known Gaps
 
-- Review sessions now use the two-queue state machine, but the UI still lacks wrap-up controls, cheats, quick settings, and a full summary screen.
+- Review sessions have cheats (override correct, try again later, add synonym) and wrap-up, but still lack quick settings, Anki mode, and full review ordering.
 - Lessons currently mark starts from an intro flow and do not yet include the full quiz flow. Lesson quiz should reuse the review state machine.
 - Dashboard lacks charts and most power-user sections.
 - Subject browsing/search/detail screens are not implemented.

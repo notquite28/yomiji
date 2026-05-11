@@ -49,6 +49,7 @@ function makeSettings(
     meaningFirst: true,
     minimizeReviewPenalty: false,
     skipKanjiReadings: false,
+    enableCheats: true,
     ...overrides,
   };
 }
@@ -508,10 +509,55 @@ describe('ReviewSession', () => {
       expect(session.currentItem!.meaningWrong).toBe(true);
       expect(session.currentItem!.meaningWrongCount).toBe(1);
 
-      session.overrideCorrect();
+      const result = session.overrideCorrect();
       expect(session.currentItem!.meaningWrong).toBe(false);
       expect(session.currentItem!.meaningWrongCount).toBe(0);
       expect(session.currentItem!.answeredMeaning).toBe(true);
+      expect(result.correct).toBe(true);
+    });
+
+    it('returns subjectFinished when both sides answered after override', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(true);
+      session.nextTask();
+      session.markAnswer(false);
+
+      expect(session.currentItem!.readingWrong).toBe(true);
+      const result = session.overrideCorrect();
+      expect(result.subjectFinished).toBe(true);
+      expect(session.reviewsCompleted).toBe(1);
+    });
+
+    it('returns subjectFinished false when other side not answered', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType === 'meaning') {
+        session.markAnswer(false);
+      } else {
+        session.markAnswer(true);
+        session.nextTask();
+        session.markAnswer(false);
+      }
+
+      const result = session.overrideCorrect();
+      expect(result.subjectFinished).toBe(false);
+      expect(session.reviewsCompleted).toBe(0);
     });
   });
 
@@ -549,6 +595,104 @@ describe('ReviewSession', () => {
       expect(session.isComplete).toBe(true);
       expect(session.reviewsCompleted).toBe(2);
       expect(session.isPracticeSession).toBe(true);
+    });
+  });
+
+  describe('addSynonym', () => {
+    it('adds synonym to study materials and marks correct', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(false);
+      expect(session.currentItem!.meaningWrong).toBe(true);
+      expect(session.currentItem!.studyMaterials?.meaningSynonyms).toBeUndefined();
+
+      const result = session.addSynonym('feline');
+      expect(result.correct).toBe(true);
+      expect(session.currentItem!.meaningWrong).toBe(false);
+      expect(session.currentItem!.meaningWrongCount).toBe(0);
+      expect(session.currentItem!.answeredMeaning).toBe(true);
+      expect(session.currentItem!.studyMaterials?.meaningSynonyms).toEqual(['feline']);
+    });
+
+    it('appends to existing synonyms', () => {
+      const items: StudyQueueItem[] = [
+        {
+          assignmentId: 1,
+          subjectId: 1,
+          subjectType: 'vocabulary',
+          level: 1,
+          srsStage: 1,
+          subject: makeSubject({ id: 1 }),
+          studyMaterials: { meaningSynonyms: ['kitty'] },
+        },
+      ];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(false);
+      session.addSynonym('feline');
+
+      expect(session.currentItem!.studyMaterials?.meaningSynonyms).toEqual(['kitty', 'feline']);
+    });
+
+    it('creates study materials if missing', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(false);
+      expect(session.currentItem!.studyMaterials).toBeUndefined();
+
+      session.addSynonym('kitty');
+      expect(session.currentItem!.studyMaterials?.meaningSynonyms).toEqual(['kitty']);
+    });
+
+    it('finishes subject when both sides answered', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(true);
+      session.nextTask();
+      session.markAnswer(false);
+
+      const result = session.addSynonym('kitty');
+      expect(result.subjectFinished).toBe(true);
+      expect(session.reviewsCompleted).toBe(1);
     });
   });
 });
