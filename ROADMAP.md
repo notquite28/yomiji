@@ -9,7 +9,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Keep background work battery-conscious and user-visible.
 - [x] Prefer local cache reads for dashboard, study sessions, search, and subject details.
 - [x] Queue local writes transactionally before attempting network sync.
-- [ ] Avoid logging API tokens, Authorization headers, or sensitive request payloads.
+- [x] Avoid logging API tokens, Authorization headers, or sensitive request payloads.
 
 ## Current Foundation
 
@@ -28,16 +28,16 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
 - [x] Android-first reading input with Tsurukame-style romaji-to-kana conversion.
 - [x] CSS-aware image-only radical rendering in reviews, lessons, and diagnostics.
-- [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, and study queue image selection.
+- [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, study queue image selection, error sanitization/classification, and migration validation.
 
 ## M0: Architecture Hardening
 
 - [ ] Document the SQLite schema mapping versus the original protobuf model.
-- [ ] Add migration tests for schema creation and future migrations.
-- [ ] Add sanitized error logging helpers and wire API/sync failures into `error_log`.
-- [ ] Add a diagnostics screen for app version, sync state, pending queue counts, and sanitized export.
+- [x] Add migration tests for schema creation and future migrations.
+- [x] Add sanitized error logging helpers and wire API/sync failures into `error_log`.
+- [x] Add a diagnostics screen for app version, sync state, pending queue counts, and sanitized export.
 - [x] Add a radical image diagnostics preview for cached image-only radicals.
-- [ ] Add network-state awareness so sync errors distinguish offline, timeout, auth, and rate-limit states.
+- [x] Add network-state awareness so sync errors distinguish offline, timeout, auth, and rate-limit states.
 - [ ] Add a simple local repository layer boundary for subjects, assignments, study materials, and review stats.
 
 ## M1: Sync Reliability
@@ -198,7 +198,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Flush pending writes on background only when local pending writes exist.
 - [x] Throttle foreground lifecycle sync checks.
 - [x] Keep manual pull-to-refresh as the explicit full-sync escape hatch.
-- [ ] Add settings/diagnostics copy explaining sync behavior.
+- [x] Add settings/diagnostics copy explaining sync behavior.
 - [x] Keep reading keyboard behavior in-app rather than relying on heavyweight background/native services.
 - [ ] Add optional background refresh only after explicit user-facing design and platform review.
 
@@ -209,7 +209,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - Dashboard lacks charts and most power-user sections.
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.
-- Audio, font, and diagnostics settings UI are not yet exposed.
+- Audio, font, and notification settings UI are not yet exposed.
 
 ## Feature Reference
 

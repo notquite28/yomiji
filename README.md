@@ -12,7 +12,7 @@ The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. S
 
 ## Current Status
 
-The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, and working dashboard, lesson, and review flows.
+The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, error logging, and working dashboard, lesson, and review flows.
 
 ## Features
 
@@ -28,6 +28,8 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Pending-write queues for review progress, lesson starts, and study material edits, flushed to WaniKani when online.
 - Battery-conscious lifecycle sync: full sync on foreground when stale (>15 min), pending-write flush on background only when writes exist.
 - Manual pull-to-refresh for explicit full sync.
+- Network-state awareness with actionable error messages for offline, timeout, auth, rate-limit, and server errors.
+- Sanitized error logging to local `error_log` table with token redaction.
 
 ### Dashboard
 
@@ -88,6 +90,8 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 **Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
 
+**Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, and sanitized export via Share sheet.
+
 **Log Out** — Clears token, cache, and pending queues.
 
 ### Shared Components
@@ -115,6 +119,8 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Unit tests for romaji-to-kana conversion.
 - Unit tests for review session state machine (ordering, grouping, wrap-up, wrong counts, practice mode).
 - Unit tests for study repository queries and radical SVG/image handling.
+- Unit tests for error sanitization, sync error classification, and friendly message generation.
+- Unit tests for migration schema validation (version ordering, table/index completeness, constraints).
 
 ## Known Major Gaps
 
@@ -125,6 +131,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Quick settings during review is implemented. Hardware keyboard shortcuts are not planned.
+- Diagnostics screen is implemented. Audio, font, and notification settings UI are not yet exposed.
 
 ## Getting Started
 
@@ -154,7 +161,7 @@ src/
   domain/           # Pure logic layer — no React, no UI imports
     answers/        # Answer checking, romaji-to-kana conversion
     api/            # WaniKani v2 REST client (WaniKaniClient.ts) + types
-    db/             # SQLite open/migrations/put functions (database.ts, schema.ts)
+    db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts)
     dashboard/      # Dashboard query aggregation
     settings/       # AppSettings, load/save via AsyncStorage
     storage/        # Secure token storage (expo-secure-store)
@@ -162,7 +169,7 @@ src/
     subjects/       # Radical image handling and SVG rendering
     sync/           # Incremental sync + pending-write flush (syncService.ts)
   navigation/       # React Navigation routes, auth gate, AppState lifecycle
-  screens/          # UI screens (Dashboard, Login, Settings, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
+  screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
   components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings)
   theme/            # WaniKani color palette, subject-type colors, theme provider
 App.tsx             # App root
