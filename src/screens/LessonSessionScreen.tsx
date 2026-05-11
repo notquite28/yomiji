@@ -1,10 +1,11 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { openAppDatabase } from '../domain/db/database';
 import { getLessonQueue, queueLessonStart, StudyQueueItem } from '../domain/study/studyRepository';
+import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
@@ -67,56 +68,48 @@ export function LessonSessionScreen({ navigation }: Props) {
   };
 
   if (isLoading) {
-    return <CenteredScreen label="Loading advanced lessons..." />;
+    return <CenteredMessage label="Loading advanced lessons..." />;
   }
 
   if (error && !current) {
-    return <CenteredScreen label={error} actionLabel="Back" onAction={() => navigation.goBack()} />;
+    return <CenteredMessage label={error} actionLabel="Back" onAction={() => navigation.goBack()} />;
   }
 
   if (isComplete) {
-    return <CenteredScreen label="Advanced lessons queued. Starts will sync on the next sync run." actionLabel="Back to Dashboard" onAction={() => navigation.goBack()} />;
+    return <CenteredMessage label="Advanced lessons queued. Starts will sync on the next sync run." actionLabel="Back to Dashboard" onAction={() => navigation.goBack()} />;
   }
 
   if (!current) {
-    return <CenteredScreen label="No advanced lessons are available in the local cache." actionLabel="Back" onAction={() => navigation.goBack()} />;
+    return <CenteredMessage label="No advanced lessons are available in the local cache." actionLabel="Back" onAction={() => navigation.goBack()} />;
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-          <Text style={styles.progressText}>{index + 1}/{queue.length}</Text>
-        </View>
+    <ScreenLayout scrollable>
+      <SessionHeader onBack={() => navigation.goBack()} progress={`${index + 1}/${queue.length}`} />
 
-        <View style={[styles.heroCard, { backgroundColor: subjectColor }]}>
-          <Text style={styles.kicker}>Advanced Lesson</Text>
-          {current.subject.characterImageUrl ? (
-            <View style={styles.imageFrame}>
-              <Image source={{ uri: current.subject.characterImageUrl }} style={styles.characterImage} resizeMode="contain" />
-            </View>
-          ) : (
-            <Text style={styles.characters}>{current.subject.japanese || current.subjectType}</Text>
-          )}
-          <Text style={styles.meta}>Level {current.level ?? '?'} · {current.subjectType}</Text>
-        </View>
+      <SubjectHeroCard
+        kicker="Advanced Lesson"
+        japanese={current.subject.japanese}
+        characterImageUrl={current.subject.characterImageUrl}
+        characterImageIsSvg={current.subject.characterImageIsSvg}
+        subjectType={current.subjectType}
+        level={current.level}
+        color={subjectColor}
+        minHeight={260}
+      />
 
-        <InfoPanel title="Meanings" value={acceptedMeanings(current)} />
-        {acceptedReadings(current) ? <InfoPanel title="Readings" value={acceptedReadings(current) ?? ''} /> : null}
+      <InfoPanel title="Meanings" value={acceptedMeanings(current)} />
+      {acceptedReadings(current) ? <InfoPanel title="Readings" value={acceptedReadings(current) ?? ''} /> : null}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Pressable disabled={isSaving} onPress={startLesson} style={({ pressed }) => [styles.primaryButton, { backgroundColor: subjectColor }, (pressed || isSaving) && styles.pressed]}>
-          <Text style={styles.primaryButtonText}>{isSaving ? 'Queueing...' : 'Mark Lesson Started'}</Text>
-        </Pressable>
-        <Pressable disabled={isSaving} onPress={() => setIndex((value) => value + 1)} style={styles.secondaryButton}>
-          <Text style={styles.secondaryButtonText}>Skip for Now</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+      <Pressable disabled={isSaving} onPress={startLesson} style={({ pressed }) => [styles.primaryButton, { backgroundColor: subjectColor }, (pressed || isSaving) && styles.pressed]}>
+        <Text style={styles.primaryButtonText}>{isSaving ? 'Queueing...' : 'Mark Lesson Started'}</Text>
+      </Pressable>
+      <Pressable disabled={isSaving} onPress={() => setIndex((value) => value + 1)} style={styles.secondaryButton}>
+        <Text style={styles.secondaryButtonText}>Skip for Now</Text>
+      </Pressable>
+    </ScreenLayout>
   );
 }
 
@@ -145,115 +138,8 @@ function acceptedReadings(item: StudyQueueItem) {
     .join(', ');
 }
 
-function CenteredScreen({ label, actionLabel, onAction }: { label: string; actionLabel?: string; onAction?: () => void }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.colors.radical} style={actionLabel ? styles.hidden : undefined} />
-        <Text style={styles.centeredText}>{label}</Text>
-        {actionLabel ? (
-          <Pressable onPress={onAction} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </SafeAreaView>
-  );
-}
-
 function makeStyles(theme: AppTheme) {
   return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    content: {
-      flexGrow: 1,
-      padding: 20,
-      gap: 16,
-    },
-    centered: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      gap: 16,
-    },
-    hidden: {
-      opacity: 0,
-    },
-    centeredText: {
-      color: theme.colors.text,
-      textAlign: 'center',
-      fontSize: 18,
-      lineHeight: 25,
-      fontWeight: '800',
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    backButton: {
-      borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    backText: {
-      color: theme.colors.text,
-      fontWeight: '900',
-    },
-    progressText: {
-      color: theme.colors.mutedText,
-      fontWeight: '900',
-    },
-    heroCard: {
-      minHeight: 260,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-    },
-    kicker: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-    },
-    characters: {
-      marginTop: 12,
-      color: '#ffffff',
-      fontSize: 72,
-      fontWeight: '900',
-      textAlign: 'center',
-    },
-    imageFrame: {
-      marginTop: 16,
-      width: 150,
-      height: 150,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 28,
-      backgroundColor: '#ffffff',
-    },
-    characterImage: {
-      width: 112,
-      height: 112,
-    },
-    meta: {
-      marginTop: 10,
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '800',
-      opacity: 0.86,
-      textTransform: 'capitalize',
-    },
     panel: {
       borderRadius: 24,
       padding: 18,

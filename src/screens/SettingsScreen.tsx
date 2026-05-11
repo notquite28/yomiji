@@ -55,6 +55,14 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           <Text style={styles.bodyText}>Review order, batching, typo handling, and audio settings.</Text>
         </View>
 
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Diagnostics</Text>
+          <Text style={styles.bodyText}>Preview image-only radicals from the local cache without starting lessons or reviews.</Text>
+          <Pressable onPress={() => navigation.navigate('RadicalImagePreview')} style={({ pressed }) => [styles.previewButton, pressed && styles.pressed]}>
+            <Text style={styles.previewButtonText}>Preview Radical Images</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.dangerPanel}>
           <Text style={styles.panelTitle}>Log Out</Text>
           <Text style={styles.bodyText}>Clears token, cache, and pending queues.</Text>
@@ -177,6 +185,18 @@ function makeStyles(theme: AppTheme) {
     logoutText: {
       color: '#ffffff',
       fontSize: 16,
+      fontWeight: '900',
+    },
+    previewButton: {
+      minHeight: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+      backgroundColor: theme.colors.radical,
+    },
+    previewButtonText: {
+      color: '#ffffff',
+      fontSize: 15,
       fontWeight: '900',
     },
     pressed: {

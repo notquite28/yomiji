@@ -23,10 +23,11 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Battery-conscious lifecycle sync: stale foreground sync and pending-write-only background flush.
 - [x] Dashboard with username, level, advanced lesson count, review count, SRS bucket counts, sync status, and cache stats.
 - [x] Interactive advanced lesson starter flow using cached lesson-stage assignments.
-- [x] Interactive basic review flow using cached available review assignments.
+- [x] Interactive review flow using cached available review assignments and the two-queue review state machine.
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
 - [x] Android-first reading input with Tsurukame-style romaji-to-kana conversion.
-- [x] Unit tests for the initial answer checker behavior.
+- [x] CSS-aware image-only radical rendering in reviews, lessons, and diagnostics.
+- [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, and study queue image selection.
 
 ## M0: Architecture Hardening
 
@@ -34,6 +35,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [ ] Add migration tests for schema creation and future migrations.
 - [ ] Add sanitized error logging helpers and wire API/sync failures into `error_log`.
 - [ ] Add a diagnostics screen for app version, sync state, pending queue counts, and sanitized export.
+- [x] Add a radical image diagnostics preview for cached image-only radicals.
 - [ ] Add network-state awareness so sync errors distinguish offline, timeout, auth, and rate-limit states.
 - [ ] Add a simple local repository layer boundary for subjects, assignments, study materials, and review stats.
 
@@ -65,24 +67,38 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M3: Review Session Parity
 
+### Phase 1: Core State Machine (current focus)
+
+- [x] Extract shared UI components into `src/components/` (`ScreenLayout`, `SubjectHeroCard`).
+- [ ] Add shared `SrsBar` component.
+- [x] Replace flat review loop with two-queue state machine (activeQueue + reviewQueue) modeled after iOS `ReviewSession.swift`.
+- [x] Re-queue wrong answers with 5-item return delay.
+- [x] Track meaningWrong/readingWrong/meaningWrongCount/readingWrongCount per item.
+- [x] Mark item finished only when both meaning and reading answered, or one side is unavailable/skipped.
+- [x] Support practice mode flag that skips progress submission.
+- [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, minimizeReviewPenalty, and skipKanjiReadings.
+- [ ] Consume exact-match settings in review answer checking.
+- [x] Add unit tests for review queue state machine in `src/domain/study/`.
+- [x] Refactor LessonSessionScreen to use shared components.
+
+### Phase 2: Completion Features
+
+- [ ] Add review summary screen with success rate and incorrect items grouped by level.
+- [x] Support domain-level wrap-up behavior.
+- [ ] Add review UI for wrap-up mode.
+- [ ] Support skip/ask-again-later when enabled.
+- [ ] Add cheats: override correct, ask again later, add synonym, and exclude vocabulary.
+
+### Phase 3: Polish
+
 - [ ] Port iOS `ReviewSession` ordering semantics.
 - [ ] Support random review order.
 - [ ] Support ascending, descending, and alternating SRS review order.
 - [ ] Support current-level-first and lowest-level-first review order.
 - [ ] Support newest available, oldest available, and longest-relative-wait review order.
-- [ ] Support review item limit and review batch size.
-- [ ] Support grouped meaning/reading mode.
-- [ ] Support configurable meaning-first behavior.
-- [ ] Support wrap-up behavior.
-- [ ] Support skip when enabled.
 - [ ] Support Anki mode variants.
-- [ ] Support minimized review penalty.
-- [ ] Keep incorrect answers active and re-ask later according to iOS behavior.
-- [ ] Add review summary with success rate and incorrect items grouped by level.
 - [ ] Add quick settings during review.
-- [ ] Add cheats: override correct, ask again later, add synonym, and exclude vocabulary.
 - [ ] Add hardware keyboard shortcuts where practical.
-- [ ] Add unit tests for review session state transitions and wrong counts.
 
 ## M4: Lesson Flow Parity
 
@@ -185,9 +201,10 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Current Known Gaps
 
-- [ ] Review sessions are currently functional but not parity-complete.
-- [ ] Lessons currently mark starts from an intro flow and do not yet include the full quiz flow.
-- [ ] Dashboard lacks charts and most power-user sections.
-- [ ] Subject browsing/search/detail screens are not implemented.
-- [ ] Audio and notifications are scaffold dependencies only, not implemented features.
-- [ ] Settings are represented in TypeScript but most controls are not exposed in UI.
+- Review sessions now use the two-queue state machine, but the UI still lacks wrap-up controls, cheats, quick settings, and a full summary screen.
+- Lessons currently mark starts from an intro flow and do not yet include the full quiz flow. Lesson quiz should reuse the review state machine.
+- Dashboard lacks charts and most power-user sections.
+- Subject browsing/search/detail screens are not implemented.
+- Audio and notifications are scaffold dependencies only, not implemented features.
+- Settings are represented in TypeScript but most controls are not exposed in UI.
+- Diagnostics currently include radical image preview only; full sync state, pending queue counts, sanitized logs, and export remain future work.

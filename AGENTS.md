@@ -3,14 +3,15 @@
 ## Commands
 
 ```bash
-npm run typecheck          # tsc --noEmit
-npm test                   # jest --runInBand (single-threaded)
-npm start                  # expo start (dev server)
-npm run android            # expo start --android
-npx expo install --check   # verify dependency versions match Expo SDK
+pnpm typecheck             # tsc --noEmit
+pnpm test                  # jest --runInBand (single-threaded)
+pnpm start                 # expo start (dev server)
+pnpm android               # expo start --android
+pnpm ios                   # expo start --ios
+pnpm exec expo install --check # verify dependency versions match Expo SDK
 ```
 
-Always run `npm run typecheck` after code changes. Run `npm test` if tests exist for the changed area.
+Use `pnpm` for scripts and dependency changes; `pnpm-lock.yaml` is the lockfile to keep current. Always run `pnpm typecheck` after code changes. Run `pnpm test` if tests exist for the changed area.
 
 ## Project Structure
 
@@ -32,12 +33,14 @@ App.tsx             # App root
 tsurukame/          # Original iOS Swift/UIKit source — behavior reference only
 ```
 
+Use `ROADMAP.md` for feature parity status and `tsurukame/REACT_NATIVE_PORT_PRD.md` for product requirements context.
+
 ## Key Constraints
 
 - **`noUncheckedIndexedAccess`** is enabled. Array/tuple indexing returns `T | undefined`. Always guard with explicit undefined checks.
 - **No `DOMException`** in React Native. Detect aborts with `error instanceof Error && error.name === 'AbortError'`.
 - **Jest pinned to `~29.7.0`** — do not upgrade; Expo SDK 55 requires this version.
-- **SQLite foreign keys enforced.** Child tables (assignments, study_materials, review_stats, audio_urls, subject_progress) reference `subjects(id)`. Delete children before parents in `resetLocalData`.
+- **SQLite foreign keys enforced.** Child tables (assignments, study_materials, review_stats, audio_urls, subject_progress, pending_study_materials) reference `subjects(id)`. Delete children before parents in `resetLocalData`.
 - Tests run in Node (`testEnvironment: 'node'`) — no React Native runtime. Only pure domain logic is testable without mocking.
 - `ts-jest` preset, test files match `**/*.test.ts`.
 
@@ -50,17 +53,12 @@ tsurukame/          # Original iOS Swift/UIKit source — behavior reference onl
 - **Image-only radicals.** Some radicals have no `characters` field, only `character_images`. The app stores empty string for `japanese`, includes `characterImageUrl` in answer data (PNG preferred), and renders images in the prompt UI.
 - **Answer checker** ported from Tsurukame Swift: normalization, Levenshtein fuzzy matching, okurigana mismatch detection, invalid character ranges, other-reading detection, blacklists.
 
-## WaniKani Subject Colors
-
-- Radical: `#00aaff` (blue)
-- Kanji: `#ff00aa` (pink)
-- Vocabulary: `#aa00ff` (purple)
-
-Use `colorForSubjectType()` from `src/theme/subjectColors.ts`.
-
 ## Common Pitfalls
 
 - **Study material sync** must skip entries whose `subject_id` is absent from local `subjects` table (hidden/uncached subjects). Do not abort the entire batch.
 - **Radical `characters`** can be `null`. Store `characters ?? ''` — never use `slug` as fallback (it leaks the answer for meaning prompts).
+- **`kana_vocabulary` subjects** are a distinct WaniKani API object but are stored/rendered as `vocabulary` in local subject-type flows. Handle both when comparing API `object` values or UI subject colors.
+- **Subject colors** come from `colorForSubjectType()` in `src/theme/subjectColors.ts`; do not duplicate switch logic in screens.
 - **Database singleton.** `openAppDatabase()` returns a cached promise. Call it; do not open a second connection.
+- **Pending sync 422s** are treated as stale/invalid local writes and deleted from the queue. Preserve that behavior when extending pending-write sync.
 - The `tsurukame/` directory is read-only reference code. Never import from it or modify it.

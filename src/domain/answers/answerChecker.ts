@@ -32,6 +32,7 @@ export type SubjectAnswerData = {
   type: 'radical' | 'kanji' | 'vocabulary' | 'kana_vocabulary' | string;
   japanese: string;
   characterImageUrl?: string;
+  characterImageIsSvg?: boolean;
   meanings: MeaningCandidate[];
   readings?: ReadingCandidate[];
   componentSubjectIds?: number[];

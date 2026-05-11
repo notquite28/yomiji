@@ -1,32 +1,61 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { openAppDatabase } from '../domain/db/database';
+import { defaultSettings } from '../domain/settings/settings';
+import {
+  MarkResult,
+  ReviewItem,
+  ReviewSession,
+  ReviewSessionSettings,
+} from '../domain/study/reviewSession';
 import { getReviewQueue, queueReviewResult, StudyQueueItem } from '../domain/study/studyRepository';
+import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewSession'>;
-type Feedback = { correct: boolean; message: string; detail: string };
-type WrongCounts = { meaning: number; reading: number };
+type Feedback = {
+  correct: boolean;
+  message: string;
+  detail: string;
+  item: ReviewItem;
+  taskType: TaskType;
+  subjectFinished: boolean;
+};
 
 export function ReviewSessionScreen({ navigation }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
-  const [queue, setQueue] = useState<StudyQueueItem[]>([]);
+  const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [itemIndex, setItemIndex] = useState(0);
-  const [taskIndex, setTaskIndex] = useState(0);
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const wrongCounts = useRef(new Map<number, WrongCounts>());
+  const [lastMarkResult, setLastMarkResult] = useState<MarkResult | null>(null);
+  const [isContinuing, setIsContinuing] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  const sessionRef = useRef<ReviewSession | null>(null);
+
+  const settings = useMemo<ReviewSessionSettings>(
+    () => ({
+      reviewOrder: defaultSettings.reviewOrder,
+      reviewBatchSize: defaultSettings.reviewBatchSize,
+      reviewItemsLimit: defaultSettings.reviewItemsLimit,
+      reviewItemsLimitEnabled: defaultSettings.reviewItemsLimitEnabled,
+      groupMeaningReading: defaultSettings.groupMeaningReading,
+      meaningFirst: defaultSettings.meaningFirst,
+      minimizeReviewPenalty: defaultSettings.minimizeReviewPenalty,
+      skipKanjiReadings: defaultSettings.skipKanjiReadings,
+    }),
+    [],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -34,7 +63,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
       .then((db) => getReviewQueue(db))
       .then((items) => {
         if (isMounted) {
-          setQueue(items);
+          setQueueItems(items);
         }
       })
       .catch((caught: unknown) => {
@@ -52,164 +81,205 @@ export function ReviewSessionScreen({ navigation }: Props) {
     };
   }, []);
 
-  const subjectLookup = useMemo(() => new Map(queue.map((item) => [item.subjectId, item.subject])), [queue]);
-  const current = queue[itemIndex];
-  const tasks = current ? tasksFor(current) : [];
-  const activeTask = tasks[taskIndex] ?? 'meaning';
-  const subjectColor = current ? colorForSubjectType(theme.colors, current.subjectType) : theme.colors.vocabulary;
-  const isComplete = !isLoading && itemIndex >= queue.length;
-
-  const submit = () => {
-    if (!current || !answer.trim() || feedback) {
+  useEffect(() => {
+    if (queueItems.length === 0 || sessionRef.current) {
       return;
     }
 
-    const result = checkAnswer(answer, current.subject, {
-      taskType: activeTask,
-      studyMaterials: current.studyMaterials,
+    const availableAtMap = new Map<number, string>();
+    for (const item of queueItems) {
+      if (item.availableAt) {
+        availableAtMap.set(item.assignmentId, item.availableAt);
+      }
+    }
+
+    const session = new ReviewSession(queueItems, settings, false, availableAtMap);
+    sessionRef.current = session;
+    session.nextTask();
+    setRevision((r) => r + 1);
+  }, [queueItems, settings]);
+
+  const session = sessionRef.current;
+  const currentItem = session?.currentItem ?? null;
+  const taskType = session?.currentTaskType ?? null;
+  const displayItem = feedback?.item ?? currentItem;
+  const displayTaskType = feedback?.taskType ?? taskType;
+  const subjectColor = displayItem
+    ? colorForSubjectType(theme.colors, displayItem.subjectType)
+    : theme.colors.vocabulary;
+  const isComplete = !feedback && (session?.isComplete ?? false);
+  const progress = session
+    ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
+    : '0/0';
+
+  const subjectLookup = useMemo(
+    () => new Map(queueItems.map((item) => [item.subjectId, item.subject])),
+    [queueItems],
+  );
+
+  const submit = () => {
+    if (!session || !currentItem || !answer.trim() || feedback) {
+      return;
+    }
+
+    const result = checkAnswer(answer, currentItem.subject, {
+      taskType: taskType ?? 'meaning',
+      studyMaterials: currentItem.studyMaterials,
       lookupSubject: (subjectId) => subjectLookup.get(subjectId),
     });
     const correct = result.kind === 'precise' || result.kind === 'imprecise';
 
-    if (!correct) {
-      const counts = wrongCounts.current.get(current.assignmentId) ?? { meaning: 0, reading: 0 };
-      counts[activeTask] += 1;
-      wrongCounts.current.set(current.assignmentId, counts);
-    }
-
+    const markResult = session.markAnswer(correct);
+    setLastMarkResult(markResult);
     setFeedback({
       correct,
       message: feedbackTitle(result),
-      detail: correct ? 'Continue to the next prompt.' : correctAnswerText(current, activeTask),
+      detail: correct
+        ? 'Continue to the next prompt.'
+        : correctAnswerText(currentItem, taskType ?? 'meaning'),
+      item: currentItem,
+      taskType: taskType ?? 'meaning',
+      subjectFinished: markResult.subjectFinished,
     });
+    setRevision((r) => r + 1);
   };
 
   const changeAnswer = (text: string) => {
-    setAnswer(activeTask === 'reading' ? convertRomajiToKanaInput(text) : text);
+    setAnswer(taskType === 'reading' ? convertRomajiToKanaInput(text) : text);
   };
 
   const continueSession = async () => {
-    if (!current || !feedback) {
+    if (!session || !feedback || isContinuing) {
       return;
     }
 
+    setIsContinuing(true);
     setError(null);
-    if (!feedback.correct) {
-      setFeedback(null);
-      setAnswer('');
-      return;
-    }
 
-    const nextTaskIndex = taskIndex + 1;
-    if (nextTaskIndex < tasks.length) {
-      setTaskIndex(nextTaskIndex);
-      setFeedback(null);
-      setAnswer('');
-      return;
-    }
-
-    setIsSaving(true);
     try {
-      const db = await openAppDatabase();
-      const counts = wrongCounts.current.get(current.assignmentId) ?? { meaning: 0, reading: 0 };
-      await queueReviewResult(db, {
-        assignmentId: current.assignmentId,
-        incorrectMeaningAnswers: counts.meaning,
-        incorrectReadingAnswers: counts.reading,
-      });
-      setItemIndex((value) => value + 1);
-      setTaskIndex(0);
+      if (lastMarkResult?.subjectFinished && !session.isPracticeSession) {
+        const item = session.completedItems[session.completedItems.length - 1];
+        if (item) {
+          const db = await openAppDatabase();
+          await queueReviewResult(db, {
+            assignmentId: item.assignmentId,
+            incorrectMeaningAnswers: item.meaningWrongCount,
+            incorrectReadingAnswers: item.readingWrongCount,
+          });
+        }
+      }
+
       setFeedback(null);
       setAnswer('');
+      setLastMarkResult(null);
+      session.nextTask();
+      setRevision((r) => r + 1);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
-      setIsSaving(false);
+      setIsContinuing(false);
     }
   };
 
   if (isLoading) {
-    return <CenteredScreen label="Loading reviews..." />;
+    return <CenteredMessage label="Loading reviews..." />;
   }
 
-  if (error && !current) {
-    return <CenteredScreen label={error} actionLabel="Back" onAction={() => navigation.goBack()} />;
+  if (error && !displayItem && !isComplete) {
+    return (
+      <CenteredMessage label={error} actionLabel="Back" onAction={() => navigation.goBack()} />
+    );
   }
 
   if (isComplete) {
-    return <CenteredScreen label="Reviews complete. Queued progress will sync on the next sync run." actionLabel="Back to Dashboard" onAction={() => navigation.goBack()} />;
+    const rate = session?.successRateText ?? '100%';
+    const completed = session?.reviewsCompleted ?? 0;
+    return (
+      <CenteredMessage
+        label={`Reviews complete!\n${rate} accuracy across ${completed} reviews.`}
+        actionLabel="Back to Dashboard"
+        onAction={() => navigation.goBack()}
+      />
+    );
   }
 
-  if (!current) {
-    return <CenteredScreen label="No reviews are available in the local cache." actionLabel="Back" onAction={() => navigation.goBack()} />;
+  if (!displayItem) {
+    return (
+      <CenteredMessage
+        label="No reviews are available in the local cache."
+        actionLabel="Back"
+        onAction={() => navigation.goBack()}
+      />
+    );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-          <Text style={styles.progressText}>{itemIndex + 1}/{queue.length}</Text>
-        </View>
+    <ScreenLayout scrollable keyboardShouldPersistTaps>
+      <SessionHeader onBack={() => navigation.goBack()} progress={progress} />
 
-        <View style={[styles.promptCard, { backgroundColor: subjectColor }]}>
-          <Text style={styles.promptKind}>{activeTask === 'meaning' ? 'Meaning' : 'Reading'}</Text>
-          {current.subject.characterImageUrl ? (
-            <View style={styles.imageFrame}>
-              <Image source={{ uri: current.subject.characterImageUrl }} style={styles.promptImage} resizeMode="contain" />
-            </View>
-          ) : (
-            <Text style={styles.promptText}>{current.subject.japanese || current.subjectType}</Text>
-          )}
-          <Text style={styles.promptMeta}>Level {current.level ?? '?'} · {current.subjectType}</Text>
-        </View>
+      <SubjectHeroCard
+        kicker={displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
+        japanese={displayItem.subject.japanese}
+        characterImageUrl={displayItem.subject.characterImageUrl}
+        characterImageIsSvg={displayItem.subject.characterImageIsSvg}
+        subjectType={displayItem.subjectType}
+        level={displayItem.level}
+        color={subjectColor}
+      />
 
-        <TextInput
-          value={answer}
-          onChangeText={changeAnswer}
-          editable={!feedback && !isSaving}
-          autoCapitalize="none"
-          autoComplete="off"
-          autoCorrect={false}
-          spellCheck={false}
-          importantForAutofill="no"
-          keyboardType={activeTask === 'meaning' ? 'visible-password' : 'default'}
-          placeholder={activeTask === 'meaning' ? 'Type the meaning' : 'Type the reading in kana'}
-          placeholderTextColor={theme.colors.mutedText}
-          style={styles.input}
-          returnKeyType="done"
-          onSubmitEditing={submit}
-        />
+      <TextInput
+        value={answer}
+        onChangeText={changeAnswer}
+        editable={!feedback}
+        autoCapitalize="none"
+        autoComplete="off"
+        autoCorrect={false}
+        spellCheck={false}
+        importantForAutofill="no"
+        keyboardType={displayTaskType === 'meaning' ? 'visible-password' : 'default'}
+        placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : 'Type the reading in kana'}
+        placeholderTextColor={theme.colors.mutedText}
+        style={styles.input}
+        returnKeyType="done"
+        onSubmitEditing={submit}
+      />
 
-        {feedback ? (
-          <View style={[styles.feedbackCard, { borderColor: feedback.correct ? theme.colors.success : theme.colors.danger }]}>
-            <Text style={[styles.feedbackTitle, { color: feedback.correct ? theme.colors.success : theme.colors.danger }]}>{feedback.message}</Text>
-            <Text style={styles.feedbackDetail}>{feedback.detail}</Text>
-          </View>
-        ) : null}
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        <Pressable
-          disabled={isSaving || (!feedback && !answer.trim())}
-          onPress={feedback ? continueSession : submit}
-          style={({ pressed }) => [styles.primaryButton, { backgroundColor: subjectColor }, (pressed || isSaving || (!feedback && !answer.trim())) && styles.pressed]}
+      {feedback ? (
+        <View
+          style={[
+            styles.feedbackCard,
+            { borderColor: feedback.correct ? theme.colors.success : theme.colors.danger },
+          ]}
         >
-          <Text style={styles.primaryButtonText}>{feedback ? (isSaving ? 'Queueing...' : 'Continue') : 'Submit Answer'}</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+          <Text
+            style={[
+              styles.feedbackTitle,
+              { color: feedback.correct ? theme.colors.success : theme.colors.danger },
+            ]}
+          >
+            {feedback.message}
+          </Text>
+          <Text style={styles.feedbackDetail}>{feedback.detail}</Text>
+        </View>
+      ) : null}
 
-function tasksFor(item: StudyQueueItem): TaskType[] {
-  const tasks: TaskType[] = ['meaning'];
-  if (item.subject.readings?.some((reading) => reading.acceptedAnswer !== false)) {
-    tasks.push('reading');
-  }
-  return tasks;
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      <Pressable
+        disabled={isContinuing || (!feedback && !answer.trim())}
+        onPress={feedback ? continueSession : submit}
+        style={({ pressed }) => [
+          styles.primaryButton,
+          { backgroundColor: subjectColor },
+          (pressed || isContinuing || (!feedback && !answer.trim())) && styles.pressed,
+        ]}
+      >
+        <Text style={styles.primaryButtonText}>
+          {feedback ? (isContinuing ? 'Saving...' : 'Continue') : 'Submit Answer'}
+        </Text>
+      </Pressable>
+    </ScreenLayout>
+  );
 }
 
 function feedbackTitle(result: AnswerCheckResult) {
@@ -231,122 +301,15 @@ function feedbackTitle(result: AnswerCheckResult) {
   }
 }
 
-function correctAnswerText(item: StudyQueueItem, taskType: TaskType) {
+function correctAnswerText(item: ReviewItem, taskType: TaskType) {
   if (taskType === 'reading') {
     return `Accepted readings: ${item.subject.readings?.filter((reading) => reading.acceptedAnswer !== false).map((reading) => reading.reading).join(', ') || 'none'}`;
   }
   return `Accepted meanings: ${item.subject.meanings.filter((meaning) => meaning.acceptedAnswer !== false && meaning.type !== 'blacklist').map((meaning) => meaning.meaning).join(', ')}`;
 }
 
-function CenteredScreen({ label, actionLabel, onAction }: { label: string; actionLabel?: string; onAction?: () => void }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.colors.kanji} style={actionLabel ? styles.hidden : undefined} />
-        <Text style={styles.centeredText}>{label}</Text>
-        {actionLabel ? (
-          <Pressable onPress={onAction} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </SafeAreaView>
-  );
-}
-
 function makeStyles(theme: AppTheme) {
   return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    content: {
-      flexGrow: 1,
-      padding: 20,
-      gap: 18,
-    },
-    centered: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      gap: 16,
-    },
-    hidden: {
-      opacity: 0,
-    },
-    centeredText: {
-      color: theme.colors.text,
-      textAlign: 'center',
-      fontSize: 18,
-      lineHeight: 25,
-      fontWeight: '800',
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    backButton: {
-      borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    backText: {
-      color: theme.colors.text,
-      fontWeight: '900',
-    },
-    progressText: {
-      color: theme.colors.mutedText,
-      fontWeight: '900',
-    },
-    promptCard: {
-      minHeight: 240,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-    },
-    promptKind: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-    },
-    promptText: {
-      marginTop: 12,
-      color: '#ffffff',
-      fontSize: 72,
-      fontWeight: '900',
-      textAlign: 'center',
-    },
-    imageFrame: {
-      marginTop: 16,
-      width: 150,
-      height: 150,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 28,
-      backgroundColor: '#ffffff',
-    },
-    promptImage: {
-      width: 112,
-      height: 112,
-    },
-    promptMeta: {
-      marginTop: 10,
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '800',
-      opacity: 0.86,
-      textTransform: 'capitalize',
-    },
     input: {
       minHeight: 58,
       borderRadius: 18,

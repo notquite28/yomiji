@@ -93,7 +93,7 @@ export type CharacterImageData = {
   metadata?: {
     color?: string;
     dimensions?: string;
-    inline_svg?: string;
+    inline_styles?: boolean;
     style_name?: string;
   };
 };
