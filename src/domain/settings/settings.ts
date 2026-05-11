@@ -23,6 +23,7 @@ export type AppSettings = {
   notificationsBadging: boolean;
   notificationSounds: boolean;
   prioritizeCurrentLevel: boolean;
+  interleaveLessons: boolean;
   lessonOrder: SubjectType[];
   lessonBatchSize: number;
   apprenticeLessonsLimit: number;
@@ -55,6 +56,7 @@ export const defaultSettings: AppSettings = {
   notificationsBadging: true,
   notificationSounds: false,
   prioritizeCurrentLevel: false,
+  interleaveLessons: false,
   lessonOrder: ['radical', 'kanji', 'vocabulary'],
   lessonBatchSize: 5,
   apprenticeLessonsLimit: Number.MAX_SAFE_INTEGER,

@@ -205,6 +205,55 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           ) : null}
         </View>
 
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Lessons</Text>
+
+          <SettingStepper
+            label="Batch Size"
+            detail="Items per lesson session."
+            value={settings.lessonBatchSize}
+            min={1}
+            max={10}
+            onChange={(v) => updateSetting('lessonBatchSize', v)}
+            theme={theme}
+          />
+
+          <SettingStepper
+            label="Apprentice Limit"
+            detail="Block new lessons when apprentice items exceed this."
+            value={settings.apprenticeLessonsLimit >= 999 ? 999 : settings.apprenticeLessonsLimit}
+            min={25}
+            max={999}
+            step={25}
+            onChange={(v) => updateSetting('apprenticeLessonsLimit', v >= 999 ? Number.MAX_SAFE_INTEGER : v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Prioritize Current Level"
+            detail="Show current-level items first in lessons."
+            value={settings.prioritizeCurrentLevel}
+            onValueChange={(v) => updateSetting('prioritizeCurrentLevel', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Interleave Lessons"
+            detail="Randomize item order across types within each level."
+            value={settings.interleaveLessons}
+            onValueChange={(v) => updateSetting('interleaveLessons', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Show Kana-Only Vocabulary"
+            detail="Include kana-only vocabulary in lessons."
+            value={settings.showKanaOnlyVocab}
+            onValueChange={(v) => updateSetting('showKanaOnlyVocab', v)}
+            theme={theme}
+          />
+        </View>
+
         <View style={styles.dangerPanel}>
           <Text style={styles.panelTitle}>Log Out</Text>
           <Text style={styles.bodyText}>Clears token, cache, and pending queues.</Text>

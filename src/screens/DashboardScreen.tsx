@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { DashboardSummary, getDashboardSummary } from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
+import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import { runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
 import { SrsBar } from '../components/SrsBar';
 import { RootStackParamList } from '../navigation/types';
@@ -36,6 +37,11 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+
+  useEffect(() => {
+    loadSettings().then(setSettings);
+  }, []);
 
   useEffect(() => {
     Animated.timing(entrance, {
@@ -71,6 +77,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   };
 
   const isVacation = Boolean(summary?.vacationStartedAt);
+  const apprenticeLimitReached = (summary?.apprentice ?? 0) >= settings.apprenticeLessonsLimit;
   const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
   const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
@@ -131,14 +138,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
         <Animated.View key={theme.isDark ? 'dark-actions' : 'light-actions'} style={[styles.actionStack, entranceStyle]}>
           <StudyAction
             label="Lessons"
-            hint="Unlocked pool"
+            hint={apprenticeLimitReached ? 'Apprentice limit reached' : 'Unlocked pool'}
             value={summary?.availableLessons ?? 0}
             color={theme.colors.radical}
             cardTheme={actionCardTheme}
             isCompact={isCompact}
-            disabled={isVacation}
+            disabled={isVacation || apprenticeLimitReached}
             featured
-            onPress={() => navigation.navigate('LessonSession')}
+            onPress={() => navigation.navigate('LessonSession', {})}
           />
           <StudyAction
             label="Reviews"
@@ -151,6 +158,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             onPress={() => navigation.navigate('ReviewSession')}
           />
         </Animated.View>
+
+        {(summary?.availableLessons ?? 0) > 0 && !apprenticeLimitReached && !isVacation ? (
+          <Animated.View style={entranceStyle}>
+            <Pressable onPress={() => navigation.navigate('LessonPicker')} style={({ pressed }) => [styles.pickerButton, pressed && styles.pressed]}>
+              <Text style={styles.pickerButtonText}>Lesson Picker</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         <View style={styles.panel}>
           <View style={styles.panelHeader}>
@@ -527,6 +542,21 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
     pressed: {
       opacity: 0.7,
       transform: [{ scale: 0.99 }],
+    },
+    pickerButton: {
+      minHeight: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
+      borderWidth: 1,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
+    },
+    pickerButtonText: {
+      color: theme.colors.mutedText,
+      fontSize: 14,
+      fontWeight: '900',
+      letterSpacing: 0.3,
     },
   });
 }

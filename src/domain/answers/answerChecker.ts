@@ -36,6 +36,13 @@ export type SubjectAnswerData = {
   meanings: MeaningCandidate[];
   readings?: ReadingCandidate[];
   componentSubjectIds?: number[];
+  meaningMnemonic?: string;
+  meaningHint?: string;
+  readingMnemonic?: string;
+  readingHint?: string;
+  contextSentences?: Array<{ en: string; ja: string }>;
+  partsOfSpeech?: string[];
+  amalgamationSubjectIds?: number[];
 };
 
 export type StudyMaterialAnswerData = {

@@ -12,24 +12,119 @@ The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. S
 
 ## Current Status
 
-The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, and working dashboard, lesson starter, and review flows.
+The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, and working dashboard, lesson, and review flows.
 
-Implemented highlights:
+## Features
 
-- API token login with secure token storage and `/user` validation.
-- Incremental sync for users, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
-- Pending sync for review progress, lesson starts, and study material writes.
-- Dashboard counts for lessons, reviews, SRS buckets, sync status, and cache stats.
-- Review session state machine with active/review queues, batching, ordering options (random, SRS ascending/descending/alternating, current-level-first, lowest-level-first, newest/oldest available, longest wait), wrong-answer delay, grouped meaning/reading mode, minimized review penalty, Anki mode, exact-match option, wrap-up mode, completion summary, and practice-session support.
-- Answer checker behavior ported from Tsurukame, including kana input conversion, fuzzy matching, blacklists, other-reading detection, invalid character detection, and okurigana checks.
-- Settings screen with appearance toggle (light/dark/system with persistence), review order picker, Anki mode, exact match, grouping controls, batch size stepper, review limit, and all review-related toggles.
-- Shared UI components (`ScreenLayout`, `SubjectHeroCard`, `SrsBar`) for reviews, lessons, and dashboard.
-- Image-only radical support using WaniKani SVG assets and CSS-aware `react-native-svg` rendering.
+### Authentication
 
-Known major gaps:
+- WaniKani API token login validated against `/user`.
+- Secure token storage via platform Keychain/Keystore.
+- Logout clears token, local cache, and pending queues.
 
-- Lesson flow is still a starter/introduction flow; full lesson quiz parity is not implemented.
-- Dashboard charts, subject browsing/search/details, audio playback, and notifications remain future milestones.
+### Data Sync
+
+- Incremental sync using `updated_after` cursors for users, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
+- Pending-write queues for review progress, lesson starts, and study material edits, flushed to WaniKani when online.
+- Battery-conscious lifecycle sync: full sync on foreground when stale (>15 min), pending-write flush on background only when writes exist.
+- Manual pull-to-refresh for explicit full sync.
+
+### Dashboard
+
+- Username, level, and cache stats header.
+- Available lessons count with apprentice-limit gating (button disabled when apprentice items exceed the configured limit).
+- Available reviews count based on current time.
+- SRS bucket counts (Apprentice, Guru, Master, Enlightened, Burned) with progress bar.
+- Vacation mode banner.
+- Sync status, last sync time, and error display.
+- Lesson Picker button (visible when lessons are available and apprentice limit is not reached).
+
+### Review Sessions
+
+- Two-queue state machine (active queue + review queue) matching Tsurukame iOS semantics.
+- Wrong answers re-queued with a 5-item return delay.
+- Per-item tracking of meaning/reading wrong counts.
+- Items marked finished when both meaning and reading are answered, or one side is unavailable/skipped.
+- Practice mode that never submits WaniKani SRS progress.
+- Review summary with success rate and incorrect items grouped by level.
+- Wrap-up mode that stops adding new items and finishes only active items.
+
+**Review Ordering** — Random, ascending SRS, descending SRS, alternating SRS, current level first, lowest level first, newest available, oldest available, longest relative wait.
+
+**Answer Checking** (ported from Tsurukame) — Normalization, romaji-to-kana conversion, meaning/reading validation, synonym support, blacklist checking, Levenshtein fuzzy matching, other-reading detection, invalid character range detection, okurigana mismatch detection, and exact-match mode.
+
+**Cheats** — Override incorrect as correct, try again later (re-queue without penalty), and add synonym (queued for WaniKani API sync).
+
+**Anki Mode** — Self-grading with immediate answer reveal. Supports both, reading-only, meaning-only, and combined reading/meaning variants.
+
+**Quick Settings** — Mid-session settings modal for toggling exact match, cheats, Anki mode, answer reveal, and full answer display without leaving the review. Includes Wrap Up and End Session actions. Changes persist to the main settings screen.
+
+### Lesson Sessions
+
+- Fetches lesson-stage assignments from local cache with configurable ordering, filtering, and batch size.
+- Ordering by level (ascending by default, or descending with current-level priority), then by subject type per `lessonOrder` setting (default: radical → kanji → vocabulary), then by subject ID.
+- Interleave mode shuffles items within level groups for a mixed-type experience.
+- Batch size caps items per session (default 5, configurable 1–10).
+- Apprentice limit gates the lesson button when apprentice SRS items exceed the threshold.
+- Filters kana-only vocabulary when `showKanaOnlyVocab` is disabled.
+- Filters hidden/excluded vocabulary based on study material data.
+
+**Introduction Pages** — Each subject shows a detail page with meanings, readings, components/radicals, mnemonics (with inline Japanese rendering), context sentences (vocabulary), parts of speech (vocabulary), and "Used In" amalgamation chips. Navigate between subjects via chip bar or Back/Next buttons.
+
+**Lesson Quiz** — After all introduction pages, a quiz phase uses the same answer-checking UI as reviews. Answer checking supports meaning and reading prompts with romaji-to-kana conversion. Lesson starts are queued for WaniKani API sync only after each subject is correctly answered in the quiz.
+
+### Lesson Picker
+
+- Browses all available lesson items grouped by level and subject type (radicals, kanji, vocabulary).
+- Multi-select with checkmark toggles on each item.
+- "Begin (N)" button passes selected items directly to the lesson session, bypassing batch size and ordering.
+- Respects the same kana-only and hidden/excluded filters as the lesson queue.
+
+### Settings
+
+**Appearance** — Light, dark, and system theme with immediate persistence.
+
+**Lessons** — Batch size (1–10), apprentice lessons limit (25–999), prioritize current level, interleave lessons, show kana-only vocabulary.
+
+**Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
+
+**Log Out** — Clears token, cache, and pending queues.
+
+### Shared Components
+
+- `ScreenLayout`, `SessionHeader` (with optional settings gear), `CenteredMessage` for consistent screen structure.
+- `SubjectHeroCard` for displaying Japanese characters and radical images.
+- `SrsBar` for SRS stage progress visualization.
+- `ReviewQuickSettings` modal for in-session setting toggles.
+- CSS-aware SVG rendering for image-only radicals with inline style fallbacks.
+
+### Image-Only Radical Support
+
+- WaniKani radicals that have no `characters` field are rendered using their `character_images` assets.
+- Prefers PNG images; falls back to SVG with CSS variable resolution.
+- Radical image diagnostics screen for previewing cached image-only radicals.
+
+### Input
+
+- In-app romaji-to-kana conversion for reading prompts, matching Tsurukame's input behavior.
+- No reliance on OS Japanese keyboard switching.
+
+### Testing
+
+- Unit tests for answer checking (normalization, fuzzy matching, blacklists, okurigana, other readings).
+- Unit tests for romaji-to-kana conversion.
+- Unit tests for review session state machine (ordering, grouping, wrap-up, wrong counts, practice mode).
+- Unit tests for study repository queries and radical SVG/image handling.
+
+## Known Major Gaps
+
+- Lessons have full intro pages and quiz flow. Unit tests for lesson selection and filtering are not yet implemented.
+- Dashboard lacks charts, upcoming review forecast, current-level progress, and power-user sections (recent lessons, recent mistakes, leeches, burned items).
+- Subject browsing, search, and detail screens are not implemented.
+- Audio playback, offline audio, and voice actor selection are not implemented.
+- Notifications, badges, and deep links are not implemented.
+- Custom font and font-size settings are not implemented.
+- Quick settings during review is implemented. Hardware keyboard shortcuts are not planned.
 
 ## Getting Started
 
@@ -51,3 +146,25 @@ pnpm exec expo install --check
 ```
 
 Use `pnpm` for dependency changes. Keep `pnpm-lock.yaml` current.
+
+## Project Structure
+
+```
+src/
+  domain/           # Pure logic layer — no React, no UI imports
+    answers/        # Answer checking, romaji-to-kana conversion
+    api/            # WaniKani v2 REST client (WaniKaniClient.ts) + types
+    db/             # SQLite open/migrations/put functions (database.ts, schema.ts)
+    dashboard/      # Dashboard query aggregation
+    settings/       # AppSettings, load/save via AsyncStorage
+    storage/        # Secure token storage (expo-secure-store)
+    study/          # Review/lesson queue queries, result queueing, ordering, filtering
+    subjects/       # Radical image handling and SVG rendering
+    sync/           # Incremental sync + pending-write flush (syncService.ts)
+  navigation/       # React Navigation routes, auth gate, AppState lifecycle
+  screens/          # UI screens (Dashboard, Login, Settings, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
+  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings)
+  theme/            # WaniKani color palette, subject-type colors, theme provider
+App.tsx             # App root
+tsurukame/          # Original iOS Swift/UIKit source — behavior reference only
+```
