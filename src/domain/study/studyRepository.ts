@@ -27,6 +27,7 @@ type StudyQueueRow = {
   assignment_payload: string;
   subject_payload: string;
   study_material_payload: string | null;
+  available_at: string | null;
 };
 
 export type StudyQueueItem = {
@@ -37,6 +38,7 @@ export type StudyQueueItem = {
   srsStage: number;
   subject: SubjectAnswerData;
   studyMaterials?: StudyMaterialAnswerData;
+  availableAt?: string;
 };
 
 export type ReviewResult = {
@@ -54,6 +56,7 @@ export async function getReviewQueue(db: AppDatabase, limit = 100) {
        assignments.subject_type,
        assignments.level,
        assignments.srs_stage,
+       assignments.available_at,
        assignments.payload AS assignment_payload,
        subjects.payload AS subject_payload,
        study_materials.payload AS study_material_payload
@@ -80,6 +83,7 @@ export async function getLessonQueue(db: AppDatabase, limit = 100) {
        assignments.subject_type,
        assignments.level,
        assignments.srs_stage,
+       assignments.available_at,
        assignments.payload AS assignment_payload,
        subjects.payload AS subject_payload,
        study_materials.payload AS study_material_payload
@@ -156,6 +160,7 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
       type: subjectType,
       japanese: subject.data.characters ?? '',
       characterImageUrl: getCharacterImageUrl(subject.data),
+      characterImageIsSvg: isCharacterImageSvg(subject.data),
       meanings: [
         ...(subject.data.meanings ?? []).map((meaning) => ({
           meaning: meaning.meaning,
@@ -180,6 +185,7 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
           meaningSynonyms: studyMaterial.data.meaning_synonyms ?? [],
         }
       : undefined,
+    availableAt: row.available_at ?? undefined,
   };
 }
 
@@ -191,7 +197,48 @@ function hasPrompt(item: StudyQueueItem) {
   return Boolean(item.subject.japanese || item.subject.characterImageUrl);
 }
 
-function getCharacterImageUrl(subject: SubjectData) {
+export function getCharacterImageUrl(subject: SubjectData) {
   const images = subject.character_images ?? [];
-  return images.find((image) => image.content_type === 'image/png')?.url ?? images.find((image) => image.content_type !== 'image/svg+xml')?.url;
+
+  const svgWithInlineStyles = images.find(
+    (image) => image.content_type === 'image/svg+xml' && image.metadata?.inline_styles === true,
+  );
+  if (svgWithInlineStyles?.url) {
+    return svgWithInlineStyles.url;
+  }
+
+  const pngs = images.filter((image) => image.content_type === 'image/png');
+  return (
+    pngs.find((image) => image.metadata?.style_name === 'original')?.url ??
+    pngs[0]?.url ??
+    images.find((image) => image.content_type === 'image/svg+xml')?.url
+  );
+}
+
+function isDarkImageColor(color?: string) {
+  if (!color) {
+    return false;
+  }
+  const normalized = color.replace('#', '').toLowerCase();
+  if (normalized.length !== 6) {
+    return false;
+  }
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  if (!Number.isFinite(red) || !Number.isFinite(green) || !Number.isFinite(blue)) {
+    return false;
+  }
+  return red * 0.299 + green * 0.587 + blue * 0.114 < 180;
+}
+
+export function isCharacterImageSvg(subject: SubjectData) {
+  const images = subject.character_images ?? [];
+  const url = getCharacterImageUrl(subject);
+  if (!url) {
+    return false;
+  }
+  return images.some(
+    (image) => image.url === url && image.content_type === 'image/svg+xml',
+  );
 }

@@ -9,6 +9,7 @@ import { hasPendingWrites, runIncrementalSync, runPendingSync, SyncProgress } fr
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { LessonSessionScreen } from '../screens/LessonSessionScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import { RadicalImagePreviewScreen } from '../screens/RadicalImagePreviewScreen';
 import { ReviewSessionScreen } from '../screens/ReviewSessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { useAppTheme } from '../theme/AppThemeProvider';
@@ -170,6 +171,7 @@ export function AppNavigator() {
           <Stack.Screen name="Settings">
             {(props) => <SettingsScreen {...props} onLoggedOut={() => setApiToken(null)} />}
           </Stack.Screen>
+          <Stack.Screen name="RadicalImagePreview" component={RadicalImagePreviewScreen} />
           <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
           <Stack.Screen name="LessonSession" component={LessonSessionScreen} />
         </>

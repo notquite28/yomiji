@@ -1,6 +1,8 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -28,9 +30,31 @@ const TOKEN_HELP_URL = 'https://www.wanikani.com/settings/personal_access_tokens
 export function LoginScreen({ onAuthenticated }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
+  const entrance = useRef(new Animated.Value(0)).current;
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 640,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
+
+  const entranceStyle = {
+    opacity: entrance,
+    transform: [
+      {
+        translateY: entrance.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+        }),
+      },
+    ],
+  };
 
   const submit = async () => {
     const trimmedToken = token.trim();
@@ -59,34 +83,44 @@ export function LoginScreen({ onAuthenticated }: Props) {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.select({ ios: 'padding', android: undefined })}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.heroCard}>
+          <Animated.View style={[styles.heroCard, entranceStyle]}>
+            <View style={styles.brandPill}>
+              <View style={styles.brandDot} />
+              <Text style={styles.kicker}>WaniKani study</Text>
+            </View>
             <Text style={styles.logo}>読み道</Text>
             <Text style={styles.title}>Yomichi</Text>
-          </View>
+            <Text style={styles.subtitle}>A quieter path through reviews.</Text>
+          </Animated.View>
 
-          <View style={styles.formCard}>
-            <Text style={styles.label}>WaniKani API token</Text>
+          <Animated.View style={[styles.formCard, entranceStyle]}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Connect</Text>
+              <Text style={styles.formMeta}>Private token</Text>
+            </View>
+            <Text style={styles.label}>API token</Text>
             <TextInput
               value={token}
               onChangeText={setToken}
               autoCapitalize="none"
               autoCorrect={false}
               secureTextEntry
-              placeholder="Token token=... not needed"
+              placeholder="Paste personal access token"
               placeholderTextColor={theme.colors.mutedText}
+              selectionColor={theme.colors.kanji}
               style={styles.input}
               returnKeyType="done"
               onSubmitEditing={submit}
             />
-            <Text style={styles.helpText}>Required permissions: assignments:start, reviews:create, study_materials:create, and study_materials:update.</Text>
+            <Text style={styles.helpText}>Needs review and study-material scopes.</Text>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <Pressable disabled={isSubmitting} onPress={submit} style={({ pressed }) => [styles.primaryButton, (pressed || isSubmitting) && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>{isSubmitting ? 'Validating...' : 'Validate and Continue'}</Text>
+              <Text style={styles.primaryButtonText}>{isSubmitting ? 'Validating...' : 'Enter Yomichi'}</Text>
             </Pressable>
             <Pressable onPress={() => Linking.openURL(TOKEN_HELP_URL)} style={styles.linkButton}>
-              <Text style={styles.linkText}>Open WaniKani token settings</Text>
+              <Text style={styles.linkText}>Create token</Text>
             </Pressable>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -115,79 +149,136 @@ function makeStyles(theme: AppTheme) {
   return StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
     },
     keyboard: {
       flex: 1,
     },
     content: {
       flexGrow: 1,
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingVertical: 28,
       justifyContent: 'center',
-      gap: 18,
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 460,
+      gap: 16,
     },
     heroCard: {
       overflow: 'hidden',
-      borderRadius: 32,
-      padding: 26,
-      backgroundColor: theme.colors.surface,
+      borderRadius: 30,
+      padding: 24,
+      minHeight: 258,
+      justifyContent: 'space-between',
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.18 : 0.06,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 5,
+    },
+    brandPill: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
+      borderWidth: 1,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
+    },
+    brandDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: theme.colors.kanji,
     },
     kicker: {
-      color: theme.colors.vocabulary,
+      color: theme.colors.mutedText,
       fontSize: 12,
       fontWeight: '800',
-      letterSpacing: 1.5,
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
     },
     logo: {
-      marginTop: 14,
+      marginTop: 34,
       color: theme.colors.kanji,
-      fontSize: 72,
+      fontSize: 74,
       fontWeight: '900',
-      letterSpacing: 10,
+      letterSpacing: 8,
     },
     title: {
-      marginTop: 6,
+      marginTop: 4,
       color: theme.colors.text,
-      fontSize: 32,
-      lineHeight: 38,
+      fontSize: 38,
+      lineHeight: 44,
       fontWeight: '900',
     },
     subtitle: {
-      marginTop: 12,
+      marginTop: 6,
       color: theme.colors.mutedText,
-      fontSize: 16,
-      lineHeight: 24,
+      fontSize: 15,
+      lineHeight: 21,
+      fontWeight: '700',
     },
     formCard: {
       borderRadius: 28,
-      padding: 20,
-      backgroundColor: theme.colors.surfaceElevated,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+      gap: 13,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.16 : 0.05,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
+    },
+    formHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       gap: 12,
     },
-    label: {
+    formTitle: {
       color: theme.colors.text,
-      fontSize: 14,
+      fontSize: 22,
+      fontWeight: '900',
+    },
+    formMeta: {
+      color: theme.colors.mutedText,
+      fontSize: 12,
       fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    label: {
+      color: theme.colors.mutedText,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
     },
     input: {
-      minHeight: 54,
-      borderRadius: 18,
+      minHeight: 58,
+      borderRadius: 20,
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
+      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(32, 26, 36, 0.08)',
+      backgroundColor: theme.isDark ? '#0f0e13' : '#f2eee8',
       color: theme.colors.text,
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       fontSize: 16,
+      fontWeight: '700',
     },
     helpText: {
       color: theme.colors.mutedText,
       fontSize: 13,
-      lineHeight: 19,
+      lineHeight: 18,
+      fontWeight: '700',
     },
     errorText: {
       color: theme.colors.danger,
@@ -196,19 +287,26 @@ function makeStyles(theme: AppTheme) {
       fontWeight: '700',
     },
     primaryButton: {
-      minHeight: 54,
+      minHeight: 58,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 18,
+      borderRadius: 20,
       backgroundColor: theme.colors.kanji,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.2 : 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
     },
     primaryButtonText: {
       color: '#ffffff',
       fontSize: 16,
       fontWeight: '900',
+      letterSpacing: 0.2,
     },
     pressed: {
       opacity: 0.72,
+      transform: [{ scale: 0.99 }],
     },
     linkButton: {
       alignItems: 'center',
