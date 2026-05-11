@@ -104,14 +104,14 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M4: Lesson Flow Parity
 
-- [ ] Port iOS lesson selection behavior.
-- [ ] Apply lesson ordering by radical, kanji, and vocabulary.
-- [ ] Support current-level priority.
-- [ ] Support lesson batch size.
-- [ ] Support apprentice lesson limit.
-- [ ] Support kana-only vocabulary visibility setting.
-- [ ] Support vocabulary exclusion setting.
-- [ ] Add lesson picker grouped by level and subject type.
+- [x] Port iOS lesson selection behavior.
+- [x] Apply lesson ordering by radical, kanji, and vocabulary.
+- [x] Support current-level priority.
+- [x] Support lesson batch size.
+- [x] Support apprentice lesson limit.
+- [x] Support kana-only vocabulary visibility setting.
+- [x] Support vocabulary exclusion setting.
+- [x] Add lesson picker grouped by level and subject type.
 - [ ] Add subject introduction pages with iOS-like detail sections.
 - [ ] Add lesson quiz using the review answer-checking UI.
 - [ ] Queue lesson starts after successful lesson quiz completion instead of the current starter-only flow.
@@ -170,7 +170,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 - [x] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
 - [ ] Add typed settings migrations.
-- [ ] Add lesson settings UI.
+- [x] Add lesson settings UI.
 - [x] Add review settings UI.
 - [ ] Add subject detail settings UI.
 - [ ] Add audio settings UI.
@@ -204,8 +204,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 ## Current Known Gaps
 
 - Review sessions have cheats, wrap-up, Anki mode, full ordering, and exact-match support, but still lack quick settings during review and hardware keyboard shortcuts.
-- Lessons currently mark starts from an intro flow and do not yet include the full quiz flow. Lesson quiz should reuse the review state machine.
+- Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, and lesson picker, but still lack subject introduction pages and the full quiz flow. Lesson quiz should reuse the review state machine.
 - Dashboard lacks charts and most power-user sections.
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.
-- Lesson, audio, font, and diagnostics settings UI are not yet exposed.
+- Audio, font, and diagnostics settings UI are not yet exposed.

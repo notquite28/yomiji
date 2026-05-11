@@ -4,5 +4,6 @@ export type RootStackParamList = {
   Settings: undefined;
   RadicalImagePreview: undefined;
   ReviewSession: undefined;
-  LessonSession: undefined;
+  LessonSession: { selectedIds?: number[] };
+  LessonPicker: undefined;
 };

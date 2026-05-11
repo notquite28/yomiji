@@ -3,16 +3,17 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { openAppDatabase } from '../domain/db/database';
-import { getLessonQueue, queueLessonStart, StudyQueueItem } from '../domain/study/studyRepository';
+import { getLessonItemsByIds, getLessonQueue, queueLessonStart, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
+import { defaultSettings, loadSettings, AppSettings } from '../domain/settings/settings';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LessonSession'>;
 
-export function LessonSessionScreen({ navigation }: Props) {
+export function LessonSessionScreen({ navigation, route }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [queue, setQueue] = useState<StudyQueueItem[]>([]);
@@ -20,11 +21,21 @@ export function LessonSessionScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
   useEffect(() => {
     let isMounted = true;
-    openAppDatabase()
-      .then((db) => getLessonQueue(db))
+    const selectedIds = route.params?.selectedIds;
+    const selectedSet = selectedIds ? new Set(selectedIds) : null;
+
+    Promise.all([openAppDatabase(), loadSettings()])
+      .then(([db, loadedSettings]) => {
+        setSettings(loadedSettings);
+        if (selectedSet && selectedSet.size > 0) {
+          return getLessonItemsByIds(db, loadedSettings, selectedSet);
+        }
+        return getLessonQueue(db, loadedSettings, loadedSettings.lessonBatchSize);
+      })
       .then((items) => {
         if (isMounted) {
           setQueue(items);

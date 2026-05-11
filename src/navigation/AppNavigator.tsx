@@ -7,6 +7,7 @@ import { getLastSyncTime, openAppDatabase } from '../domain/db/database';
 import { getApiToken } from '../domain/storage/secureToken';
 import { hasPendingWrites, runIncrementalSync, runPendingSync, SyncProgress } from '../domain/sync/syncService';
 import { DashboardScreen } from '../screens/DashboardScreen';
+import { LessonPickerScreen } from '../screens/LessonPickerScreen';
 import { LessonSessionScreen } from '../screens/LessonSessionScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { RadicalImagePreviewScreen } from '../screens/RadicalImagePreviewScreen';
@@ -173,6 +174,7 @@ export function AppNavigator() {
           </Stack.Screen>
           <Stack.Screen name="RadicalImagePreview" component={RadicalImagePreviewScreen} />
           <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
+          <Stack.Screen name="LessonPicker" component={LessonPickerScreen} />
           <Stack.Screen name="LessonSession" component={LessonSessionScreen} />
         </>
       ) : (
