@@ -100,8 +100,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Support current-level-first and lowest-level-first review order.
 - [x] Support newest available, oldest available, and longest-relative-wait review order.
 - [x] Support Anki mode variants.
-- [ ] Add quick settings during review.
-- [ ] Add hardware keyboard shortcuts where practical.
+- [x] Add quick settings during review.
+- [~] Add hardware keyboard shortcuts where practical. *(not planned — tablet-only, low ROI)*
 
 ## M4: Lesson Flow Parity
 

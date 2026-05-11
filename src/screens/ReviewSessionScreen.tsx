@@ -15,6 +15,7 @@ import {
 import { getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
+import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
@@ -43,6 +44,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultSettings);
   const [userLevel, setUserLevel] = useState<number | undefined>(undefined);
   const [ankiRevealed, setAnkiRevealed] = useState(false);
+  const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
 
   const sessionRef = useRef<ReviewSession | null>(null);
 
@@ -317,6 +319,23 @@ export function ReviewSessionScreen({ navigation }: Props) {
     setRevision((r) => r + 1);
   };
 
+  const handleQuickSettingsChange = (next: AppSettings) => {
+    setAppSettings(next);
+    setRevision((r) => r + 1);
+  };
+
+  const handleQuickWrapUp = () => {
+    setQuickSettingsOpen(false);
+    if (!feedback) {
+      wrapUp();
+    }
+  };
+
+  const handleEndSession = () => {
+    setQuickSettingsOpen(false);
+    navigation.goBack();
+  };
+
   const enableCheats = settings.enableCheats;
   const showCheats = enableCheats && feedback && !feedback.correct;
   const canAddSynonym = showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0;
@@ -365,7 +384,11 @@ export function ReviewSessionScreen({ navigation }: Props) {
 
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
-      <SessionHeader onBack={() => navigation.goBack()} progress={progress} />
+      <SessionHeader
+        onBack={() => navigation.goBack()}
+        progress={progress}
+        onSettings={() => setQuickSettingsOpen(true)}
+      />
 
       <SubjectHeroCard
         kicker={displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
@@ -553,6 +576,19 @@ export function ReviewSessionScreen({ navigation }: Props) {
       ) : null}
 
       {session?.wrappingUp ? <Text style={styles.wrapUpText}>Wrap-up mode: finish the current review batch. No new reviews will be added.</Text> : null}
+
+      <ReviewQuickSettings
+        visible={quickSettingsOpen}
+        settings={appSettings}
+        onSettingsChange={handleQuickSettingsChange}
+        onClose={() => setQuickSettingsOpen(false)}
+        onEndSession={handleEndSession}
+        onWrapUp={handleQuickWrapUp}
+        canWrapUp={session?.canWrapUp ?? false}
+        wrappingUp={session?.wrappingUp ?? false}
+        hasFeedback={feedback !== null}
+        remainingInBatch={session?.activeQueueLength ?? 0}
+      />
     </ScreenLayout>
   );
 }

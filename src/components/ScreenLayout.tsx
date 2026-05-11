@@ -70,9 +70,11 @@ export function CenteredMessage({
 export function SessionHeader({
   onBack,
   progress,
+  onSettings,
 }: {
   onBack: () => void;
   progress: string;
+  onSettings?: () => void;
 }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
@@ -83,6 +85,13 @@ export function SessionHeader({
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <Text style={styles.progressText}>{progress}</Text>
+      {onSettings ? (
+        <Pressable onPress={onSettings} style={styles.settingsButton}>
+          <Text style={styles.settingsButtonText}>⚙</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.headerSpacer} />
+      )}
     </View>
   );
 }
@@ -151,6 +160,23 @@ function makeStyles(theme: AppTheme) {
     progressText: {
       color: theme.colors.mutedText,
       fontWeight: '900',
+    },
+    settingsButton: {
+      borderRadius: 999,
+      width: 38,
+      height: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    settingsButtonText: {
+      color: theme.colors.text,
+      fontSize: 18,
+    },
+    headerSpacer: {
+      width: 38,
     },
   });
 }
