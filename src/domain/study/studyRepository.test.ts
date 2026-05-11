@@ -1,8 +1,28 @@
-import { getCharacterImageUrl, isCharacterImageSvg } from './studyRepository';
+import { AppSettings, defaultSettings, SubjectType } from '../settings/settings';
+import { StudyQueueItem } from './studyRepository';
+import { getCharacterImageUrl, isCharacterImageSvg, isLessonFiltered, sortLessonItems } from './studyRepository';
 import { SubjectData } from '../api/types';
 
 function makeSubject(images: SubjectData['character_images']): SubjectData {
   return { level: 1, character_images: images };
+}
+
+function makeQueueItem(overrides: Partial<StudyQueueItem> = {}): StudyQueueItem {
+  return {
+    assignmentId: 1,
+    subjectId: 1,
+    subjectType: 'vocabulary',
+    level: 1,
+    srsStage: 0,
+    subject: {
+      id: 1,
+      type: 'vocabulary',
+      japanese: '猫',
+      meanings: [{ meaning: 'cat', type: 'primary', acceptedAnswer: true }],
+      readings: [{ reading: 'ねこ', primary: true, acceptedAnswer: true }],
+    },
+    ...overrides,
+  };
 }
 
 describe('getCharacterImageUrl', () => {
@@ -65,5 +85,165 @@ describe('getCharacterImageUrl', () => {
     ]);
     expect(getCharacterImageUrl(subject)).toBe('https://cdn.example.com/radical.png');
     expect(isCharacterImageSvg(subject)).toBe(false);
+  });
+});
+
+describe('isLessonFiltered', () => {
+  it('does not filter kanji subjects', () => {
+    const item = makeQueueItem({ subjectType: 'kanji' });
+    expect(isLessonFiltered(item, false, false, defaultSettings)).toBe(false);
+  });
+
+  it('does not filter radical subjects', () => {
+    const item = makeQueueItem({ subjectType: 'radical' });
+    expect(isLessonFiltered(item, false, false, defaultSettings)).toBe(false);
+  });
+
+  it('does not filter regular vocabulary when showKanaOnlyVocab is true', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    expect(isLessonFiltered(item, false, false, defaultSettings)).toBe(false);
+  });
+
+  it('does not filter kana-only vocabulary when showKanaOnlyVocab is true', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    const settings = { ...defaultSettings, showKanaOnlyVocab: true };
+    expect(isLessonFiltered(item, true, false, settings)).toBe(false);
+  });
+
+  it('filters kana-only vocabulary when showKanaOnlyVocab is false', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    const settings = { ...defaultSettings, showKanaOnlyVocab: false };
+    expect(isLessonFiltered(item, true, false, settings)).toBe(true);
+  });
+
+  it('does not filter regular vocabulary when showKanaOnlyVocab is false', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    const settings = { ...defaultSettings, showKanaOnlyVocab: false };
+    expect(isLessonFiltered(item, false, false, settings)).toBe(false);
+  });
+
+  it('filters hidden vocabulary', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    expect(isLessonFiltered(item, false, true, defaultSettings)).toBe(true);
+  });
+
+  it('does not filter hidden non-vocabulary', () => {
+    const item = makeQueueItem({ subjectType: 'kanji' });
+    expect(isLessonFiltered(item, false, true, defaultSettings)).toBe(false);
+  });
+
+  it('filters kana-only AND hidden vocabulary with both flags', () => {
+    const item = makeQueueItem({ subjectType: 'vocabulary' });
+    const settings = { ...defaultSettings, showKanaOnlyVocab: false };
+    expect(isLessonFiltered(item, true, true, settings)).toBe(true);
+  });
+});
+
+describe('sortLessonItems', () => {
+  function makeItem(id: number, level: number, subjectType: string): { item: StudyQueueItem } {
+    return {
+      item: makeQueueItem({
+        subjectId: id,
+        assignmentId: id,
+        level,
+        subjectType,
+        subject: {
+          id,
+          type: subjectType,
+          japanese: `item${id}`,
+          meanings: [{ meaning: `item${id}`, type: 'primary', acceptedAnswer: true }],
+          readings: [],
+        },
+      }),
+    };
+  }
+
+  it('sorts by level ascending by default', () => {
+    const items = [
+      makeItem(3, 5, 'vocabulary'),
+      makeItem(1, 2, 'radical'),
+      makeItem(2, 3, 'kanji'),
+    ];
+    const result = sortLessonItems(items, defaultSettings);
+    expect(result.map((r) => r.item.level)).toEqual([2, 3, 5]);
+  });
+
+  it('sorts by level descending when prioritizeCurrentLevel is true', () => {
+    const items = [
+      makeItem(1, 2, 'radical'),
+      makeItem(2, 3, 'kanji'),
+      makeItem(3, 5, 'vocabulary'),
+    ];
+    const settings = { ...defaultSettings, prioritizeCurrentLevel: true };
+    const result = sortLessonItems(items, settings);
+    expect(result.map((r) => r.item.level)).toEqual([5, 3, 2]);
+  });
+
+  it('sorts by subject type order within same level', () => {
+    const items = [
+      makeItem(3, 1, 'vocabulary'),
+      makeItem(1, 1, 'radical'),
+      makeItem(2, 1, 'kanji'),
+    ];
+    const result = sortLessonItems(items, defaultSettings);
+    expect(result.map((r) => r.item.subjectType)).toEqual(['radical', 'kanji', 'vocabulary']);
+  });
+
+  it('sorts by subject ID when level and type are equal', () => {
+    const items = [
+      makeItem(5, 1, 'radical'),
+      makeItem(2, 1, 'radical'),
+      makeItem(8, 1, 'radical'),
+    ];
+    const result = sortLessonItems(items, defaultSettings);
+    expect(result.map((r) => r.item.subjectId)).toEqual([2, 5, 8]);
+  });
+
+  it('sorts with custom lesson order', () => {
+    const items = [
+      makeItem(1, 1, 'radical'),
+      makeItem(2, 1, 'kanji'),
+      makeItem(3, 1, 'vocabulary'),
+    ];
+    const settings: AppSettings = { ...defaultSettings, lessonOrder: ['vocabulary', 'kanji', 'radical'] as SubjectType[] };
+    const result = sortLessonItems(items, settings);
+    expect(result.map((r) => r.item.subjectType)).toEqual(['vocabulary', 'kanji', 'radical']);
+  });
+
+  it('does not sort by type when interleave is enabled', () => {
+    const items = [
+      makeItem(1, 1, 'vocabulary'),
+      makeItem(2, 1, 'radical'),
+      makeItem(3, 1, 'kanji'),
+    ];
+    const settings = { ...defaultSettings, interleaveLessons: true };
+    const result = sortLessonItems([...items], settings);
+    expect(result.map((r) => r.item.subjectId)).toEqual([1, 2, 3]);
+  });
+
+  it('handles mixed levels and types', () => {
+    const items = [
+      makeItem(6, 3, 'kanji'),
+      makeItem(1, 1, 'radical'),
+      makeItem(4, 2, 'vocabulary'),
+      makeItem(2, 1, 'kanji'),
+      makeItem(5, 3, 'radical'),
+      makeItem(3, 2, 'radical'),
+    ];
+    const result = sortLessonItems(items, defaultSettings);
+    const types = result.map((r) => `${r.item.level}:${r.item.subjectType}`);
+    expect(types).toEqual([
+      '1:radical',
+      '1:kanji',
+      '2:radical',
+      '2:vocabulary',
+      '3:radical',
+      '3:kanji',
+    ]);
+  });
+
+  it('returns empty array unchanged', () => {
+    const result = sortLessonItems([], defaultSettings);
+    expect(result).toEqual([]);
   });
 });

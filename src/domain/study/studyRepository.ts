@@ -98,30 +98,13 @@ export async function getLessonQueue(db: AppDatabase, settings: AppSettings, lim
 
   let items = rows
     .map((row) => ({ item: rowToStudyQueueItem(row), row }))
-    .filter(({ item, row }) => hasPrompt(item) && !isFiltered(item, row, settings));
+    .filter(({ item, row }) => hasPrompt(item) && !isLessonFiltered(item, isKanaOnly(row), isHidden(row), settings));
 
   if (settings.interleaveLessons) {
     shuffleArray(items);
   }
 
-  const typeOrder = new Map(settings.lessonOrder.map((type, idx) => [type, idx]));
-
-  items.sort((a, b) => {
-    const levelA = a.item.level ?? 0;
-    const levelB = b.item.level ?? 0;
-    if (levelA !== levelB) {
-      return settings.prioritizeCurrentLevel ? levelB - levelA : levelA - levelB;
-    }
-    if (settings.interleaveLessons) {
-      return 0;
-    }
-    const typeIdxA = typeOrder.get(a.item.subjectType as SubjectType) ?? 0;
-    const typeIdxB = typeOrder.get(b.item.subjectType as SubjectType) ?? 0;
-    if (typeIdxA !== typeIdxB) {
-      return typeIdxA - typeIdxB;
-    }
-    return a.item.subjectId - b.item.subjectId;
-  });
+  items = sortLessonItems(items, settings);
 
   return items.slice(0, limit).map(({ item }) => item);
 }
@@ -147,18 +130,41 @@ export async function getLessonItemsByIds(db: AppDatabase, settings: AppSettings
 
   return rows
     .map((row) => ({ item: rowToStudyQueueItem(row), row }))
-    .filter(({ item, row }) => hasPrompt(item) && !isFiltered(item, row, settings) && subjectIds.has(item.subjectId))
+    .filter(({ item, row }) => hasPrompt(item) && !isLessonFiltered(item, isKanaOnly(row), isHidden(row), settings) && subjectIds.has(item.subjectId))
     .map(({ item }) => item);
 }
 
-function isFiltered(item: StudyQueueItem, row: StudyQueueRow, settings: AppSettings): boolean {
-  if (!settings.showKanaOnlyVocab && item.subjectType === 'vocabulary' && isKanaOnly(row)) {
+export function isLessonFiltered(item: StudyQueueItem, isKanaOnlySubject: boolean, isHiddenSubject: boolean, settings: AppSettings): boolean {
+  if (!settings.showKanaOnlyVocab && item.subjectType === 'vocabulary' && isKanaOnlySubject) {
     return true;
   }
-  if (item.subjectType === 'vocabulary' && isHidden(row)) {
+  if (item.subjectType === 'vocabulary' && isHiddenSubject) {
     return true;
   }
   return false;
+}
+
+export function sortLessonItems<T extends { item: StudyQueueItem }>(items: T[], settings: AppSettings): T[] {
+  const typeOrder = new Map(settings.lessonOrder.map((type, idx) => [type, idx]));
+
+  items.sort((a, b) => {
+    const levelA = a.item.level ?? 0;
+    const levelB = b.item.level ?? 0;
+    if (levelA !== levelB) {
+      return settings.prioritizeCurrentLevel ? levelB - levelA : levelA - levelB;
+    }
+    if (settings.interleaveLessons) {
+      return 0;
+    }
+    const typeIdxA = typeOrder.get(a.item.subjectType as SubjectType) ?? 0;
+    const typeIdxB = typeOrder.get(b.item.subjectType as SubjectType) ?? 0;
+    if (typeIdxA !== typeIdxB) {
+      return typeIdxA - typeIdxB;
+    }
+    return a.item.subjectId - b.item.subjectId;
+  });
+
+  return items;
 }
 
 export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {

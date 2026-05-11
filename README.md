@@ -121,10 +121,11 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Unit tests for study repository queries and radical SVG/image handling.
 - Unit tests for error sanitization, sync error classification, and friendly message generation.
 - Unit tests for migration schema validation (version ordering, table/index completeness, constraints).
+- Unit tests for lesson selection filtering and ordering (kana-only, hidden, level, subject type, interleave).
 
 ## Known Major Gaps
 
-- Lessons have full intro pages and quiz flow. Unit tests for lesson selection and filtering are not yet implemented.
+- Lessons have full intro pages, quiz flow, and unit tests for selection/filtering.
 - Dashboard lacks charts, upcoming review forecast, current-level progress, and power-user sections (recent lessons, recent mistakes, leeches, burned items).
 - Subject browsing, search, and detail screens are not implemented.
 - Audio playback, offline audio, and voice actor selection are not implemented.
