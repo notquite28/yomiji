@@ -70,14 +70,15 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 ### Phase 1: Core State Machine
 
 - [x] Extract shared UI components into `src/components/` (`ScreenLayout`, `SubjectHeroCard`).
-- [ ] Add shared `SrsBar` component.
+- [x] Add shared `SrsBar` component.
 - [x] Replace flat review loop with two-queue state machine (activeQueue + reviewQueue) modeled after iOS `ReviewSession.swift`.
 - [x] Re-queue wrong answers with 5-item return delay.
 - [x] Track meaningWrong/readingWrong/meaningWrongCount/readingWrongCount per item.
 - [x] Mark item finished only when both meaning and reading answered, or one side is unavailable/skipped.
 - [x] Support practice mode flag that skips progress submission.
 - [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, minimizeReviewPenalty, and skipKanjiReadings.
-- [ ] Consume exact-match settings in review answer checking.
+- [x] Consume exact-match settings in review answer checking.
+- [x] Load persisted settings into review session instead of hardcoded defaults.
 - [x] Add unit tests for review queue state machine in `src/domain/study/`.
 - [x] Refactor LessonSessionScreen to use shared components.
 
@@ -92,12 +93,12 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ### Phase 3: Polish
 
-- [ ] Port iOS `ReviewSession` ordering semantics.
-- [ ] Support random review order.
-- [ ] Support ascending, descending, and alternating SRS review order.
-- [ ] Support current-level-first and lowest-level-first review order.
-- [ ] Support newest available, oldest available, and longest-relative-wait review order.
-- [ ] Support Anki mode variants.
+- [x] Port iOS `ReviewSession` ordering semantics.
+- [x] Support random review order.
+- [x] Support ascending, descending, and alternating SRS review order.
+- [x] Support current-level-first and lowest-level-first review order.
+- [x] Support newest available, oldest available, and longest-relative-wait review order.
+- [x] Support Anki mode variants.
 - [ ] Add quick settings during review.
 - [ ] Add hardware keyboard shortcuts where practical.
 
@@ -141,8 +142,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [ ] Add autoplay and interrupt-background-audio settings.
 - [ ] Add custom Japanese review font support.
 - [ ] Add review font-size setting.
-- [ ] Add light, dark, and system appearance controls in settings.
-- [ ] Persist and apply appearance changes immediately.
+- [x] Add light, dark, and system appearance controls in settings.
+- [x] Persist and apply appearance changes immediately.
 
 ## M7: Notifications, Badges, And Links
 
@@ -167,10 +168,10 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M9: Settings Parity
 
-- [ ] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
+- [x] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
 - [ ] Add typed settings migrations.
 - [ ] Add lesson settings UI.
-- [ ] Add review settings UI.
+- [x] Add review settings UI.
 - [ ] Add subject detail settings UI.
 - [ ] Add audio settings UI.
 - [ ] Add font settings UI.
@@ -202,10 +203,9 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Current Known Gaps
 
-- Review sessions have cheats (override correct, try again later, add synonym) and wrap-up, but still lack quick settings, Anki mode, and full review ordering.
+- Review sessions have cheats, wrap-up, Anki mode, full ordering, and exact-match support, but still lack quick settings during review and hardware keyboard shortcuts.
 - Lessons currently mark starts from an intro flow and do not yet include the full quiz flow. Lesson quiz should reuse the review state machine.
 - Dashboard lacks charts and most power-user sections.
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.
-- Settings are represented in TypeScript but most controls are not exposed in UI.
-- Diagnostics currently include radical image preview only; full sync state, pending queue counts, sanitized logs, and export remain future work.
+- Lesson, audio, font, and diagnostics settings UI are not yet exposed.

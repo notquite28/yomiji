@@ -20,16 +20,16 @@ Implemented highlights:
 - Incremental sync for users, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
 - Pending sync for review progress, lesson starts, and study material writes.
 - Dashboard counts for lessons, reviews, SRS buckets, sync status, and cache stats.
-- Review session state machine with active/review queues, batching, ordering options, wrong-answer delay, grouped meaning/reading mode, minimized review penalty, wrap-up mode, completion summary, and practice-session support.
+- Review session state machine with active/review queues, batching, ordering options (random, SRS ascending/descending/alternating, current-level-first, lowest-level-first, newest/oldest available, longest wait), wrong-answer delay, grouped meaning/reading mode, minimized review penalty, Anki mode, exact-match option, wrap-up mode, completion summary, and practice-session support.
 - Answer checker behavior ported from Tsurukame, including kana input conversion, fuzzy matching, blacklists, other-reading detection, invalid character detection, and okurigana checks.
-- Shared study UI for reviews, lessons, and diagnostics.
-- Image-only radical support using WaniKani SVG assets, CSS-aware `react-native-svg` rendering, CSS variable fallback handling, and a Settings diagnostics preview screen.
+- Settings screen with appearance toggle (light/dark/system with persistence), review order picker, Anki mode, exact match, grouping controls, batch size stepper, review limit, and all review-related toggles.
+- Shared UI components (`ScreenLayout`, `SubjectHeroCard`, `SrsBar`) for reviews, lessons, and dashboard.
+- Image-only radical support using WaniKani SVG assets and CSS-aware `react-native-svg` rendering.
 
 Known major gaps:
 
 - Lesson flow is still a starter/introduction flow; full lesson quiz parity is not implemented.
-- Dashboard charts, subject browsing/search/details, audio playback, notifications, and most settings UI remain future milestones.
-- In-session cheats, quick settings, and full lesson quiz parity are not yet implemented.
+- Dashboard charts, subject browsing/search/details, audio playback, and notifications remain future milestones.
 
 ## Getting Started
 
