@@ -4,6 +4,12 @@ A WaniKani study app for Android, built with React Native and Expo. Named for шк
 
 The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. See `ROADMAP.md` for the parity checklist and `tsurukame/REACT_NATIVE_PORT_PRD.md` for product requirements context.
 
+## Screenshots
+
+| Light Mode | Dark Mode |
+| --- | --- |
+| <img src="assets/light.png" alt="Yomichi light mode screenshot" width="260" /> | <img src="assets/dark.png" alt="Yomichi dark mode screenshot" width="260" /> |
+
 ## Current Status
 
 The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, and working dashboard, lesson starter, and review flows.
