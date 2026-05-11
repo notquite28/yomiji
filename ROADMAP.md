@@ -113,9 +113,9 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Support kana-only vocabulary visibility setting.
 - [x] Support vocabulary exclusion setting.
 - [x] Add lesson picker grouped by level and subject type.
-- [ ] Add subject introduction pages with iOS-like detail sections.
-- [ ] Add lesson quiz using the review answer-checking UI.
-- [ ] Queue lesson starts after successful lesson quiz completion instead of the current starter-only flow.
+- [x] Add subject introduction pages with iOS-like detail sections.
+- [x] Add lesson quiz using the review answer-checking UI.
+- [x] Queue lesson starts after successful lesson quiz completion instead of the current starter-only flow.
 - [ ] Add unit tests for lesson selection and filtering.
 
 ## M5: Subject Browsing And Search
@@ -204,8 +204,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Current Known Gaps
 
-- Review sessions have cheats, wrap-up, Anki mode, full ordering, and exact-match support, but still lack quick settings during review and hardware keyboard shortcuts.
-- Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, and lesson picker, but still lack subject introduction pages and the full quiz flow. Lesson quiz should reuse the review state machine.
+- Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support, but still lack hardware keyboard shortcuts.
+- Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion. Unit tests for lesson selection and filtering remain.
 - Dashboard lacks charts and most power-user sections.
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.

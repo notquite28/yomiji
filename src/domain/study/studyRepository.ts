@@ -296,6 +296,13 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
         acceptedAnswer: reading.accepted_answer ?? reading.primary ?? true,
       })),
       componentSubjectIds: subject.data.component_subject_ids ?? [],
+      meaningMnemonic: subject.data.meaning_mnemonic,
+      meaningHint: subject.data.meaning_hint,
+      readingMnemonic: subject.data.reading_mnemonic,
+      readingHint: subject.data.reading_hint,
+      contextSentences: subject.data.context_sentences,
+      partsOfSpeech: subject.data.parts_of_speech,
+      amalgamationSubjectIds: subject.data.amalgamation_subject_ids ?? [],
     },
     studyMaterials: studyMaterial
       ? {
@@ -304,6 +311,49 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
       : undefined,
     availableAt: row.available_at ?? undefined,
   };
+}
+
+export async function getSubjectsByIds(db: AppDatabase, ids: number[]): Promise<Map<number, SubjectAnswerData>> {
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await db.getAllAsync<{ id: number; payload: string }>(
+    `SELECT id, payload FROM subjects WHERE id IN (${placeholders})`,
+    ...ids,
+  );
+
+  const result = new Map<number, SubjectAnswerData>();
+  for (const row of rows) {
+    const resource = JSON.parse(row.payload) as SubjectResource;
+    const subjectType = normalizeSubjectType(resource.object);
+    result.set(row.id, {
+      id: row.id,
+      type: subjectType,
+      japanese: resource.data.characters ?? '',
+      characterImageUrl: getCharacterImageUrl(resource.data),
+      characterImageIsSvg: isCharacterImageSvg(resource.data),
+      meanings: [
+        ...(resource.data.meanings ?? []).map((meaning) => ({
+          meaning: meaning.meaning,
+          type: meaning.primary ? 'primary' : 'secondary',
+          acceptedAnswer: meaning.accepted_answer ?? true,
+        })),
+        ...(resource.data.auxiliary_meanings ?? []).map((meaning) => ({
+          meaning: meaning.meaning,
+          type: meaning.type === 'blacklist' ? 'blacklist' : 'auxiliary_whitelist',
+          acceptedAnswer: meaning.type !== 'blacklist',
+        })),
+      ],
+      readings: (resource.data.readings ?? []).map((reading) => ({
+        reading: reading.reading,
+        primary: reading.primary ?? reading.accepted_answer ?? false,
+        acceptedAnswer: reading.accepted_answer ?? reading.primary ?? true,
+      })),
+    });
+  }
+  return result;
 }
 
 function normalizeSubjectType(subjectType: string) {

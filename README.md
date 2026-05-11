@@ -57,6 +57,8 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 **Anki Mode** — Self-grading with immediate answer reveal. Supports both, reading-only, meaning-only, and combined reading/meaning variants.
 
+**Quick Settings** — Mid-session settings modal for toggling exact match, cheats, Anki mode, answer reveal, and full answer display without leaving the review. Includes Wrap Up and End Session actions. Changes persist to the main settings screen.
+
 ### Lesson Sessions
 
 - Fetches lesson-stage assignments from local cache with configurable ordering, filtering, and batch size.
@@ -66,7 +68,10 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Apprentice limit gates the lesson button when apprentice SRS items exceed the threshold.
 - Filters kana-only vocabulary when `showKanaOnlyVocab` is disabled.
 - Filters hidden/excluded vocabulary based on study material data.
-- Marks lessons started with local progress queued for sync.
+
+**Introduction Pages** — Each subject shows a detail page with meanings, readings, components/radicals, mnemonics (with inline Japanese rendering), context sentences (vocabulary), parts of speech (vocabulary), and "Used In" amalgamation chips. Navigate between subjects via chip bar or Back/Next buttons.
+
+**Lesson Quiz** — After all introduction pages, a quiz phase uses the same answer-checking UI as reviews. Answer checking supports meaning and reading prompts with romaji-to-kana conversion. Lesson starts are queued for WaniKani API sync only after each subject is correctly answered in the quiz.
 
 ### Lesson Picker
 
@@ -87,9 +92,10 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ### Shared Components
 
-- `ScreenLayout`, `SessionHeader`, `CenteredMessage` for consistent screen structure.
+- `ScreenLayout`, `SessionHeader` (with optional settings gear), `CenteredMessage` for consistent screen structure.
 - `SubjectHeroCard` for displaying Japanese characters and radical images.
 - `SrsBar` for SRS stage progress visualization.
+- `ReviewQuickSettings` modal for in-session setting toggles.
 - CSS-aware SVG rendering for image-only radicals with inline style fallbacks.
 
 ### Image-Only Radical Support
@@ -112,13 +118,13 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ## Known Major Gaps
 
-- Lessons lack subject introduction pages and the full quiz flow (currently a starter-only flow; quiz should reuse the review state machine).
+- Lessons have full intro pages and quiz flow. Unit tests for lesson selection and filtering are not yet implemented.
 - Dashboard lacks charts, upcoming review forecast, current-level progress, and power-user sections (recent lessons, recent mistakes, leeches, burned items).
 - Subject browsing, search, and detail screens are not implemented.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
-- Quick settings during review and hardware keyboard shortcuts are not implemented.
+- Quick settings during review is implemented. Hardware keyboard shortcuts are not planned.
 
 ## Getting Started
 
@@ -157,7 +163,7 @@ src/
     sync/           # Incremental sync + pending-write flush (syncService.ts)
   navigation/       # React Navigation routes, auth gate, AppState lifecycle
   screens/          # UI screens (Dashboard, Login, Settings, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
-  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar)
+  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings)
   theme/            # WaniKani color palette, subject-type colors, theme provider
 App.tsx             # App root
 tsurukame/          # Original iOS Swift/UIKit source — behavior reference only

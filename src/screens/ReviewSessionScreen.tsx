@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
+import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { openAppDatabase } from '../domain/db/database';
 import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import {
@@ -685,32 +686,6 @@ function wrongCountText(item: ReviewItem) {
     parts.push(`${item.readingWrongCount} reading`);
   }
   return parts.join(' · ');
-}
-
-function feedbackTitle(result: AnswerCheckResult) {
-  switch (result.kind) {
-    case 'precise':
-      return 'Correct';
-    case 'imprecise':
-      return 'Close enough';
-    case 'containsInvalidCharacters':
-      return 'Invalid characters';
-    case 'isReadingButWantMeaning':
-      return 'That is the reading';
-    case 'otherKanjiReading':
-      return 'That is another reading';
-    case 'mismatchingOkurigana':
-      return 'Check the okurigana';
-    case 'incorrect':
-      return 'Incorrect';
-  }
-}
-
-function correctAnswerText(item: ReviewItem, taskType: TaskType) {
-  if (taskType === 'reading') {
-    return `Accepted readings: ${item.subject.readings?.filter((reading) => reading.acceptedAnswer !== false).map((reading) => reading.reading).join(', ') || 'none'}`;
-  }
-  return `Accepted meanings: ${item.subject.meanings.filter((meaning) => meaning.acceptedAnswer !== false && meaning.type !== 'blacklist').map((meaning) => meaning.meaning).join(', ')}`;
 }
 
 function makeStyles(theme: AppTheme) {
