@@ -1,3 +1,4 @@
+import type { SQLiteBindValue } from 'expo-sqlite';
 import { SubjectData } from '../api/types';
 import { SubjectAnswerData } from '../answers/answerChecker';
 import { AppDatabase } from './database';
@@ -123,4 +124,212 @@ export function isCharacterImageSvg(subject: SubjectData): boolean {
   const url = getCharacterImageUrl(subject);
   if (!url) return false;
   return images.some((image) => image.url === url && image.content_type === 'image/svg+xml');
+}
+
+export type SubjectListRow = {
+  id: number;
+  japanese: string;
+  level: number;
+  subjectType: string;
+  srsStage: number | null;
+  meaningNote: string | null;
+  readingNote: string | null;
+  meaningSynonyms: string[];
+  isHidden: boolean;
+  percentageCorrect: number | null;
+};
+
+export async function getSubjectsByLevel(db: AppDatabase, level: number): Promise<SubjectListRow[]> {
+  return getAllSubjectRows(db, 'WHERE s.level = ? ORDER BY s.subject_type, s.id', level);
+}
+
+export async function getSubjectsBySrsBucket(db: AppDatabase, srsMin: number, srsMax: number): Promise<SubjectListRow[]> {
+  return getAllSubjectRows(db, 'WHERE a.srs_stage BETWEEN ? AND ? ORDER BY a.srs_stage, s.level, s.id', srsMin, srsMax);
+}
+
+export async function getRemainingSubjects(db: AppDatabase, level?: number): Promise<SubjectListRow[]> {
+  if (level != null) {
+    return getAllSubjectRows(db, 'WHERE a.srs_stage BETWEEN 0 AND 8 AND s.level = ? ORDER BY s.level, s.subject_type, s.id', level);
+  }
+  return getAllSubjectRows(db, 'WHERE a.srs_stage BETWEEN 0 AND 8 ORDER BY s.level, s.subject_type, s.id');
+}
+
+export async function getExcludedSubjects(db: AppDatabase): Promise<SubjectListRow[]> {
+  const rows = await db.getAllAsync<{
+    id: number;
+    japanese: string;
+    level: number;
+    subject_type: string;
+    srsStage: number | null;
+    meaningNote: string | null;
+    readingNote: string | null;
+    meaningSynonyms: string;
+    isHidden: number;
+    percentageCorrect: number | null;
+  }>(
+    `SELECT s.id, s.japanese, s.level, s.subject_type,
+       NULL AS srsStage, NULL AS meaningNote, NULL AS readingNote,
+       '[]' AS meaningSynonyms, 1 AS isHidden, NULL AS percentageCorrect
+     FROM subjects s
+     WHERE s.id IN (
+       SELECT subject_id FROM study_materials
+       WHERE json_extract(payload, '$.data.hidden') = 1
+          OR json_extract(payload, '$.data.hidden') = 'true'
+     )
+     ORDER BY s.level, s.subject_type, s.id`,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    japanese: r.japanese ?? '',
+    level: r.level,
+    subjectType: r.subject_type,
+    srsStage: r.srsStage,
+    meaningNote: r.meaningNote,
+    readingNote: r.readingNote,
+    meaningSynonyms: parseSynonymJson(r.meaningSynonyms),
+    isHidden: r.isHidden === 1,
+    percentageCorrect: r.percentageCorrect,
+  }));
+}
+
+export type SearchResult = SubjectListRow & {
+  matchType: 'exact' | 'prefix' | 'contains';
+};
+
+export async function searchSubjects(db: AppDatabase, query: string, limit = 50): Promise<SearchResult[]> {
+  if (!query.trim()) return [];
+
+  const q = query.trim().toLowerCase();
+  const likePrefix = `${q}%`;
+  const likeContains = `%${q}%`;
+
+  const rows = await db.getAllAsync<{
+    id: number;
+    japanese: string;
+    level: number;
+    subject_type: string;
+    srsStage: number | null;
+    meaningNote: string | null;
+    readingNote: string | null;
+    meaningSynonyms: string;
+    isHidden: number;
+    percentageCorrect: number | null;
+    match_type: number;
+  }>(
+    `SELECT s.id, s.japanese, s.level, s.subject_type,
+       a.srs_stage AS srsStage,
+       json_extract(sm.payload, '$.data.meaning_note') AS meaningNote,
+       json_extract(sm.payload, '$.data.reading_note') AS readingNote,
+       COALESCE(json_extract(sm.payload, '$.data.meaning_synonyms'), '[]') AS meaningSynonyms,
+       CASE WHEN json_extract(sm.payload, '$.data.hidden') IN (1, 'true') THEN 1 ELSE 0 END AS isHidden,
+       rs.percentage_correct AS percentageCorrect,
+       CASE
+         WHEN LOWER(s.japanese) = ? THEN 0
+         WHEN LOWER(s.japanese) LIKE ? THEN 1
+         WHEN EXISTS (
+           SELECT 1 FROM json_each(json_extract(s.payload, '$.data.readings'))
+           WHERE LOWER(json_extract(value, '$.reading')) = ?
+         ) THEN 0
+         WHEN EXISTS (
+           SELECT 1 FROM json_each(json_extract(s.payload, '$.data.readings'))
+           WHERE LOWER(json_extract(value, '$.reading')) LIKE ?
+         ) THEN 1
+         WHEN EXISTS (
+           SELECT 1 FROM json_each(json_extract(s.payload, '$.data.meanings'))
+           WHERE LOWER(json_extract(value, '$.meaning')) = ?
+         ) THEN 2
+         WHEN EXISTS (
+           SELECT 1 FROM json_each(json_extract(s.payload, '$.data.meanings'))
+           WHERE LOWER(json_extract(value, '$.meaning')) LIKE ?
+         ) THEN 3
+         ELSE 4
+       END AS match_type
+     FROM subjects s
+     LEFT JOIN assignments a ON a.subject_id = s.id
+     LEFT JOIN study_materials sm ON sm.subject_id = s.id
+     LEFT JOIN review_stats rs ON rs.subject_id = s.id
+     WHERE s.japanese LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM json_each(json_extract(s.payload, '$.data.readings'))
+          WHERE LOWER(json_extract(value, '$.reading')) LIKE ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM json_each(json_extract(s.payload, '$.data.meanings'))
+          WHERE LOWER(json_extract(value, '$.meaning')) LIKE ?
+        )
+     ORDER BY match_type, s.level, s.subject_type, s.id
+     LIMIT ?`,
+    q, likePrefix,
+    q, likePrefix,
+    q, likePrefix,
+    likeContains,
+    likeContains,
+    likeContains,
+    limit,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    japanese: r.japanese ?? '',
+    level: r.level,
+    subjectType: r.subject_type,
+    srsStage: r.srsStage,
+    meaningNote: r.meaningNote,
+    readingNote: r.readingNote,
+    meaningSynonyms: parseSynonymJson(r.meaningSynonyms),
+    isHidden: r.isHidden === 1,
+    percentageCorrect: r.percentageCorrect,
+    matchType: r.match_type === 0 || r.match_type === 2 ? 'exact' : r.match_type === 1 || r.match_type === 3 ? 'prefix' : 'contains',
+  }));
+}
+
+async function getAllSubjectRows(db: AppDatabase, whereClause: string, ...args: SQLiteBindValue[]): Promise<SubjectListRow[]> {
+  const rows = await db.getAllAsync<{
+    id: number;
+    japanese: string;
+    level: number;
+    subject_type: string;
+    srsStage: number | null;
+    meaningNote: string | null;
+    readingNote: string | null;
+    meaningSynonyms: string;
+    isHidden: number;
+    percentageCorrect: number | null;
+  }>(
+    `SELECT s.id, s.japanese, s.level, s.subject_type,
+       a.srs_stage AS srsStage,
+       json_extract(sm.payload, '$.data.meaning_note') AS meaningNote,
+       json_extract(sm.payload, '$.data.reading_note') AS readingNote,
+       COALESCE(json_extract(sm.payload, '$.data.meaning_synonyms'), '[]') AS meaningSynonyms,
+       CASE WHEN json_extract(sm.payload, '$.data.hidden') IN (1, 'true') THEN 1 ELSE 0 END AS isHidden,
+       rs.percentage_correct AS percentageCorrect
+     FROM subjects s
+     LEFT JOIN assignments a ON a.subject_id = s.id
+     LEFT JOIN study_materials sm ON sm.subject_id = s.id
+     LEFT JOIN review_stats rs ON rs.subject_id = s.id
+     ${whereClause}`,
+    ...args,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    japanese: r.japanese ?? '',
+    level: r.level,
+    subjectType: r.subject_type,
+    srsStage: r.srsStage,
+    meaningNote: r.meaningNote,
+    readingNote: r.readingNote,
+    meaningSynonyms: parseSynonymJson(r.meaningSynonyms),
+    isHidden: r.isHidden === 1,
+    percentageCorrect: r.percentageCorrect,
+  }));
+}
+
+export function parseSynonymJson(json: string): string[] {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
 }

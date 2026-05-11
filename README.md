@@ -125,6 +125,14 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - In-app romaji-to-kana conversion for reading prompts, matching Tsurukame's input behavior.
 - No reliance on OS Japanese keyboard switching.
 
+### Subject Browsing and Search
+
+- **Level Catalog** — Browse subjects grouped by type (radical, kanji, vocabulary) at the current level, with navigation to detail screens.
+- **Local Search** — Search by Japanese text, meaning, and kana reading prefixes. Exact matches sorted first, then prefix matches, then contains; ties broken by level ascending. Results limited to 50.
+- **Rich Subject Detail** — Meanings, readings, component radicals/kanji with navigation, meaning and reading mnemonics with inline Japanese rendering, hints, context sentences, parts of speech, "Used In" amalgamation chips, SRS stage, and review accuracy percentage.
+- **Synonym Editing** — Add/remove meaning synonyms, queued for WaniKani API sync via pending writes.
+- **Note Editing** — Add/edit meaning and reading notes, queued for WaniKani API sync.
+
 ### Testing
 
 - Unit tests for answer checking (normalization, fuzzy matching, blacklists, okurigana, other readings).
@@ -135,12 +143,13 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Unit tests for migration schema validation (version ordering, table/index completeness, constraints).
 - Unit tests for lesson selection filtering and ordering (kana-only, hidden, level, subject type, interleave).
 - Unit tests for leech score calculation and dashboard repository logic.
+- Unit tests for search result ranking (exact, prefix, contains match ordering).
 
 ## Known Major Gaps
 
 - Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject browsing, search, and detail screens are not implemented.
+- Subject catalog by level, local search, and rich detail screen are implemented. SRS browsing, remaining items, and excluded items screens are not yet wired.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
@@ -183,7 +192,7 @@ src/
     subjects/       # Radical image handling and SVG rendering
     sync/           # Incremental sync + pending-write flush (syncService.ts)
   navigation/       # React Navigation routes, auth gate, AppState lifecycle
-  screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview)
+  screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview, SubjectCatalog, SubjectSearch, SubjectDetail)
   components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings, ReviewForecastChart, LevelProgressChart, DashboardItemList)
   theme/            # WaniKani color palette, subject-type colors, theme provider
 App.tsx             # App root

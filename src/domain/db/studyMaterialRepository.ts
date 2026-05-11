@@ -16,6 +16,12 @@ export async function upsertWithSynonyms(db: AppDatabase, payload: StudyMaterial
     if (payload.meaningSynonyms !== undefined) {
       parsed.data.meaning_synonyms = payload.meaningSynonyms;
     }
+    if (payload.meaningNote !== undefined) {
+      parsed.data.meaning_note = payload.meaningNote;
+    }
+    if (payload.readingNote !== undefined) {
+      parsed.data.reading_note = payload.readingNote;
+    }
     await db.runAsync(
       'UPDATE study_materials SET payload = ? WHERE id = ?',
       JSON.stringify(parsed),

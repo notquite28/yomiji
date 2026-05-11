@@ -15,6 +15,9 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { RadicalImagePreviewScreen } from '../screens/RadicalImagePreviewScreen';
 import { ReviewSessionScreen } from '../screens/ReviewSessionScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { SubjectCatalogScreen } from '../screens/SubjectCatalogScreen';
+import { SubjectDetailScreen } from '../screens/SubjectDetailScreen';
+import { SubjectSearchScreen } from '../screens/SubjectSearchScreen';
 import { useAppTheme } from '../theme/AppThemeProvider';
 import { RootStackParamList } from './types';
 
@@ -200,6 +203,9 @@ export function AppNavigator() {
           <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
           <Stack.Screen name="LessonPicker" component={LessonPickerScreen} />
           <Stack.Screen name="LessonSession" component={LessonSessionScreen} />
+          <Stack.Screen name="SubjectCatalog" component={SubjectCatalogScreen} />
+          <Stack.Screen name="SubjectSearch" component={SubjectSearchScreen} />
+          <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} />
         </>
       ) : (
         <Stack.Screen name="Login">

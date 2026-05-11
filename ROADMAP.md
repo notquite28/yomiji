@@ -120,19 +120,19 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M5: Subject Browsing And Search
 
-- [ ] Add subject catalog by level.
+- [x] Add subject catalog by level.
 - [ ] Add SRS category browsing.
 - [ ] Add remaining subjects browsing.
 - [ ] Add excluded vocabulary browsing.
-- [ ] Add local search by Japanese text, meaning, and kana reading prefixes.
-- [ ] Sort exact search matches first, then by level.
-- [ ] Limit search results to 50.
-- [ ] Add rich subject detail screen with meanings, readings, mnemonics, hints, components, amalgamations, context sentences, stats, and audio.
-- [ ] Add synonym editing.
-- [ ] Add meaning note editing.
-- [ ] Add reading note editing.
-- [ ] Queue study material edits offline.
-- [ ] Add tests for search ranking and filtering.
+- [x] Add local search by Japanese text, meaning, and kana reading prefixes.
+- [x] Sort exact search matches first, then by level.
+- [x] Limit search results to 50.
+- [x] Add rich subject detail screen with meanings, readings, mnemonics, hints, components, amalgamations, context sentences, stats, and audio.
+- [x] Add synonym editing.
+- [x] Add meaning note editing.
+- [x] Add reading note editing.
+- [x] Queue study material edits offline.
+- [x] Add tests for search ranking and filtering.
 
 ## M6: Audio, Fonts, And Appearance
 
@@ -208,7 +208,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
 - Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject browsing/search/detail screens are not implemented.
+- Subject catalog by level, search, and detail screens are implemented. SRS browsing, remaining items, and excluded items browsing are not yet wired to screens.
 - Audio and notifications are scaffold dependencies only, not implemented features.
 - Audio, font, and notification settings UI are not yet exposed.
 

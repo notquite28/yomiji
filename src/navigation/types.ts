@@ -7,4 +7,7 @@ export type RootStackParamList = {
   ReviewSession: undefined;
   LessonSession: { selectedIds?: number[] };
   LessonPicker: undefined;
+  SubjectCatalog: { level: number };
+  SubjectSearch: undefined;
+  SubjectDetail: { subjectId: number };
 };

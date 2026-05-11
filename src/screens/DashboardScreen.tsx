@@ -196,17 +196,29 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             <Text style={styles.kicker}>Yomichi</Text>
             <Text style={styles.title}>{summary?.username ?? 'Local cache'}</Text>
             <View style={styles.metaRow}>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaPillText}>{levelText}</Text>
-              </View>
+              {summary?.level ? (
+                <Pressable onPress={() => navigation.navigate('SubjectCatalog', { level: summary.level ?? 1 })} style={({ pressed }) => [styles.metaPill, pressed && styles.pressed]}>
+                  <GridIcon color={theme.colors.text} />
+                  <Text style={styles.metaPillText}>{levelText}</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.metaPill}>
+                  <Text style={styles.metaPillText}>{levelText}</Text>
+                </View>
+              )}
               <View style={styles.metaPill}>
                 <Text style={styles.metaPillText}>{summary?.cachedSubjects ?? 0} cached</Text>
               </View>
             </View>
           </View>
-          <Pressable onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
-            <SettingsIcon color={theme.colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => navigation.navigate('SubjectSearch')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <SearchIcon color={theme.colors.text} />
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate('Settings')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+              <SettingsIcon color={theme.colors.text} />
+            </Pressable>
+          </View>
         </Animated.View>
 
         {isVacation ? <Text style={styles.vacationBanner}>Vacation mode active</Text> : null}
@@ -428,6 +440,26 @@ function SettingsIcon({ color }: { color: string }) {
   );
 }
 
+function SearchIcon({ color }: { color: string }) {
+  return (
+    <View style={actionStyles.searchIcon}>
+      <View style={[actionStyles.searchCircle, { borderColor: color }]} />
+      <View style={[actionStyles.searchHandle, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function GridIcon({ color }: { color: string }) {
+  return (
+    <View style={actionStyles.gridIcon}>
+      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
+      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
+      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
+      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
@@ -543,6 +575,43 @@ const actionStyles = StyleSheet.create({
     height: 2,
     borderRadius: 999,
   },
+  searchIcon: {
+    width: 18,
+    height: 18,
+    position: 'relative',
+  },
+  searchCircle: {
+    width: 13,
+    height: 13,
+    borderRadius: 999,
+    borderWidth: 2,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  searchHandle: {
+    width: 7,
+    height: 2,
+    borderRadius: 999,
+    position: 'absolute',
+    bottom: 1,
+    right: 0,
+    transform: [{ rotate: '45deg' }],
+  },
+  gridIcon: {
+    width: 12,
+    height: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 1,
+  },
 });
 
 function makeStyles(theme: AppTheme, isCompact: boolean) {
@@ -597,6 +666,9 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
       borderWidth: 1,
       borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     metaPillText: {
       color: theme.colors.text,
@@ -604,7 +676,11 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       fontWeight: '900',
       letterSpacing: 0.4,
     },
-    settingsButton: {
+    headerActions: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    iconButton: {
       borderRadius: 999,
       width: 42,
       height: 42,
@@ -614,10 +690,9 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       borderWidth: 1,
       borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
     },
-    settingsText: {
-      color: theme.colors.text,
-      fontSize: 13,
-      fontWeight: '900',
+    pressed: {
+      opacity: 0.7,
+      transform: [{ scale: 0.99 }],
     },
     vacationBanner: {
       overflow: 'hidden',
@@ -693,10 +768,6 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       fontSize: 16,
       fontWeight: '900',
       letterSpacing: 0.2,
-    },
-    pressed: {
-      opacity: 0.7,
-      transform: [{ scale: 0.99 }],
     },
     pickerButton: {
       minHeight: 48,
