@@ -24,7 +24,12 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
     try {
       const db = await openAppDatabase();
       await deleteApiToken();
-      await resetLocalData(db);
+      try {
+        await resetLocalData(db);
+      } catch (caught) {
+        const message = caught instanceof Error ? caught.message : String(caught);
+        setError(`Token removed, but cache clear failed: ${message}`);
+      }
       onLoggedOut();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
