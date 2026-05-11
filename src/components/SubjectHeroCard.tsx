@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { SvgCss } from 'react-native-svg/css';
 
-import { replaceCssVariableFallbacks } from '../domain/subjects/radicalSvg';
+import { replaceCssVariableFallbacksForHero } from '../domain/subjects/radicalSvg';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
 export function SubjectHeroCard({
@@ -99,7 +99,7 @@ function RadicalSvgImage({ uri, fallback }: { uri: string; fallback: string }) {
         return response.text();
       })
       .then((text) => {
-        const resolvedXml = replaceCssVariableFallbacks(text);
+        const resolvedXml = replaceCssVariableFallbacksForHero(text);
         svgCache.set(uri, resolvedXml);
         setXml(resolvedXml);
       })
@@ -156,7 +156,7 @@ function makeStyles(_theme: AppTheme) {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 28,
-      backgroundColor: '#ffffff',
+      backgroundColor: 'transparent',
     },
     radicalImage: {
       width: 112,

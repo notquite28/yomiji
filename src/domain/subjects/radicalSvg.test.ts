@@ -1,4 +1,4 @@
-import { replaceCssVariableFallbacks } from './radicalSvg';
+import { replaceCssVariableFallbacks, replaceCssVariableFallbacksForHero } from './radicalSvg';
 
 describe('replaceCssVariableFallbacks', () => {
   it('uses CSS var fallback colors before SVG parsing', () => {
@@ -9,5 +9,11 @@ describe('replaceCssVariableFallbacks', () => {
 
   it('uses black when a CSS var has no fallback', () => {
     expect(replaceCssVariableFallbacks('<path stroke="var(--color-text)"/>')).toBe('<path stroke="#000"/>');
+  });
+
+  it('uses white for WaniKani radical text in hero cards', () => {
+    const xml = '<style>.b{stroke:var(--color-text, #000);fill:var(--radical-color, #0af);}</style>';
+
+    expect(replaceCssVariableFallbacksForHero(xml)).toBe('<style>.b{stroke:#ffffff;fill:#0af;}</style>');
   });
 });
