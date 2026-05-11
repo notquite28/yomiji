@@ -56,4 +56,20 @@ describe('answerChecker', () => {
     expect(checkAnswer('kani', subject, { taskType: 'reading' }).kind).toBe('containsInvalidCharacters');
     expect(checkAnswer('かに', subject, { taskType: 'meaning' }).kind).toBe('containsInvalidCharacters');
   });
+
+  it('rejects fuzzy matches when exactMatch is enabled', () => {
+    const subject = {
+      type: 'vocabulary',
+      japanese: '蟹',
+      meanings: [
+        { meaning: 'Crab', acceptedAnswer: true },
+        { meaning: 'Cab', type: 'blacklist' },
+      ],
+      readings: [{ reading: 'かに', primary: true }],
+    };
+
+    expect(checkAnswer('crab', subject, { taskType: 'meaning' })).toEqual({ kind: 'precise' });
+    expect(checkAnswer('crabb', subject, { taskType: 'meaning' })).toEqual({ kind: 'imprecise' });
+    expect(checkAnswer('crabb', subject, { taskType: 'meaning', exactMatch: true })).toEqual({ kind: 'incorrect' });
+  });
 });

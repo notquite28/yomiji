@@ -1,9 +1,11 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
+
+import { AppearanceMode, loadSettings, saveSettings } from '../domain/settings/settings';
 
 import { AppColors, darkColors, lightColors } from './palette';
 
-export type AppearanceMode = 'system' | 'light' | 'dark';
+export type { AppearanceMode };
 
 export type AppTheme = {
   mode: AppearanceMode;
@@ -17,7 +19,27 @@ const AppThemeContext = createContext<AppTheme | null>(null);
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const [mode, setMode] = useState<AppearanceMode>('system');
+  const [mode, setModeInternal] = useState<AppearanceMode>('system');
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadSettings().then((settings) => {
+      if (isMounted) {
+        setModeInternal(settings.appearance);
+        setHydrated(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const setMode = useCallback((nextMode: AppearanceMode) => {
+    setModeInternal(nextMode);
+    saveSettings({ appearance: nextMode }).catch(() => {});
+  }, []);
+
   const isDark = mode === 'dark' || (mode === 'system' && systemScheme === 'dark');
 
   const value = useMemo<AppTheme>(
@@ -28,8 +50,12 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       spacing: (unit: number) => unit * 8,
       setMode,
     }),
-    [isDark, mode],
+    [isDark, mode, setMode],
   );
+
+  if (!hydrated) {
+    return null;
+  }
 
   return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
 }

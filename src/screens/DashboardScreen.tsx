@@ -7,6 +7,7 @@ import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { DashboardSummary, getDashboardSummary } from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
 import { runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
+import { SrsBar } from '../components/SrsBar';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
@@ -73,15 +74,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
   const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
-  const srsRows = [
+  const srsEntries = [
     { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice },
     { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru },
     { label: 'Master', count: summary?.master ?? 0, color: theme.colors.master },
     { label: 'Enlightened', count: summary?.enlightened ?? 0, color: theme.colors.enlightened },
     { label: 'Burned', count: summary?.burned ?? 0, color: theme.colors.burned },
   ];
-  const totalSrs = srsRows.reduce((total, row) => total + row.count, 0);
-  const maxSrsCount = Math.max(1, ...srsRows.map((row) => row.count));
+  const totalSrs = srsEntries.reduce((total, row) => total + row.count, 0);
   const actionCardTheme: StudyActionTheme = {
     surfaceColor: theme.isDark ? '#15141a' : '#fffdf8',
     borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
@@ -157,18 +157,12 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             <Text style={styles.panelTitle}>SRS</Text>
             <Text style={styles.panelMeta}>{totalSrs} active</Text>
           </View>
-          {srsRows.map((row) => (
-            <SrsRow
-              key={row.label}
-              label={row.label}
-              count={row.count}
-              color={row.color}
-              maxCount={maxSrsCount}
-              textColor={theme.colors.text}
-              mutedColor={theme.colors.mutedText}
-              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
-            />
-          ))}
+          <SrsBar
+            entries={srsEntries}
+            textColor={theme.colors.text}
+            mutedColor={theme.colors.mutedText}
+            trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+          />
         </View>
 
         <View style={styles.panel}>
@@ -260,38 +254,6 @@ function SettingsIcon({ color }: { color: string }) {
       <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 16 }]} />
       <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 11 }]} />
       <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 14 }]} />
-    </View>
-  );
-}
-
-function SrsRow({
-  label,
-  count,
-  color,
-  maxCount,
-  textColor,
-  mutedColor,
-  trackColor,
-}: {
-  label: string;
-  count: number;
-  color: string;
-  maxCount: number;
-  textColor: string;
-  mutedColor: string;
-  trackColor: string;
-}) {
-  const fillWidth = `${Math.round((count / maxCount) * 100)}%` as `${number}%`;
-  return (
-    <View style={actionStyles.srsRow}>
-      <View style={actionStyles.srsTextRow}>
-        <View style={[actionStyles.dot, { backgroundColor: color }]} />
-        <Text style={[actionStyles.srsLabel, { color: mutedColor }]}>{label}</Text>
-        <Text style={[actionStyles.srsCount, { color: textColor }]}>{count}</Text>
-      </View>
-      <View style={[actionStyles.srsTrack, { backgroundColor: trackColor }]}>
-        <View style={[actionStyles.srsFill, { backgroundColor: color, width: fillWidth }]} />
-      </View>
     </View>
   );
 }
@@ -401,37 +363,6 @@ const actionStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.1,
-  },
-  srsRow: {
-    gap: 8,
-  },
-  srsTextRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-  },
-  srsLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  srsCount: {
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  srsTrack: {
-    overflow: 'hidden',
-    height: 8,
-    borderRadius: 999,
-  },
-  srsFill: {
-    height: '100%',
-    borderRadius: 999,
   },
   settingsIcon: {
     width: 18,

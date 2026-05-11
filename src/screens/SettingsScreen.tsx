@@ -1,22 +1,51 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { openAppDatabase, resetLocalData } from '../domain/db/database';
+import { AppSettings, defaultSettings, loadSettings, saveSettings, ReviewOrder } from '../domain/settings/settings';
 import { deleteApiToken } from '../domain/storage/secureToken';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { AppTheme, AppearanceMode, useAppTheme } from '../theme/AppThemeProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'> & {
   onLoggedOut: () => void;
 };
 
+const REVIEW_ORDER_LABELS: Record<ReviewOrder, string> = {
+  random: 'Random',
+  ascendingSrsStage: 'Ascending SRS',
+  descendingSrsStage: 'Descending SRS',
+  alternatingSrsStage: 'Alternating SRS',
+  currentLevelFirst: 'Current Level First',
+  lowestLevelFirst: 'Lowest Level First',
+  newestAvailableFirst: 'Newest Available',
+  oldestAvailableFirst: 'Oldest Available',
+  longestRelativeWait: 'Longest Wait',
+};
+
+const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 export function SettingsScreen({ navigation, onLoggedOut }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadSettings().then(setSettings);
+  }, []);
+
+  const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    saveSettings({ [key]: value }).catch(() => {});
+  }, []);
 
   const logout = async () => {
     setError(null);
@@ -47,25 +76,133 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
         <View style={styles.headerBlock}>
           <Text style={styles.kicker}>Yomichi</Text>
           <Text style={styles.title}>Settings</Text>
-          <Text style={styles.subtitle}>Account, appearance, and local data.</Text>
+          <Text style={styles.subtitle}>Account, appearance, and study preferences.</Text>
         </View>
 
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Appearance</Text>
-          <Text style={styles.bodyText}>Theme and notification controls are scaffolded.</Text>
+          <Text style={styles.sectionLabel}>Theme</Text>
+          <View style={styles.segmentGroup}>
+            {APPEARANCE_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                onPress={() => theme.setMode(opt.value)}
+                style={[styles.segmentButton, theme.mode === opt.value && styles.segmentActive]}
+              >
+                <Text style={[styles.segmentText, theme.mode === opt.value && styles.segmentTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Study</Text>
-          <Text style={styles.bodyText}>Review order, batching, typo handling, and audio settings.</Text>
-        </View>
+          <Text style={styles.panelTitle}>Reviews</Text>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Diagnostics</Text>
-          <Text style={styles.bodyText}>Preview image-only radicals from the local cache without starting lessons or reviews.</Text>
-          <Pressable onPress={() => navigation.navigate('RadicalImagePreview')} style={({ pressed }) => [styles.previewButton, pressed && styles.pressed]}>
-            <Text style={styles.previewButtonText}>Preview Radical Images</Text>
-          </Pressable>
+          <Text style={styles.sectionLabel}>Review Order</Text>
+          <View style={styles.pillGroup}>
+            {(Object.entries(REVIEW_ORDER_LABELS) as [ReviewOrder, string][]).map(([value, label]) => (
+              <Pressable
+                key={value}
+                onPress={() => updateSetting('reviewOrder', value)}
+                style={[styles.pill, settings.reviewOrder === value && styles.pillActive]}
+              >
+                <Text style={[styles.pillText, settings.reviewOrder === value && styles.pillTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <SettingToggle
+            label="Anki Mode"
+            detail="Reveal the answer first, then self-grade."
+            value={settings.ankiMode}
+            onValueChange={(v) => updateSetting('ankiMode', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Exact Match"
+            detail="Disable fuzzy matching for meaning answers."
+            value={settings.exactMatch}
+            onValueChange={(v) => updateSetting('exactMatch', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Group Meaning & Reading"
+            detail="Ask meaning and reading back-to-back for each item."
+            value={settings.groupMeaningReading}
+            onValueChange={(v) => updateSetting('groupMeaningReading', v)}
+            theme={theme}
+          />
+
+          {settings.groupMeaningReading ? (
+            <SettingToggle
+              label="Meaning First"
+              detail="Ask meaning before reading when grouped."
+              value={settings.meaningFirst}
+              onValueChange={(v) => updateSetting('meaningFirst', v)}
+              theme={theme}
+            />
+          ) : null}
+
+          <SettingToggle
+            label="Minimize Review Penalty"
+            detail="Cap wrong counts to 1 per task type."
+            value={settings.minimizeReviewPenalty}
+            onValueChange={(v) => updateSetting('minimizeReviewPenalty', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Enable Cheats"
+            detail="Allow override correct, try again later, and add synonym."
+            value={settings.enableCheats}
+            onValueChange={(v) => updateSetting('enableCheats', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Skip Kanji Readings"
+            detail="Skip reading prompts for kanji subjects."
+            value={settings.skipKanjiReadings}
+            onValueChange={(v) => updateSetting('skipKanjiReadings', v)}
+            theme={theme}
+          />
+
+          <SettingStepper
+            label="Batch Size"
+            detail="Items in the active review queue."
+            value={settings.reviewBatchSize}
+            min={1}
+            max={15}
+            onChange={(v) => updateSetting('reviewBatchSize', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Limit Review Count"
+            detail={`Cap reviews at ${settings.reviewItemsLimit} items.`}
+            value={settings.reviewItemsLimitEnabled}
+            onValueChange={(v) => updateSetting('reviewItemsLimitEnabled', v)}
+            theme={theme}
+          />
+
+          {settings.reviewItemsLimitEnabled ? (
+            <SettingStepper
+              label="Review Limit"
+              detail="Maximum reviews per session."
+              value={settings.reviewItemsLimit}
+              min={5}
+              max={500}
+              step={5}
+              onChange={(v) => updateSetting('reviewItemsLimit', v)}
+              theme={theme}
+            />
+          ) : null}
         </View>
 
         <View style={styles.dangerPanel}>
@@ -78,6 +215,83 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SettingToggle({
+  label,
+  detail,
+  value,
+  onValueChange,
+  theme,
+}: {
+  label: string;
+  detail?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  theme: AppTheme;
+}) {
+  const styles = makeStyles(theme);
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: theme.colors.border, true: theme.colors.kanji }}
+        thumbColor="#ffffff"
+      />
+    </View>
+  );
+}
+
+function SettingStepper({
+  label,
+  detail,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  theme,
+}: {
+  label: string;
+  detail?: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+  theme: AppTheme;
+}) {
+  const styles = makeStyles(theme);
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+      </View>
+      <View style={styles.stepperGroup}>
+        <Pressable
+          disabled={value <= min}
+          onPress={() => onChange(Math.max(min, value - step))}
+          style={[styles.stepperButton, value <= min && styles.stepperDisabled]}
+        >
+          <Text style={styles.stepperButtonText}>-</Text>
+        </Pressable>
+        <Text style={styles.stepperValue}>{value}</Text>
+        <Pressable
+          disabled={value >= max}
+          onPress={() => onChange(Math.min(max, value + step))}
+          style={[styles.stepperButton, value >= max && styles.stepperDisabled]}
+        >
+          <Text style={styles.stepperButtonText}>+</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -165,6 +379,14 @@ function makeStyles(theme: AppTheme) {
       fontWeight: '900',
       letterSpacing: -0.3,
     },
+    sectionLabel: {
+      color: theme.colors.mutedText,
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginTop: 6,
+    },
     bodyText: {
       color: theme.colors.mutedText,
       fontSize: 15,
@@ -174,6 +396,111 @@ function makeStyles(theme: AppTheme) {
     errorText: {
       color: theme.colors.danger,
       fontWeight: '800',
+    },
+    segmentGroup: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    segmentButton: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 14,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    segmentActive: {
+      backgroundColor: theme.colors.kanji,
+      borderColor: theme.colors.kanji,
+    },
+    segmentText: {
+      color: theme.colors.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    segmentTextActive: {
+      color: '#ffffff',
+    },
+    pillGroup: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    pill: {
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    pillActive: {
+      backgroundColor: theme.colors.kanji,
+      borderColor: theme.colors.kanji,
+    },
+    pillText: {
+      color: theme.colors.text,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    pillTextActive: {
+      color: '#ffffff',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    rowText: {
+      flex: 1,
+      gap: 2,
+    },
+    rowLabel: {
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    rowDetail: {
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '700',
+    },
+    stepperGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    stepperButton: {
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 12,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    stepperDisabled: {
+      opacity: 0.4,
+    },
+    stepperButtonText: {
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    stepperValue: {
+      color: theme.colors.text,
+      fontSize: 16,
+      fontWeight: '900',
+      minWidth: 32,
+      textAlign: 'center',
     },
     logoutButton: {
       minHeight: 54,
@@ -190,18 +517,6 @@ function makeStyles(theme: AppTheme) {
     logoutText: {
       color: '#ffffff',
       fontSize: 16,
-      fontWeight: '900',
-    },
-    previewButton: {
-      minHeight: 50,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: theme.colors.radical,
-    },
-    previewButtonText: {
-      color: '#ffffff',
-      fontSize: 15,
       fontWeight: '900',
     },
     pressed: {

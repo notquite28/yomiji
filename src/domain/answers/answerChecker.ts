@@ -47,6 +47,7 @@ export type AnswerCheckOptions = {
   alphabet?: KanaAlphabet;
   studyMaterials?: StudyMaterialAnswerData | null;
   lookupSubject?: (subjectId: number) => SubjectAnswerData | undefined;
+  exactMatch?: boolean;
 };
 
 const PRECISE: AnswerCheckResult = { kind: 'precise' };
@@ -162,10 +163,12 @@ function checkMeaningAnswer(answer: string, subject: SubjectAnswerData, options:
     }
   }
 
-  for (const meaning of meanings) {
-    const normalizedMeaning = normalizeAnswer(meaning, 'meaning');
-    if (levenshteinDistance(normalizedMeaning, answer) <= distanceTolerance(normalizedMeaning)) {
-      return IMPRECISE;
+  if (!options.exactMatch) {
+    for (const meaning of meanings) {
+      const normalizedMeaning = normalizeAnswer(meaning, 'meaning');
+      if (levenshteinDistance(normalizedMeaning, answer) <= distanceTolerance(normalizedMeaning)) {
+        return IMPRECISE;
+      }
     }
   }
 

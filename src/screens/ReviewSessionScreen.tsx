@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { openAppDatabase } from '../domain/db/database';
-import { defaultSettings } from '../domain/settings/settings';
+import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import {
   MarkResult,
   ReviewItem,
@@ -40,33 +40,45 @@ export function ReviewSessionScreen({ navigation }: Props) {
   const [lastMarkResult, setLastMarkResult] = useState<MarkResult | null>(null);
   const [isContinuing, setIsContinuing] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [appSettings, setAppSettings] = useState<AppSettings>(defaultSettings);
+  const [userLevel, setUserLevel] = useState<number | undefined>(undefined);
+  const [ankiRevealed, setAnkiRevealed] = useState(false);
 
   const sessionRef = useRef<ReviewSession | null>(null);
 
   const settings = useMemo<ReviewSessionSettings>(
     () => ({
-      reviewOrder: defaultSettings.reviewOrder,
-      reviewBatchSize: defaultSettings.reviewBatchSize,
-      reviewItemsLimit: defaultSettings.reviewItemsLimit,
-      reviewItemsLimitEnabled: defaultSettings.reviewItemsLimitEnabled,
-      groupMeaningReading: defaultSettings.groupMeaningReading,
-      meaningFirst: defaultSettings.meaningFirst,
-      minimizeReviewPenalty: defaultSettings.minimizeReviewPenalty,
-      skipKanjiReadings: defaultSettings.skipKanjiReadings,
-      enableCheats: defaultSettings.enableCheats,
+      reviewOrder: appSettings.reviewOrder,
+      reviewBatchSize: appSettings.reviewBatchSize,
+      reviewItemsLimit: appSettings.reviewItemsLimit,
+      reviewItemsLimitEnabled: appSettings.reviewItemsLimitEnabled,
+      groupMeaningReading: appSettings.groupMeaningReading,
+      meaningFirst: appSettings.meaningFirst,
+      minimizeReviewPenalty: appSettings.minimizeReviewPenalty,
+      skipKanjiReadings: appSettings.skipKanjiReadings,
+      enableCheats: appSettings.enableCheats,
     }),
-    [],
+    [appSettings],
   );
 
-  const enableCheats = settings.enableCheats;
+  const ankiMode = appSettings.ankiMode;
 
   useEffect(() => {
     let isMounted = true;
-    openAppDatabase()
-      .then((db) => getReviewQueue(db))
-      .then((items) => {
+    Promise.all([
+      openAppDatabase().then((db) =>
+        Promise.all([
+          getReviewQueue(db),
+          db.getFirstAsync<{ level: number }>('SELECT level FROM user WHERE id = 1'),
+        ]),
+      ),
+      loadSettings(),
+    ])
+      .then(([[items, userRow], loaded]) => {
         if (isMounted) {
           setQueueItems(items);
+          setUserLevel(userRow?.level);
+          setAppSettings(loaded);
         }
       })
       .catch((caught: unknown) => {
@@ -96,11 +108,11 @@ export function ReviewSessionScreen({ navigation }: Props) {
       }
     }
 
-    const session = new ReviewSession(queueItems, settings, false, availableAtMap);
+    const session = new ReviewSession(queueItems, settings, false, availableAtMap, userLevel);
     sessionRef.current = session;
     session.nextTask();
     setRevision((r) => r + 1);
-  }, [queueItems, settings]);
+  }, [queueItems, settings, userLevel]);
 
   const session = sessionRef.current;
   const currentItem = session?.currentItem ?? null;
@@ -121,8 +133,19 @@ export function ReviewSessionScreen({ navigation }: Props) {
     [queueItems],
   );
 
+  const shouldShowAnkiReveal = ankiMode && !feedback && !ankiRevealed;
+
   const submit = () => {
-    if (!session || !currentItem || !answer.trim() || feedback) {
+    if (!session || !currentItem || feedback) {
+      return;
+    }
+
+    if (ankiMode && !ankiRevealed) {
+      setAnkiRevealed(true);
+      return;
+    }
+
+    if (!ankiMode && !answer.trim()) {
       return;
     }
 
@@ -130,6 +153,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
       taskType: taskType ?? 'meaning',
       studyMaterials: currentItem.studyMaterials,
       lookupSubject: (subjectId) => subjectLookup.get(subjectId),
+      exactMatch: appSettings.exactMatch,
     });
     const correct = result.kind === 'precise' || result.kind === 'imprecise';
 
@@ -145,6 +169,27 @@ export function ReviewSessionScreen({ navigation }: Props) {
       taskType: taskType ?? 'meaning',
       subjectFinished: markResult.subjectFinished,
     });
+    setRevision((r) => r + 1);
+  };
+
+  const handleAnkiMark = (correct: boolean) => {
+    if (!session || !currentItem || feedback) {
+      return;
+    }
+
+    const markResult = session.markAnswer(correct);
+    setLastMarkResult(markResult);
+    setFeedback({
+      correct,
+      message: correct ? 'Correct' : 'Incorrect',
+      detail: correct
+        ? 'Continue to the next prompt.'
+        : correctAnswerText(currentItem, taskType ?? 'meaning'),
+      item: currentItem,
+      taskType: taskType ?? 'meaning',
+      subjectFinished: markResult.subjectFinished,
+    });
+    setAnkiRevealed(false);
     setRevision((r) => r + 1);
   };
 
@@ -176,6 +221,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
       setFeedback(null);
       setAnswer('');
       setLastMarkResult(null);
+      setAnkiRevealed(false);
       session.nextTask();
       setRevision((r) => r + 1);
     } catch (caught) {
@@ -215,6 +261,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
       setFeedback(null);
       setAnswer('');
       setLastMarkResult(null);
+      setAnkiRevealed(false);
       session.nextTask();
       setRevision((r) => r + 1);
     } catch (caught) {
@@ -270,6 +317,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
     setRevision((r) => r + 1);
   };
 
+  const enableCheats = settings.enableCheats;
   const showCheats = enableCheats && feedback && !feedback.correct;
   const canAddSynonym = showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0;
 
@@ -307,6 +355,14 @@ export function ReviewSessionScreen({ navigation }: Props) {
     );
   }
 
+  const ankiAnswerText = () => {
+    if (!displayItem) return '';
+    if (displayTaskType === 'reading') {
+      return displayItem.subject.readings?.filter((r) => r.acceptedAnswer !== false).map((r) => r.reading).join(', ') || '';
+    }
+    return displayItem.subject.meanings.filter((m) => m.acceptedAnswer !== false && m.type !== 'blacklist').map((m) => m.meaning).join(', ');
+  };
+
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
       <SessionHeader onBack={() => navigation.goBack()} progress={progress} />
@@ -321,22 +377,44 @@ export function ReviewSessionScreen({ navigation }: Props) {
         color={subjectColor}
       />
 
-      <TextInput
-        value={answer}
-        onChangeText={changeAnswer}
-        editable={!feedback}
-        autoCapitalize="none"
-        autoComplete="off"
-        autoCorrect={false}
-        spellCheck={false}
-        importantForAutofill="no"
-        keyboardType={displayTaskType === 'meaning' ? 'visible-password' : 'default'}
-        placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
-        placeholderTextColor={theme.colors.mutedText}
-        style={styles.input}
-        returnKeyType="done"
-        onSubmitEditing={submit}
-      />
+      {ankiMode ? (
+        shouldShowAnkiReveal ? (
+          <Pressable
+            onPress={() => setAnkiRevealed(true)}
+            style={({ pressed }) => [
+              styles.ankiRevealButton,
+              { borderColor: subjectColor },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.ankiRevealButtonText}>Show Answer</Text>
+          </Pressable>
+        ) : ankiRevealed && !feedback ? (
+          <View style={[styles.ankiAnswerCard, { borderColor: subjectColor }]}>
+            <Text style={styles.ankiAnswerLabel}>
+              {displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
+            </Text>
+            <Text style={styles.ankiAnswerText}>{ankiAnswerText()}</Text>
+          </View>
+        ) : null
+      ) : (
+        <TextInput
+          value={answer}
+          onChangeText={changeAnswer}
+          editable={!feedback}
+          autoCapitalize="none"
+          autoComplete="off"
+          autoCorrect={false}
+          spellCheck={false}
+          importantForAutofill="no"
+          keyboardType={displayTaskType === 'meaning' ? 'visible-password' : 'default'}
+          placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
+          placeholderTextColor={theme.colors.mutedText}
+          style={styles.input}
+          returnKeyType="done"
+          onSubmitEditing={submit}
+        />
+      )}
 
       {feedback ? (
         <View
@@ -357,67 +435,112 @@ export function ReviewSessionScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      {showCheats ? (
-        <View style={styles.cheatGroup}>
+      {ankiMode && ankiRevealed && !feedback ? (
+        <View style={styles.ankiMarkGroup}>
           <Pressable
-            disabled={isContinuing}
-            onPress={handleOverrideCorrect}
+            onPress={() => handleAnkiMark(false)}
             style={({ pressed }) => [
-              styles.cheatButton,
-              { borderColor: theme.colors.border },
-              (pressed || isContinuing) && styles.pressed,
+              styles.ankiMarkButton,
+              { backgroundColor: theme.colors.danger },
+              pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.cheatButtonText}>My answer was correct</Text>
+            <Text style={styles.ankiMarkButtonText}>Incorrect</Text>
           </Pressable>
           <Pressable
-            disabled={isContinuing}
-            onPress={handleAskAgainLater}
+            onPress={() => handleAnkiMark(true)}
             style={({ pressed }) => [
-              styles.cheatButton,
-              { borderColor: theme.colors.border },
-              (pressed || isContinuing) && styles.pressed,
+              styles.ankiMarkButton,
+              { backgroundColor: theme.colors.success },
+              pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.cheatButtonText}>Try again later</Text>
+            <Text style={styles.ankiMarkButtonText}>Correct</Text>
           </Pressable>
-          {canAddSynonym ? (
+        </View>
+      ) : null}
+
+      {!ankiMode ? (
+        showCheats ? (
+          <View style={styles.cheatGroup}>
             <Pressable
               disabled={isContinuing}
-              onPress={handleAddSynonym}
+              onPress={handleOverrideCorrect}
               style={({ pressed }) => [
                 styles.cheatButton,
                 { borderColor: theme.colors.border },
                 (pressed || isContinuing) && styles.pressed,
               ]}
             >
-              <Text style={styles.cheatButtonText}>Add as synonym</Text>
+              <Text style={styles.cheatButtonText}>My answer was correct</Text>
             </Pressable>
-          ) : null}
-        </View>
+            <Pressable
+              disabled={isContinuing}
+              onPress={handleAskAgainLater}
+              style={({ pressed }) => [
+                styles.cheatButton,
+                { borderColor: theme.colors.border },
+                (pressed || isContinuing) && styles.pressed,
+              ]}
+            >
+              <Text style={styles.cheatButtonText}>Try again later</Text>
+            </Pressable>
+            {canAddSynonym ? (
+              <Pressable
+                disabled={isContinuing}
+                onPress={handleAddSynonym}
+                style={({ pressed }) => [
+                  styles.cheatButton,
+                  { borderColor: theme.colors.border },
+                  (pressed || isContinuing) && styles.pressed,
+                ]}
+              >
+                <Text style={styles.cheatButtonText}>Add as synonym</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null
       ) : null}
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      <Pressable
-        disabled={isContinuing || (!feedback && !answer.trim())}
-        onPress={feedback ? continueSession : submit}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          { backgroundColor: subjectColor },
-          (pressed || isContinuing || (!feedback && !answer.trim())) && styles.pressed,
-        ]}
-      >
-        <Text style={styles.primaryButtonText}>
-          {feedback
-            ? (isContinuing
-              ? 'Saving...'
-              : feedback.correct
-                ? 'Continue'
-                : 'Got it wrong')
-            : 'Submit Answer'}
-        </Text>
-      </Pressable>
+      {!ankiMode && (
+        <Pressable
+          disabled={isContinuing || (!feedback && !answer.trim())}
+          onPress={feedback ? continueSession : submit}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: subjectColor },
+            (pressed || isContinuing || (!feedback && !answer.trim())) && styles.pressed,
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>
+            {feedback
+              ? (isContinuing
+                ? 'Saving...'
+                : feedback.correct
+                  ? 'Continue'
+                  : 'Got it wrong')
+              : 'Submit Answer'}
+          </Text>
+        </Pressable>
+      )}
+
+      {ankiMode && feedback && (
+        <Pressable
+          disabled={isContinuing}
+          onPress={continueSession}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: subjectColor },
+            (pressed || isContinuing) && styles.pressed,
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>
+            {isContinuing ? 'Saving...' : 'Continue'}
+          </Text>
+        </Pressable>
+      )}
 
       {session?.canWrapUp && !session.wrappingUp ? (
         <Pressable
@@ -742,6 +865,54 @@ function makeStyles(theme: AppTheme) {
     },
     pressed: {
       opacity: 0.58,
+    },
+    ankiRevealButton: {
+      minHeight: 58,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      backgroundColor: theme.colors.surfaceElevated,
+    },
+    ankiRevealButtonText: {
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    ankiAnswerCard: {
+      borderRadius: 18,
+      borderWidth: 2,
+      backgroundColor: theme.colors.surfaceElevated,
+      padding: 16,
+      gap: 4,
+    },
+    ankiAnswerLabel: {
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+    },
+    ankiAnswerText: {
+      color: theme.colors.text,
+      fontSize: 20,
+      fontWeight: '900',
+    },
+    ankiMarkGroup: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    ankiMarkButton: {
+      flex: 1,
+      minHeight: 54,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+    },
+    ankiMarkButtonText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '900',
     },
   });
 }
