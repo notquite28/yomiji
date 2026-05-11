@@ -4,9 +4,11 @@ import { ActivityIndicator, AppState, AppStateStatus, View } from 'react-native'
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { getLastSyncTime, openAppDatabase } from '../domain/db/database';
+import { describeSyncError } from '../domain/db/errorLog';
 import { getApiToken } from '../domain/storage/secureToken';
 import { hasPendingWrites, runIncrementalSync, runPendingSync, SyncProgress } from '../domain/sync/syncService';
 import { DashboardScreen } from '../screens/DashboardScreen';
+import { DiagnosticsScreen } from '../screens/DiagnosticsScreen';
 import { LessonPickerScreen } from '../screens/LessonPickerScreen';
 import { LessonSessionScreen } from '../screens/LessonSessionScreen';
 import { LoginScreen } from '../screens/LoginScreen';
@@ -89,7 +91,7 @@ export function AppNavigator() {
         setSyncRevision((value) => value + 1);
       }
     } catch (caught) {
-      setLifecycleSyncError(caught instanceof Error ? caught.message : String(caught));
+      setLifecycleSyncError(describeSyncError(caught).message);
     }
   }, [apiToken]);
 
@@ -117,7 +119,7 @@ export function AppNavigator() {
       });
       setSyncRevision((value) => value + 1);
     } catch (caught) {
-      setLifecycleSyncError(caught instanceof Error ? caught.message : String(caught));
+      setLifecycleSyncError(describeSyncError(caught).message);
     }
   }, [apiToken]);
 
@@ -172,6 +174,7 @@ export function AppNavigator() {
           <Stack.Screen name="Settings">
             {(props) => <SettingsScreen {...props} onLoggedOut={() => setApiToken(null)} />}
           </Stack.Screen>
+          <Stack.Screen name="Diagnostics" component={DiagnosticsScreen} />
           <Stack.Screen name="RadicalImagePreview" component={RadicalImagePreviewScreen} />
           <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
           <Stack.Screen name="LessonPicker" component={LessonPickerScreen} />

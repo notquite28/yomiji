@@ -254,6 +254,14 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           />
         </View>
 
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Diagnostics</Text>
+          <Text style={styles.bodyText}>View cache stats, sync state, and error log.</Text>
+          <Pressable onPress={() => navigation.navigate('Diagnostics')} style={({ pressed }) => [styles.diagnosticsButton, pressed && styles.pressed]}>
+            <Text style={styles.diagnosticsButtonText}>Open Diagnostics</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.dangerPanel}>
           <Text style={styles.panelTitle}>Log Out</Text>
           <Text style={styles.bodyText}>Clears token, cache, and pending queues.</Text>
@@ -562,6 +570,20 @@ function makeStyles(theme: AppTheme) {
       shadowRadius: 12,
       shadowOffset: { width: 0, height: 6 },
       elevation: 4,
+    },
+    diagnosticsButton: {
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 14,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    diagnosticsButtonText: {
+      color: theme.colors.text,
+      fontSize: 14,
+      fontWeight: '900',
     },
     logoutText: {
       color: '#ffffff',

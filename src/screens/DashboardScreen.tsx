@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { DashboardSummary, getDashboardSummary } from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
+import { describeSyncError } from '../domain/db/errorLog';
 import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import { runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
 import { SrsBar } from '../components/SrsBar';
@@ -70,7 +71,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
       await runIncrementalSync({ db, client, onProgress: setSyncProgress, onCheckpoint: refreshSummary });
       await refreshSummary();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(describeSyncError(caught).message);
     } finally {
       setIsRefreshing(false);
     }
