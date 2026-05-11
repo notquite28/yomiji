@@ -4,25 +4,26 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Guiding Principles
 
-- [ ] Preserve Tsurukame iOS learning semantics while building Android-native interaction patterns.
-- [ ] Keep the app offline-first after initial sync.
-- [ ] Keep background work battery-conscious and user-visible.
-- [ ] Prefer local cache reads for dashboard, study sessions, search, and subject details.
-- [ ] Queue local writes transactionally before attempting network sync.
+- [x] Preserve Tsurukame iOS learning semantics while building Android-native interaction patterns.
+- [x] Keep the app offline-first after initial sync.
+- [x] Keep background work battery-conscious and user-visible.
+- [x] Prefer local cache reads for dashboard, study sessions, search, and subject details.
+- [x] Queue local writes transactionally before attempting network sync.
 - [ ] Avoid logging API tokens, Authorization headers, or sensitive request payloads.
 
 ## Current Foundation
 
 - [x] Expo React Native TypeScript app shell in repository root.
-- [x] React Navigation native stack with login, dashboard, settings, reviews, and lessons routes.
+- [x] React Navigation native stack with login, dashboard, settings, reviews, lessons, and lesson picker routes.
 - [x] WaniKani API token login using `/user` validation.
 - [x] Secure API token storage through platform secure storage.
 - [x] Local SQLite schema for synced API collections, sync cursors, pending writes, audio URLs, and diagnostics.
 - [x] Incremental sync for user, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
 - [x] Pending queue sync for review submissions, lesson starts, and study material edits.
 - [x] Battery-conscious lifecycle sync: stale foreground sync and pending-write-only background flush.
-- [x] Dashboard with username, level, advanced lesson count, review count, SRS bucket counts, sync status, and cache stats.
-- [x] Interactive advanced lesson starter flow using cached lesson-stage assignments.
+- [x] Dashboard with username, level, lesson count (with apprentice-limit gating), review count, SRS bucket counts, sync status, and cache stats.
+- [x] Lesson session with configurable ordering, filtering, batch size, and interleaving.
+- [x] Lesson picker grouped by level and subject type with multi-select.
 - [x] Interactive review flow using cached available review assignments and the two-queue review state machine.
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
 - [x] Android-first reading input with Tsurukame-style romaji-to-kana conversion.
@@ -170,8 +171,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 - [x] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
 - [ ] Add typed settings migrations.
-- [x] Add lesson settings UI.
-- [x] Add review settings UI.
+- [x] Add lesson settings UI (batch size, apprentice limit, prioritize current level, interleave, kana-only vocab).
+- [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
 - [ ] Add subject detail settings UI.
 - [ ] Add audio settings UI.
 - [ ] Add font settings UI.
@@ -209,3 +210,55 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - Subject browsing/search/detail screens are not implemented.
 - Audio and notifications are scaffold dependencies only, not implemented features.
 - Audio, font, and diagnostics settings UI are not yet exposed.
+
+## Feature Reference
+
+### Lesson Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `lessonBatchSize` | number | 5 | Max items per lesson session (1–10). |
+| `apprenticeLessonsLimit` | number | MAX_SAFE_INTEGER | Disable lessons when apprentice SRS items exceed this threshold (25–999). |
+| `lessonOrder` | SubjectType[] | `['radical','kanji','vocabulary']` | Sort order for subject types within each level. |
+| `prioritizeCurrentLevel` | boolean | false | Sort current-level items first (descending level) instead of lower levels first. |
+| `interleaveLessons` | boolean | false | Shuffle items within level groups for a mixed subject-type experience. |
+| `showKanaOnlyVocab` | boolean | true | Include kana-only vocabulary in lessons and lesson picker. |
+
+### Review Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `reviewOrder` | ReviewOrder | `'random'` | Sort order for review items. Options: random, ascending/descending/alternating SRS, current/lowest level first, newest/oldest available, longest wait. |
+| `reviewBatchSize` | number | 5 | Items in the active review queue (1–15). |
+| `reviewItemsLimit` | number | 15 | Maximum reviews per session (5–500, step 5). |
+| `reviewItemsLimitEnabled` | boolean | false | Whether to cap the review session size. |
+| `groupMeaningReading` | boolean | false | Ask meaning and reading back-to-back for each item. |
+| `meaningFirst` | boolean | true | Ask meaning before reading when grouped. |
+| `showAnswerImmediately` | boolean | true | Immediately reveal the answer in Anki mode. |
+| `showFullAnswer` | boolean | false | Show the full correct answer instead of a partial reveal. |
+| `exactMatch` | boolean | false | Disable fuzzy matching for meaning answers. |
+| `enableCheats` | boolean | true | Allow override correct, try again later, and add synonym. |
+| `skipKanjiReadings` | boolean | false | Skip reading prompts for kanji subjects. |
+| `minimizeReviewPenalty` | boolean | true | Cap wrong counts to 1 per task type. |
+| `ankiMode` | boolean | false | Self-grading mode with answer reveal. |
+| `ankiModeTaskType` | AnkiModeTaskType | `'both'` | Which tasks to show in Anki mode: both, reading-only, or meaning-only. |
+| `ankiModeCombineReadingMeaning` | boolean | false | Combine reading and meaning into one card in Anki mode. |
+
+### Appearance Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `appearance` | AppearanceMode | `'system'` | Theme: system, light, or dark. Applied immediately and persisted. |
+
+### Other Settings (Defined, Not Yet Wired)
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `notificationsAllReviews` | boolean | false | Notify for all reviews (not just upcoming). |
+| `notificationsBadging` | boolean | true | Show badge count for available reviews. |
+| `notificationSounds` | boolean | false | Play sound for review notifications. |
+| `leechThreshold` | number | 1 | Threshold for leech detection in practice modes. |
+| `playAudioAutomatically` | boolean | false | Auto-play vocabulary audio during reviews. |
+| `interruptBackgroundAudio` | boolean | false | Interrupt background audio when playing vocabulary. |
+| `offlineAudio` | boolean | false | Download vocabulary audio for offline playback. |
+| `offlineAudioCellular` | boolean | false | Allow offline audio downloads over cellular. |
