@@ -5,8 +5,8 @@ import { ActivityIndicator, AppState, AppStateStatus, View } from 'react-native'
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { getLastSyncTime, openAppDatabase } from '../domain/db/database';
 import { describeSyncError } from '../domain/db/errorLog';
-import { getApiToken } from '../domain/storage/secureToken';
-import { hasPendingWrites, runIncrementalSync, runPendingSync, SyncProgress } from '../domain/sync/syncService';
+import { deleteApiToken, getApiToken } from '../domain/storage/secureToken';
+import { hasPendingWrites, isSyncAuthError, runIncrementalSync, runPendingSync, SyncProgress } from '../domain/sync/syncService';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { DiagnosticsScreen } from '../screens/DiagnosticsScreen';
 import { LessonPickerScreen } from '../screens/LessonPickerScreen';
@@ -33,6 +33,15 @@ export function AppNavigator() {
   const appState = useRef<AppStateStatus>(AppState.currentState);
   const lastForegroundCheckAt = useRef(0);
   const lastPendingFlushAt = useRef(0);
+
+  const handleSyncError = useCallback(async (caught: unknown) => {
+    if (isSyncAuthError(caught)) {
+      await deleteApiToken();
+      setApiToken(null);
+      return;
+    }
+    setLifecycleSyncError(describeSyncError(caught).message);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -91,9 +100,9 @@ export function AppNavigator() {
         setSyncRevision((value) => value + 1);
       }
     } catch (caught) {
-      setLifecycleSyncError(describeSyncError(caught).message);
+      await handleSyncError(caught);
     }
-  }, [apiToken]);
+  }, [apiToken, handleSyncError]);
 
   const syncOnBackground = useCallback(async () => {
     if (!apiToken) {
@@ -119,9 +128,9 @@ export function AppNavigator() {
       });
       setSyncRevision((value) => value + 1);
     } catch (caught) {
-      setLifecycleSyncError(describeSyncError(caught).message);
+      await handleSyncError(caught);
     }
-  }, [apiToken]);
+  }, [apiToken, handleSyncError]);
 
   useEffect(() => {
     if (apiToken) {
@@ -168,13 +177,25 @@ export function AppNavigator() {
                 lifecycleSyncProgress={lifecycleSyncProgress}
                 lifecycleSyncError={lifecycleSyncError}
                 syncRevision={syncRevision}
+                onAuthError={() => {
+                  deleteApiToken().then(() => setApiToken(null));
+                }}
               />
             )}
           </Stack.Screen>
           <Stack.Screen name="Settings">
             {(props) => <SettingsScreen {...props} onLoggedOut={() => setApiToken(null)} />}
           </Stack.Screen>
-          <Stack.Screen name="Diagnostics" component={DiagnosticsScreen} />
+          <Stack.Screen name="Diagnostics">
+            {(props) => (
+              <DiagnosticsScreen
+                {...props}
+                onForceLogout={() => {
+                  deleteApiToken().then(() => setApiToken(null));
+                }}
+              />
+            )}
+          </Stack.Screen>
           <Stack.Screen name="RadicalImagePreview" component={RadicalImagePreviewScreen} />
           <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
           <Stack.Screen name="LessonPicker" component={LessonPickerScreen} />

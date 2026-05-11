@@ -301,6 +301,33 @@ export async function resetLocalData(db: AppDatabase) {
   }
 }
 
+export async function clearRemoteCache(db: AppDatabase) {
+  const tables = [
+    'sync_cursors',
+    'assignments',
+    'study_materials',
+    'level_progressions',
+    'voice_actors',
+    'review_stats',
+    'audio_urls',
+    'subject_progress',
+    'error_log',
+    'subjects',
+    'user',
+  ];
+
+  await db.execAsync('BEGIN TRANSACTION;');
+  try {
+    for (const table of tables) {
+      await db.execAsync(`DELETE FROM ${table};`);
+    }
+    await db.execAsync('COMMIT;');
+  } catch (error) {
+    await db.execAsync('ROLLBACK;');
+    throw error;
+  }
+}
+
 async function putSubjectAudioUrls(db: AppDatabase, subject: ApiResource<SubjectData>) {
   if (!subject.id || !subject.data.pronunciation_audios?.length) {
     return;

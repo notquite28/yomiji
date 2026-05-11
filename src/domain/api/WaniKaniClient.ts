@@ -30,12 +30,14 @@ export type CollectionPageProgressCallback = (progress: CollectionPageProgress) 
 export class WaniKaniApiError extends Error {
   readonly status: number;
   readonly code?: number;
+  readonly retryAfterMs?: number;
 
-  constructor(status: number, message: string, code?: number) {
+  constructor(status: number, message: string, code?: number, retryAfterMs?: number) {
     super(message);
     this.name = 'WaniKaniApiError';
     this.status = status;
     this.code = code;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -231,10 +233,13 @@ export class WaniKaniClient {
       }
 
       const errorPayload = payload as ErrorResponse | null;
+      const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : undefined;
+      const retryAfterMs = retryAfter ? Number(retryAfter) * 1000 : undefined;
       throw new WaniKaniApiError(
         response.status,
         errorPayload?.error ?? `WaniKani request failed with HTTP ${response.status}`,
         errorPayload?.code,
+        retryAfterMs,
       );
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

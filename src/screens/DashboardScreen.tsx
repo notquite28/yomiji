@@ -8,7 +8,7 @@ import { DashboardSummary, getDashboardSummary } from '../domain/dashboard/dashb
 import { openAppDatabase } from '../domain/db/database';
 import { describeSyncError } from '../domain/db/errorLog';
 import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
-import { runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
+import { isSyncAuthError, runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
 import { SrsBar } from '../components/SrsBar';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
@@ -18,6 +18,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'> & {
   lifecycleSyncProgress?: SyncProgress | null;
   lifecycleSyncError?: string | null;
   syncRevision?: number;
+  onAuthError?: () => void;
 };
 
 type StudyActionTheme = {
@@ -28,7 +29,7 @@ type StudyActionTheme = {
   rippleColor: string;
 };
 
-export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, lifecycleSyncError, syncRevision }: Props) {
+export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, lifecycleSyncError, syncRevision, onAuthError }: Props) {
   const theme = useAppTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
@@ -71,6 +72,10 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
       await runIncrementalSync({ db, client, onProgress: setSyncProgress, onCheckpoint: refreshSummary });
       await refreshSummary();
     } catch (caught) {
+      if (isSyncAuthError(caught)) {
+        onAuthError?.();
+        return;
+      }
       setError(describeSyncError(caught).message);
     } finally {
       setIsRefreshing(false);

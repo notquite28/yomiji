@@ -11,13 +11,15 @@ export type ErrorLogEntry = {
   created_at: string;
 };
 
-export type SyncErrorCategory = 'offline' | 'timeout' | 'auth' | 'rate-limit' | 'server' | 'unknown';
+export type SyncErrorCategory = 'offline' | 'timeout' | 'auth' | 'rate-limit' | 'server' | 'hibernating' | 'unknown';
 
 export type SyncErrorInfo = {
   category: SyncErrorCategory;
   message: string;
   isRetryable: boolean;
 };
+
+const HIBERNATION_PATTERNS = ['hibernat', 'inactive subscription', 'account has been hibernated'];
 
 const TOKEN_PATTERN = /Token token=[a-f0-9\-]{8,}/gi;
 const URL_TOKEN_PATTERN = /([?&]api_key=)[^&\s]+/gi;
@@ -34,10 +36,15 @@ export function describeSyncError(error: unknown): SyncErrorInfo {
       return { category, message: 'Request timed out. Try again later.', isRetryable: true };
     case 'auth':
       return { category, message: 'Session expired or token invalid. Please log in again.', isRetryable: false };
-    case 'rate-limit':
-      return { category, message: 'Too many requests. Wait a moment and try again.', isRetryable: true };
+    case 'rate-limit': {
+      const retryMs = error instanceof WaniKaniApiError ? error.retryAfterMs : undefined;
+      const suffix = retryMs ? ` Try again in ${Math.ceil(retryMs / 1000)} seconds.` : '';
+      return { category, message: `Too many requests.${suffix}`, isRetryable: true };
+    }
     case 'server':
       return { category, message: 'WaniKani server error. Try again later.', isRetryable: true };
+    case 'hibernating':
+      return { category, message: 'Your WaniKani account is hibernating. Reactivate it at wanikani.com to continue.', isRetryable: false };
     default:
       return { category, message: sanitize(raw), isRetryable: true };
   }
@@ -52,7 +59,10 @@ export function sanitize(text: string): string {
 export function classifySyncError(error: unknown): SyncErrorCategory {
   if (error instanceof WaniKaniApiError) {
     if (error.status === 0) return 'timeout';
-    if (error.status === 401 || error.status === 403) return 'auth';
+    if (error.status === 401 || error.status === 403) {
+      if (isHibernationMessage(error.message)) return 'hibernating';
+      return 'auth';
+    }
     if (error.status === 429) return 'rate-limit';
     if (error.status >= 500) return 'server';
     return 'unknown';
@@ -74,6 +84,11 @@ export function classifySyncError(error: unknown): SyncErrorCategory {
   }
 
   return 'unknown';
+}
+
+function isHibernationMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return HIBERNATION_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
 export async function logError(db: AppDatabase, level: ErrorLogLevel, message: string, context?: string): Promise<void> {

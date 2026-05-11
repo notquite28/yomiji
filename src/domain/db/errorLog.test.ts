@@ -50,6 +50,18 @@ describe('classifySyncError', () => {
     expectCategory(new WaniKaniApiError(403, 'Forbidden'), 'auth');
   });
 
+  test('classifies 401 with hibernation message as hibernating', () => {
+    expectCategory(new WaniKaniApiError(401, 'Account has been hibernated'), 'hibernating');
+  });
+
+  test('classifies 403 with inactive subscription as hibernating', () => {
+    expectCategory(new WaniKaniApiError(403, 'Inactive subscription'), 'hibernating');
+  });
+
+  test('classifies 401 without hibernation as auth', () => {
+    expectCategory(new WaniKaniApiError(401, 'Unauthorized'), 'auth');
+  });
+
   test('classifies 429 as rate-limit', () => {
     expectCategory(new WaniKaniApiError(429, 'Too Many Requests'), 'rate-limit');
   });
@@ -127,7 +139,14 @@ describe('describeSyncError', () => {
   test('returns friendly rate-limit message', () => {
     const info = describeSyncError(new WaniKaniApiError(429, 'Too Many Requests'));
     expect(info.category).toBe('rate-limit');
-    expect(info.message).toBe('Too many requests. Wait a moment and try again.');
+    expect(info.message).toBe('Too many requests.');
+    expect(info.isRetryable).toBe(true);
+  });
+
+  test('returns rate-limit message with retry timing', () => {
+    const info = describeSyncError(new WaniKaniApiError(429, 'Too Many Requests', undefined, 30000));
+    expect(info.category).toBe('rate-limit');
+    expect(info.message).toBe('Too many requests. Try again in 30 seconds.');
     expect(info.isRetryable).toBe(true);
   });
 
@@ -149,5 +168,12 @@ describe('describeSyncError', () => {
     const info = describeSyncError('some weird error');
     expect(info.category).toBe('unknown');
     expect(info.message).toBe('some weird error');
+  });
+
+  test('returns friendly hibernating message', () => {
+    const info = describeSyncError(new WaniKaniApiError(401, 'Account has been hibernated'));
+    expect(info.category).toBe('hibernating');
+    expect(info.message).toContain('wanikani.com');
+    expect(info.isRetryable).toBe(false);
   });
 });

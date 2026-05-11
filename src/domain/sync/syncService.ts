@@ -2,6 +2,7 @@ import { WaniKaniApiError, WaniKaniClient } from '../api/WaniKaniClient';
 import { LessonStartPayload, ReviewProgressPayload, StudyMaterialPayload } from '../api/types';
 import {
   AppDatabase,
+  clearRemoteCache,
   getSyncCursors,
   putAssignments,
   putLevelProgressions,
@@ -12,7 +13,7 @@ import {
   putVoiceActors,
   setSyncCursor,
 } from '../db/database';
-import { logSyncError } from '../db/errorLog';
+import { classifySyncError, logSyncError, SyncErrorCategory } from '../db/errorLog';
 
 export type SyncStep =
   | 'pending-progress'
@@ -25,6 +26,18 @@ export type SyncStep =
   | 'voice-actors'
   | 'review-statistics'
   | 'complete';
+
+export class SyncError extends Error {
+  readonly category: SyncErrorCategory;
+  readonly isRetryable: boolean;
+
+  constructor(message: string, category: SyncErrorCategory, isRetryable: boolean = true) {
+    super(message);
+    this.name = 'SyncError';
+    this.category = category;
+    this.isRetryable = isRetryable;
+  }
+}
 
 export type SyncProgress = {
   step: SyncStep;
@@ -92,7 +105,7 @@ async function runPendingOnlySync({ db, client, onProgress }: SyncOptions) {
     onProgress?.({ step: 'complete', label: 'Pending progress synced', completed: 2, total: 2 });
   } catch (error) {
     await logSyncError(db, error, 'pending_sync').catch(() => {});
-    throw error;
+    throw wrapSyncError(error);
   }
 }
 
@@ -201,7 +214,7 @@ async function runSync({ db, client, onProgress, onCheckpoint }: SyncOptions) {
     report('complete', 'Sync complete', total, total);
   } catch (error) {
     await logSyncError(db, error, `sync_step:${currentStep}`).catch(() => {});
-    throw error;
+    throw wrapSyncError(error);
   }
 }
 
@@ -211,6 +224,22 @@ function formatDownloadLabel(label: string, loaded: number, total?: number) {
 
 function formatSaveLabel(label: string, saved: number, total: number) {
   return `Saving ${label} (${saved}/${total})`;
+}
+
+function wrapSyncError(error: unknown): SyncError {
+  if (error instanceof SyncError) return error;
+  const category = classifySyncError(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return new SyncError(message, category, category !== 'auth');
+}
+
+export function isSyncAuthError(error: unknown): boolean {
+  return error instanceof SyncError && error.category === 'auth';
+}
+
+export async function runFullRefresh(options: SyncOptions): Promise<void> {
+  await clearRemoteCache(options.db);
+  await runSync(options);
 }
 
 async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient) {

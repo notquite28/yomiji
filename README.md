@@ -28,8 +28,12 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 - Pending-write queues for review progress, lesson starts, and study material edits, flushed to WaniKani when online.
 - Battery-conscious lifecycle sync: full sync on foreground when stale (>15 min), pending-write flush on background only when writes exist.
 - Manual pull-to-refresh for explicit full sync.
-- Network-state awareness with actionable error messages for offline, timeout, auth, rate-limit, and server errors.
+- Network-state awareness with actionable error messages for offline, timeout, auth, rate-limit, hibernating-account, and server errors.
+- Auth error handling: 401/403 responses clear the stored token and prompt re-authentication.
+- Rate-limit handling: 429 responses show retry timing from `Retry-After` header.
+- Hibernating-account detection with actionable copy and link to wanikani.com.
 - Sanitized error logging to local `error_log` table with token redaction.
+- Manual full refresh: clears all cached remote data while preserving pending local writes, available from diagnostics screen.
 
 ### Dashboard
 
@@ -90,7 +94,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 **Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
 
-**Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, and sanitized export via Share sheet.
+**Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, sanitized export via Share sheet, and full refresh (clear cache and resync).
 
 **Log Out** — Clears token, cache, and pending queues.
 

@@ -4,8 +4,11 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import appConfig from '../../app.json';
+import { WaniKaniClient } from '../domain/api/WaniKaniClient';
 import { openAppDatabase } from '../domain/db/database';
 import { clearErrorLog, ErrorLogEntry, getErrorLogEntries, getErrorLogCount } from '../domain/db/errorLog';
+import { deleteApiToken, getApiToken } from '../domain/storage/secureToken';
+import { isSyncAuthError, runFullRefresh } from '../domain/sync/syncService';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
@@ -25,9 +28,11 @@ type DiagnosticsData = {
   recentErrors: ErrorLogEntry[];
 };
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Diagnostics'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Diagnostics'> & {
+  onForceLogout?: () => void;
+};
 
-export function DiagnosticsScreen({ navigation }: Props) {
+export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [data, setData] = useState<DiagnosticsData | null>(null);
@@ -216,6 +221,30 @@ export function DiagnosticsScreen({ navigation }: Props) {
         <Pressable onPress={handleExport} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
           <Text style={styles.primaryButtonText}>Export Diagnostics</Text>
         </Pressable>
+
+        <View style={styles.dangerPanel}>
+          <Text style={styles.panelTitle}>Full Refresh</Text>
+          <Text style={styles.bodyText}>Clear all cached data and re-download from WaniKani. Pending writes are preserved.</Text>
+          <Pressable
+            onPress={async () => {
+              try {
+                const db = await openAppDatabase();
+                const token = await getApiToken();
+                await runFullRefresh({ db, client: new WaniKaniClient(token ?? '') });
+                await loadDiagnostics();
+              } catch (caught) {
+                if (isSyncAuthError(caught)) {
+                  onForceLogout?.();
+                  return;
+                }
+                setError(caught instanceof Error ? caught.message : String(caught));
+              }
+            }}
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>Clear Cache and Resync</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -439,6 +468,20 @@ function makeStyles(theme: AppTheme) {
     pressed: {
       opacity: 0.72,
       transform: [{ scale: 0.99 }],
+    },
+    dangerPanel: {
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#1a1215' : '#fff5f5',
+      borderWidth: 1,
+      borderColor: theme.colors.danger,
+      gap: 6,
+    },
+    bodyText: {
+      color: theme.colors.mutedText,
+      fontSize: 14,
+      fontWeight: '700',
+      lineHeight: 20,
     },
   });
 }

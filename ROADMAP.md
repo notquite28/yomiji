@@ -46,11 +46,11 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [ ] Add integration tests for incremental `updated_after` cursors.
 - [ ] Add integration tests for pending review progress and lesson starts.
 - [ ] Add integration tests for study material create/update flows.
-- [ ] Handle 401 and 403 by marking the token unauthorized and prompting re-authentication.
-- [ ] Handle hibernating-account errors with actionable copy.
-- [ ] Handle 429 rate limiting with retry timing and visible status.
-- [ ] Preserve pending writes across full refreshes.
-- [ ] Add a manual full refresh action that clears remote cache data without dropping pending local writes.
+- [x] Handle 401 and 403 by marking the token unauthorized and prompting re-authentication.
+- [x] Handle hibernating-account errors with actionable copy.
+- [x] Handle 429 rate limiting with retry timing and visible status.
+- [x] Preserve pending writes across full refreshes.
+- [x] Add a manual full refresh action that clears remote cache data without dropping pending local writes.
 
 ## M2: Dashboard Parity
 
