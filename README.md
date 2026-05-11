@@ -14,7 +14,7 @@ Implemented highlights:
 - Incremental sync for users, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
 - Pending sync for review progress, lesson starts, and study material writes.
 - Dashboard counts for lessons, reviews, SRS buckets, sync status, and cache stats.
-- Review session state machine with active/review queues, batching, ordering options, wrong-answer delay, grouped meaning/reading mode, minimized review penalty, and practice-session support.
+- Review session state machine with active/review queues, batching, ordering options, wrong-answer delay, grouped meaning/reading mode, minimized review penalty, wrap-up mode, completion summary, and practice-session support.
 - Answer checker behavior ported from Tsurukame, including kana input conversion, fuzzy matching, blacklists, other-reading detection, invalid character detection, and okurigana checks.
 - Shared study UI for reviews, lessons, and diagnostics.
 - Image-only radical support using WaniKani SVG assets, CSS-aware `react-native-svg` rendering, CSS variable fallback handling, and a Settings diagnostics preview screen.
@@ -23,7 +23,7 @@ Known major gaps:
 
 - Lesson flow is still a starter/introduction flow; full lesson quiz parity is not implemented.
 - Dashboard charts, subject browsing/search/details, audio playback, notifications, and most settings UI remain future milestones.
-- Review summary, in-session cheats, and quick settings are not yet implemented.
+- In-session cheats, quick settings, and full lesson quiz parity are not yet implemented.
 
 ## Getting Started
 

@@ -111,6 +111,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
   const progress = session
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
     : '0/0';
+  const completedItems = session?.completedItems ?? [];
 
   const subjectLookup = useMemo(
     () => new Map(queueItems.map((item) => [item.subjectId, item.subject])),
@@ -181,6 +182,15 @@ export function ReviewSessionScreen({ navigation }: Props) {
     }
   };
 
+  const wrapUp = () => {
+    if (!session || feedback || session.wrappingUp || !session.canWrapUp) {
+      return;
+    }
+    session.setWrappingUp(true);
+    session.nextTask();
+    setRevision((r) => r + 1);
+  };
+
   if (isLoading) {
     return <CenteredMessage label="Loading reviews..." />;
   }
@@ -195,10 +205,12 @@ export function ReviewSessionScreen({ navigation }: Props) {
     const rate = session?.successRateText ?? '100%';
     const completed = session?.reviewsCompleted ?? 0;
     return (
-      <CenteredMessage
-        label={`Reviews complete!\n${rate} accuracy across ${completed} reviews.`}
-        actionLabel="Back to Dashboard"
-        onAction={() => navigation.goBack()}
+      <ReviewSummary
+        completed={completed}
+        successRate={rate}
+        completedItems={completedItems}
+        wrappedUp={session?.wrappingUp ?? false}
+        onBack={() => navigation.goBack()}
       />
     );
   }
@@ -278,8 +290,114 @@ export function ReviewSessionScreen({ navigation }: Props) {
           {feedback ? (isContinuing ? 'Saving...' : 'Continue') : 'Submit Answer'}
         </Text>
       </Pressable>
+
+      {session?.canWrapUp && !session.wrappingUp ? (
+        <Pressable
+          disabled={Boolean(feedback) || isContinuing}
+          onPress={wrapUp}
+          style={({ pressed }) => [styles.secondaryButton, (pressed || Boolean(feedback) || isContinuing) && styles.pressed]}
+        >
+          <Text style={styles.secondaryButtonText}>Wrap Up</Text>
+        </Pressable>
+      ) : null}
+
+      {session?.wrappingUp ? <Text style={styles.wrapUpText}>Wrap-up mode: finish the current review batch. No new reviews will be added.</Text> : null}
     </ScreenLayout>
   );
+}
+
+function ReviewSummary({
+  completed,
+  successRate,
+  completedItems,
+  wrappedUp,
+  onBack,
+}: {
+  completed: number;
+  successRate: string;
+  completedItems: readonly ReviewItem[];
+  wrappedUp: boolean;
+  onBack: () => void;
+}) {
+  const theme = useAppTheme();
+  const styles = makeStyles(theme);
+  const incorrectItems = completedItems.filter((item) => item.meaningWrongCount > 0 || item.readingWrongCount > 0);
+  const incorrectByLevel = groupIncorrectByLevel(incorrectItems);
+
+  return (
+    <ScreenLayout scrollable>
+      <SessionHeader onBack={onBack} progress="Complete" />
+
+      <View style={styles.summaryHero}>
+        <Text style={styles.summaryKicker}>{wrappedUp ? 'Wrap-Up Complete' : 'Reviews Complete'}</Text>
+        <Text style={styles.summaryRate}>{successRate}</Text>
+        <Text style={styles.summaryMeta}>{completed} reviews completed</Text>
+      </View>
+
+      <View style={styles.summaryStatsRow}>
+        <SummaryStat label="Correct" value={String(Math.max(0, completedItems.length - incorrectItems.length))} />
+        <SummaryStat label="Needs Review" value={String(incorrectItems.length)} />
+      </View>
+
+      <View style={styles.summaryPanel}>
+        <Text style={styles.summaryPanelTitle}>Incorrect Items</Text>
+        {incorrectByLevel.length ? (
+          incorrectByLevel.map((group) => (
+            <View key={group.level} style={styles.levelGroup}>
+              <Text style={styles.levelTitle}>{group.level}</Text>
+              {group.items.map((item) => (
+                <View key={item.assignmentId} style={styles.incorrectRow}>
+                  <Text style={styles.incorrectName}>{primaryMeaning(item) || item.subject.japanese || item.subjectType}</Text>
+                  <Text style={styles.incorrectCounts}>{wrongCountText(item)}</Text>
+                </View>
+              ))}
+            </View>
+          ))
+        ) : (
+          <Text style={styles.summaryEmpty}>No incorrect answers this session.</Text>
+        )}
+      </View>
+
+      <Pressable onPress={onBack} style={[styles.primaryButton, styles.summaryActionButton]}>
+        <Text style={styles.primaryButtonText}>Back to Dashboard</Text>
+      </Pressable>
+    </ScreenLayout>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  const theme = useAppTheme();
+  const styles = makeStyles(theme);
+  return (
+    <View style={styles.summaryStat}>
+      <Text style={styles.summaryStatValue}>{value}</Text>
+      <Text style={styles.summaryStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function groupIncorrectByLevel(items: ReviewItem[]) {
+  const groups = new Map<string, ReviewItem[]>();
+  for (const item of items) {
+    const key = `Level ${item.level ?? '?'}`;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return [...groups.entries()].map(([level, groupItems]) => ({ level, items: groupItems }));
+}
+
+function primaryMeaning(item: ReviewItem) {
+  return item.subject.meanings.find((meaning) => meaning.acceptedAnswer !== false && meaning.type !== 'blacklist')?.meaning;
+}
+
+function wrongCountText(item: ReviewItem) {
+  const parts: string[] = [];
+  if (item.meaningWrongCount > 0) {
+    parts.push(`${item.meaningWrongCount} meaning`);
+  }
+  if (item.readingWrongCount > 0) {
+    parts.push(`${item.readingWrongCount} reading`);
+  }
+  return parts.join(' · ');
 }
 
 function feedbackTitle(result: AnswerCheckResult) {
@@ -353,6 +471,129 @@ function makeStyles(theme: AppTheme) {
       color: '#ffffff',
       fontSize: 16,
       fontWeight: '900',
+    },
+    secondaryButton: {
+      minHeight: 52,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+      paddingHorizontal: 18,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    secondaryButtonText: {
+      color: theme.colors.text,
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    wrapUpText: {
+      color: theme.colors.mutedText,
+      textAlign: 'center',
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
+    },
+    summaryHero: {
+      minHeight: 210,
+      borderRadius: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      backgroundColor: theme.colors.kanji,
+    },
+    summaryKicker: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '900',
+      letterSpacing: 1.4,
+      textTransform: 'uppercase',
+    },
+    summaryRate: {
+      marginTop: 10,
+      color: '#ffffff',
+      fontSize: 64,
+      fontWeight: '900',
+    },
+    summaryMeta: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+      opacity: 0.86,
+    },
+    summaryStatsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    summaryStat: {
+      flex: 1,
+      borderRadius: 22,
+      padding: 16,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    summaryStatValue: {
+      color: theme.colors.text,
+      fontSize: 28,
+      fontWeight: '900',
+    },
+    summaryStatLabel: {
+      marginTop: 2,
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    summaryPanel: {
+      borderRadius: 24,
+      padding: 18,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      gap: 12,
+    },
+    summaryActionButton: {
+      backgroundColor: theme.colors.kanji,
+    },
+    summaryPanelTitle: {
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    summaryEmpty: {
+      color: theme.colors.mutedText,
+      fontSize: 15,
+      lineHeight: 22,
+      fontWeight: '700',
+    },
+    levelGroup: {
+      gap: 8,
+    },
+    levelTitle: {
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+    },
+    incorrectRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+      borderRadius: 16,
+      padding: 12,
+      backgroundColor: theme.colors.surface,
+    },
+    incorrectName: {
+      flex: 1,
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '900',
+    },
+    incorrectCounts: {
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      fontWeight: '800',
     },
     pressed: {
       opacity: 0.58,

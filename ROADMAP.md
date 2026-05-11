@@ -67,7 +67,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M3: Review Session Parity
 
-### Phase 1: Core State Machine (current focus)
+### Phase 1: Core State Machine
 
 - [x] Extract shared UI components into `src/components/` (`ScreenLayout`, `SubjectHeroCard`).
 - [ ] Add shared `SrsBar` component.
@@ -81,11 +81,11 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Add unit tests for review queue state machine in `src/domain/study/`.
 - [x] Refactor LessonSessionScreen to use shared components.
 
-### Phase 2: Completion Features
+### Phase 2: Completion Features (current focus)
 
-- [ ] Add review summary screen with success rate and incorrect items grouped by level.
+- [x] Add review summary screen with success rate and incorrect items grouped by level.
 - [x] Support domain-level wrap-up behavior.
-- [ ] Add review UI for wrap-up mode.
+- [x] Add review UI for wrap-up mode.
 - [ ] Support skip/ask-again-later when enabled.
 - [ ] Add cheats: override correct, ask again later, add synonym, and exclude vocabulary.
 
