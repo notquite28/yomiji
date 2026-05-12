@@ -10,7 +10,7 @@ See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for his
 
 | Light Mode | Dark Mode |
 | --- | --- |
-| <img src="assets/light.png" alt="読路 light mode screenshot" width="260" /> | <img src="assets/dark.png" alt="読路 dark mode screenshot" width="260" /> |
+| <img src="assets/light.jpg" alt="読路 light mode screenshot" width="260" /> | <img src="assets/dark.jpg" alt="読路 dark mode screenshot" width="260" /> |
 
 ## Current Status
 

@@ -52,6 +52,15 @@ pnpm exec expo install --check      # verify Expo SDK-compatible dependency vers
 - SQLite foreign keys are enforced. In cache resets, delete child tables before `subjects` (`assignments`, `study_materials`, `review_stats`, `audio_urls`, `subject_progress`, `pending_study_materials`).
 - Full refresh must clear cached remote data and cursors without dropping pending local writes.
 
+## Versioning And Releases
+
+- Versioning uses semver. While pre-1.0, bump **patch** for bug fixes, **minor** for new features, and **major** for milestone releases.
+- Do not bump the version on every commit. Bump only when the user asks for a release or when the accumulated changes warrant one.
+- When the user says "release", "ship", "bump version", or similar, ask which bump level (patch/minor/major) before proceeding.
+- Run `pnpm version:bump [patch|minor|major]` to update `package.json`, `app.json` (version + versionCode), commit, and tag in one step.
+- After the script succeeds, remind the user to push: `git push --follow-tags origin main`.
+- The CI workflow (`.github/workflows/android-release.yml`) triggers on `v*` tags only — regular pushes do not create releases.
+
 ## Current Product Gaps
 
 - Audio playback/offline audio, notifications/badges/deep links, custom fonts/font size, and related settings UI are scaffolded or pending.
