@@ -74,7 +74,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <View style={styles.headerBlock}>
-          <Text style={styles.kicker}>Yomichi</Text>
+          <Text style={styles.kicker}>読路</Text>
           <Text style={styles.title}>Settings</Text>
           <Text style={styles.subtitle}>Account, appearance, and study preferences.</Text>
         </View>

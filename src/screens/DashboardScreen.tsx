@@ -189,7 +189,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
       >
         <Animated.View style={[styles.header, entranceStyle]}>
           <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>Yomichi</Text>
+            <Text style={styles.kicker}>読路</Text>
             <Text style={styles.title}>{summary?.username ?? 'Local cache'}</Text>
             <View style={styles.metaRow}>
               {summary?.level ? (

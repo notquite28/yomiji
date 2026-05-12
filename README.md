@@ -1,18 +1,18 @@
-# Yomichi (読み道)
+# 読路 (Yomiji)
 
-A WaniKani study app for Android, built with React Native and Expo. Named for 読み (reading) + 道 (path): the path of reading.
+A WaniKani study app for Android, built with React Native and Expo. Named for 読 (よ, reading) + 路 (じ, path): the reading path.
 
-The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for product requirements context.
+The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
 
 ## Screenshots
 
 | Light Mode | Dark Mode |
 | --- | --- |
-| <img src="assets/light.png" alt="Yomichi light mode screenshot" width="260" /> | <img src="assets/dark.png" alt="Yomichi dark mode screenshot" width="260" /> |
+| <img src="assets/light.png" alt="読路 light mode screenshot" width="260" /> | <img src="assets/dark.png" alt="読路 dark mode screenshot" width="260" /> |
 
 ## Current Status
 
-The app is an offline-first React Native port with a local SQLite cache, incremental WaniKani sync, pending-write queues, error logging, and working dashboard, lesson, and review flows.
+The app is an offline-first WaniKani client with a local SQLite cache, incremental sync, pending-write queues, error logging, and working dashboard, lesson, and review flows.
 
 ## Features
 
@@ -54,7 +54,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ### Review Sessions
 
-- Two-queue state machine (active queue + review queue) matching Tsurukame iOS semantics.
+- Two-queue state machine (active queue + review queue) matching established iOS semantics.
 - Wrong answers re-queued with a 5-item return delay.
 - Per-item tracking of meaning/reading wrong counts.
 - Items marked finished when both meaning and reading are answered, or one side is unavailable/skipped.
@@ -64,7 +64,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 **Review Ordering** — Random, ascending SRS, descending SRS, alternating SRS, current level first, lowest level first, newest available, oldest available, longest relative wait.
 
-**Answer Checking** (ported from Tsurukame) — Normalization, romaji-to-kana conversion, meaning/reading validation, synonym support, blacklist checking, Levenshtein fuzzy matching, other-reading detection, invalid character range detection, okurigana mismatch detection, and exact-match mode.
+**Answer Checking** — Normalization, romaji-to-kana conversion, meaning/reading validation, synonym support, blacklist checking, Levenshtein fuzzy matching, other-reading detection, invalid character range detection, okurigana mismatch detection, and exact-match mode.
 
 **Cheats** — Override incorrect as correct, try again later (re-queue without penalty), and add synonym (queued for WaniKani API sync).
 
@@ -128,7 +128,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ### Input
 
-- In-app romaji-to-kana conversion for reading prompts, matching Tsurukame's input behavior.
+- In-app romaji-to-kana conversion for reading prompts.
 - No reliance on OS Japanese keyboard switching.
 
 ### Subject Browsing and Search

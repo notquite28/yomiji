@@ -89,7 +89,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
               <Text style={styles.kicker}>WaniKani study</Text>
             </View>
             <Text style={styles.logo}>読み道</Text>
-            <Text style={styles.title}>Yomichi</Text>
+            <Text style={styles.title}>読路</Text>
             <Text style={styles.subtitle}>A quieter path through reviews.</Text>
           </Animated.View>
 
@@ -115,7 +115,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
             <Text style={styles.helpText}>Needs review and study-material scopes.</Text>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <Pressable disabled={isSubmitting} onPress={submit} style={({ pressed }) => [styles.primaryButton, (pressed || isSubmitting) && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>{isSubmitting ? 'Validating...' : 'Enter Yomichi'}</Text>
+              <Text style={styles.primaryButtonText}>{isSubmitting ? 'Validating...' : 'Enter 読路'}</Text>
             </Pressable>
             <Pressable onPress={() => Linking.openURL(TOKEN_HELP_URL)} style={styles.linkButton}>
               <Text style={styles.linkText}>Create token</Text>

@@ -1,4 +1,4 @@
-# SQLite Schema Mapping: Protobuf (Tsurukame iOS) vs JSON (Yomichi RN)
+# SQLite Schema Mapping: Legacy iOS Protobuf vs 読路 (Yomiji) JSON
 
 Both apps follow the same pattern: store full API responses as serialized blobs alongside extracted SQL columns for querying. The original uses protobuf (`pb BLOB`), the new app uses JSON (`payload TEXT`).
 
@@ -75,7 +75,7 @@ The RN app extracts more columns because it queries assignments by SRS stage and
 
 **Key difference:** iOS uses subject ID as PK (one study material per subject). RN uses API resource ID as PK with `subject_id UNIQUE`. Both enforce one study material per subject.
 
-iOS uses a `#tsurukameExclude` hack in `meaningNote` to mark excluded items. RN uses the API's `hidden` field from the study material payload directly.
+iOS uses a `#tsurukameExclude` hack in `meaningNote` to mark excluded items. Yomiji uses the API's `hidden` field from the study material payload directly.
 
 ### user
 

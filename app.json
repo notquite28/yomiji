@@ -1,18 +1,29 @@
 {
   "expo": {
-    "name": "Yomichi",
-    "slug": "yomichi",
-    "scheme": "yomichi",
+    "name": "読路 (Yomiji)",
+    "slug": "yomiji",
+    "scheme": "yomiji",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.yomichi"
+      "bundleIdentifier": "app.yomiji",
+      "buildNumber": "1"
     },
     "android": {
-      "package": "app.yomichi"
+      "package": "app.yomiji",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#f7f4ef"
+      },
+      "permissions": []
     },
-    "plugins": ["expo-secure-store", "expo-sqlite", "expo-notifications"]
+    "plugins": ["expo-secure-store", "expo-sqlite", "expo-notifications"],
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
   }
 }

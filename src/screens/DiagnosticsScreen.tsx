@@ -120,7 +120,7 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
     try {
       await Share.share({
         message: JSON.stringify(exportData, null, 2),
-        title: 'Yomichi Diagnostics Export',
+        title: '読路 Diagnostics Export',
       });
     } catch {
       // Share API may not be available on all platforms
@@ -147,7 +147,7 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <View style={styles.headerBlock}>
-          <Text style={styles.kicker}>Yomichi</Text>
+          <Text style={styles.kicker}>読路</Text>
           <Text style={styles.title}>Diagnostics</Text>
           <Text style={styles.subtitle}>Cache state, sync status, and error log.</Text>
         </View>

@@ -1,10 +1,10 @@
-# React Native Port Roadmap
+# 読路 (Yomiji) Roadmap
 
-This roadmap tracks the React Native port in the repository root. The Swift/UIKit app in `tsurukame/` remains the behavior reference, and `REACT_NATIVE_PORT_PRD.md` remains the product requirements source.
+This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the original product requirements context.
 
 ## Guiding Principles
 
-- [x] Preserve Tsurukame iOS learning semantics while building Android-native interaction patterns.
+- [x] Preserve established iOS learning semantics while building Android-native interaction patterns.
 - [x] Keep the app offline-first after initial sync.
 - [x] Keep background work battery-conscious and user-visible.
 - [x] Prefer local cache reads for dashboard, study sessions, search, and subject details.
@@ -26,7 +26,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Lesson picker grouped by level and subject type with multi-select.
 - [x] Interactive review flow using cached available review assignments and the two-queue review state machine.
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
-- [x] Android-first reading input with Tsurukame-style romaji-to-kana conversion.
+- [x] Android-first reading input with romaji-to-kana conversion.
 - [x] CSS-aware image-only radical rendering in reviews, lessons, and diagnostics.
 - [x] Long-press help toasts and accessibility labels for ambiguous dashboard/session controls.
 - [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, study queue image selection, error sanitization/classification, and migration validation.
@@ -62,7 +62,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [~] Add recent lessons section. *(removed — dashboard now focuses on available work and recent mistakes practice)*
 - [x] Add recent mistakes section.
 - [x] Add apprentice leeches and all leeches sections.
-- [~] Add burned item practice entry point. *(count displayed; filtering requires M8 practice modes)*
+- [~] Add burned item practice entry point. *(count displayed; practice requires M8 implementation)*
 - [x] Add excluded items entry point.
 - [x] Update dashboard counts immediately after local review and lesson actions.
 - [x] Refresh dashboard on hour boundaries while foregrounded without continuous background timers.
@@ -128,7 +128,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Add local search by Japanese text, meaning, and kana reading prefixes.
 - [x] Sort exact search matches first, then by level.
 - [x] Limit search results to 50.
-- [x] Add rich subject detail screen with meanings, readings, mnemonics, hints, components, amalgamations, context sentences, stats, and audio.
+- [x] Add rich subject detail screen with meanings, readings, mnemonics, hints, components, amalgamations, context sentences, and stats.
 - [x] Add synonym editing.
 - [x] Add meaning note editing.
 - [x] Add reading note editing.
@@ -170,7 +170,9 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M9: Settings Parity
 
-- [x] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
+- [x] Add root settings sections for Appearance, Lessons, Reviews, Diagnostics, and Log Out.
+- [ ] Add Notifications settings section.
+- [ ] Add Radicals/Kanji/Vocabulary (subject detail) settings section.
 - [ ] Add typed settings migrations.
 - [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
 - [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
@@ -205,13 +207,15 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## Current Known Gaps
 
-- Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support, but still lack hardware keyboard shortcuts.
+- Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support. Hardware keyboard shortcuts are not planned.
 - Lessons have ordering, max session size, per-quiz batch size, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
 - Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches, and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject catalog by level, search, and detail screens are implemented. SRS browsing, remaining items, and excluded items browsing are not yet wired to screens.
-- Audio and notifications are scaffold dependencies only, not implemented features.
-- Audio, font, and notification settings UI are not yet exposed.
+- Audio playback, offline audio, and voice actor selection are not implemented.
+- Notifications, badges, and deep links are not implemented.
+- Custom font and font-size settings are not implemented.
+- Settings exposes Appearance, Reviews, Lessons, Diagnostics, and Log Out. Audio, font, notification, and subject detail settings UI are not yet exposed.
 
 ## Feature Reference
 

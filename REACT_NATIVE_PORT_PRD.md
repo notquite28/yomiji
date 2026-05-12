@@ -1,8 +1,8 @@
-# React Native Port PRD
+# 読路 (Yomiji) Product Requirements (Original Port PRD)
 
 ## Document Status
 
-Status: Draft 1
+Status: Historical reference — captured at port inception
 
 Source audit date: 2026-05-10
 

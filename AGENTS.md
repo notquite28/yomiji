@@ -1,4 +1,4 @@
-# AGENTS.md — Yomichi React Native Port
+# AGENTS.md — 読路 (Yomiji)
 
 ## Commands
 
