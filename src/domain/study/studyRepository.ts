@@ -1,5 +1,6 @@
 import { AssignmentData, StudyMaterialData } from '../api/types';
 import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChecker';
+import { calculateLeechScore } from '../dashboard/dashboardRepository';
 import { clearAssignmentAvailableAt, markAssignmentStarted } from '../db/assignmentRepository';
 import { AppDatabase } from '../db/database';
 import { upsertWithSynonyms } from '../db/studyMaterialRepository';
@@ -100,6 +101,90 @@ export async function getRecentMistakePracticeQueue(db: AppDatabase, limit = 100
      ORDER BY subject_progress.last_mistake_at DESC, assignments.id ASC
      LIMIT ?`,
     cutoff,
+    limit,
+  );
+
+  return rows.map(rowToStudyQueueItem).filter(hasPrompt);
+}
+
+export async function getLeechPracticeQueue(db: AppDatabase, options?: { apprenticeOnly?: boolean; threshold?: number; limit?: number }) {
+  const apprenticeOnly = options?.apprenticeOnly ?? false;
+  const threshold = options?.threshold ?? 1;
+  const limit = options?.limit ?? 100;
+
+  const srsFilter = apprenticeOnly ? 'AND a.srs_stage BETWEEN 1 AND 4' : '';
+  type LeechRow = StudyQueueRow & {
+    meaning_incorrect: number;
+    meaning_correct: number;
+    reading_incorrect: number;
+    reading_correct: number;
+  };
+
+  const rows = await db.getAllAsync<LeechRow>(
+    `SELECT
+       a.id AS assignment_id,
+       a.subject_id,
+       a.subject_type,
+       a.level,
+       a.srs_stage,
+       a.available_at,
+       a.payload AS assignment_payload,
+       s.payload AS subject_payload,
+       sm.payload AS study_material_payload,
+       CAST(COALESCE(json_extract(rs.payload, '$.data.meaning_incorrect'), 0) AS INTEGER) AS meaning_incorrect,
+       CAST(COALESCE(json_extract(rs.payload, '$.data.meaning_correct'), 0) AS INTEGER) AS meaning_correct,
+       CAST(COALESCE(json_extract(rs.payload, '$.data.reading_incorrect'), 0) AS INTEGER) AS reading_incorrect,
+       CAST(COALESCE(json_extract(rs.payload, '$.data.reading_correct'), 0) AS INTEGER) AS reading_correct
+     FROM review_stats rs
+     JOIN subjects s ON s.id = rs.subject_id
+     JOIN assignments a ON a.subject_id = rs.subject_id
+     LEFT JOIN study_materials sm ON sm.subject_id = a.subject_id
+     WHERE (COALESCE(json_extract(rs.payload, '$.data.meaning_incorrect'), 0)
+         + COALESCE(json_extract(rs.payload, '$.data.reading_incorrect'), 0)) > 0
+       ${srsFilter}
+       AND a.srs_stage BETWEEN 1 AND 9
+     ORDER BY (COALESCE(json_extract(rs.payload, '$.data.meaning_incorrect'), 0)
+         + COALESCE(json_extract(rs.payload, '$.data.reading_incorrect'), 0)) * 1.0
+       / NULLIF(
+         COALESCE(json_extract(rs.payload, '$.data.meaning_correct'), 0)
+         + COALESCE(json_extract(rs.payload, '$.data.meaning_incorrect'), 0)
+         + COALESCE(json_extract(rs.payload, '$.data.reading_correct'), 0)
+         + COALESCE(json_extract(rs.payload, '$.data.reading_incorrect'), 0), 0) DESC
+     LIMIT ?`,
+    limit,
+  );
+
+  return rows
+    .map((row) => ({
+      item: rowToStudyQueueItem(row),
+      score: calculateLeechScore(
+        row.meaning_incorrect + row.reading_incorrect,
+        row.meaning_correct + row.reading_correct,
+      ),
+    }))
+    .filter(({ item }) => hasPrompt(item))
+    .filter(({ score }) => threshold <= 0 || score >= threshold)
+    .map(({ item }) => item);
+}
+
+export async function getBurnedItemPracticeQueue(db: AppDatabase, limit = 100) {
+  const rows = await db.getAllAsync<StudyQueueRow>(
+    `SELECT
+       a.id AS assignment_id,
+       a.subject_id,
+       a.subject_type,
+       a.level,
+       a.srs_stage,
+       a.available_at,
+       a.payload AS assignment_payload,
+       s.payload AS subject_payload,
+       sm.payload AS study_material_payload
+     FROM assignments a
+     INNER JOIN subjects s ON s.id = a.subject_id
+     LEFT JOIN study_materials sm ON sm.subject_id = a.subject_id
+     WHERE a.srs_stage = 9
+     ORDER BY a.level ASC, a.subject_type ASC, a.subject_id ASC
+     LIMIT ?`,
     limit,
   );
 
@@ -328,23 +413,6 @@ function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
       : undefined,
     availableAt: row.available_at ?? undefined,
   };
-}
-
-export async function getSubjectsByIds(db: AppDatabase, ids: number[]): Promise<Map<number, SubjectAnswerData>> {
-  if (ids.length === 0) return new Map();
-
-  const placeholders = ids.map(() => '?').join(',');
-  const rows = await db.getAllAsync<{ id: number; payload: string }>(
-    `SELECT id, payload FROM subjects WHERE id IN (${placeholders})`,
-    ...ids,
-  );
-
-  const result = new Map<number, SubjectAnswerData>();
-  for (const row of rows) {
-    const parsed = parseSubjectPayload(row.id, row.payload);
-    if (parsed) result.set(row.id, parsed);
-  }
-  return result;
 }
 
 function hasPrompt(item: StudyQueueItem) {

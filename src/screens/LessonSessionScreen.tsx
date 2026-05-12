@@ -11,10 +11,10 @@ import {
   chunkLessonItems,
   getLessonItemsByIds,
   getLessonQueue,
-  getSubjectsByIds,
   queueLessonStart,
   StudyQueueItem,
 } from '../domain/study/studyRepository';
+import { getSubjectsByIds } from '../domain/db/subjectRepository';
 import {
   MarkResult,
   ReviewItem,

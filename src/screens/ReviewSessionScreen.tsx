@@ -13,8 +13,11 @@ import {
   ReviewSession,
   ReviewSessionSettings,
 } from '../domain/study/reviewSession';
-import { getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
+import { findBySubjectId } from '../domain/db/studyMaterialRepository';
+import { getSubjectsByIds } from '../domain/db/subjectRepository';
+import { getBurnedItemPracticeQueue, getLeechPracticeQueue, getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
 import { RootStackParamList } from '../navigation/types';
@@ -33,9 +36,18 @@ type Feedback = {
 
 type PracticeSource = NonNullable<RootStackParamList['ReviewSession']>['practiceSource'];
 
-function getQueueForSource(db: Awaited<ReturnType<typeof openAppDatabase>>, source: PracticeSource) {
+function getQueueForSource(db: Awaited<ReturnType<typeof openAppDatabase>>, source: PracticeSource, settings: AppSettings) {
   if (source === 'recentMistakes') {
     return getRecentMistakePracticeQueue(db);
+  }
+  if (source === 'apprenticeLeeches') {
+    return getLeechPracticeQueue(db, { apprenticeOnly: true, threshold: settings.leechThreshold });
+  }
+  if (source === 'allLeeches') {
+    return getLeechPracticeQueue(db, { threshold: settings.leechThreshold });
+  }
+  if (source === 'burnedItems') {
+    return getBurnedItemPracticeQueue(db);
   }
   return getReviewQueue(db);
 }
@@ -43,6 +55,15 @@ function getQueueForSource(db: Awaited<ReturnType<typeof openAppDatabase>>, sour
 function emptyStateLabel(source: PracticeSource) {
   if (source === 'recentMistakes') {
     return 'No recent mistakes are available for practice.';
+  }
+  if (source === 'apprenticeLeeches') {
+    return 'No apprentice leeches are available for practice.';
+  }
+  if (source === 'allLeeches') {
+    return 'No leeches are available for practice.';
+  }
+  if (source === 'burnedItems') {
+    return 'No burned items are available for practice.';
   }
   return 'No reviews are available in the local cache.';
 }
@@ -62,6 +83,12 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const [userLevel, setUserLevel] = useState<number | undefined>(undefined);
   const [ankiRevealed, setAnkiRevealed] = useState(false);
   const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
+  const [showAllDetails, setShowAllDetails] = useState(false);
+  const [subjectDetailData, setSubjectDetailData] = useState<{
+    componentSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
+    amalgamationSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
+    studyMaterial: { meaningSynonyms: string[]; meaningNote: string; readingNote: string };
+  } | null>(null);
 
   const sessionRef = useRef<ReviewSession | null>(null);
   const practiceSource = route.params?.practiceSource;
@@ -85,32 +112,29 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([
-      openAppDatabase().then((db) =>
-        Promise.all([
-          getQueueForSource(db, practiceSource),
+    (async () => {
+      try {
+        const loaded = await loadSettings();
+        if (!isMounted) return;
+        setAppSettings(loaded);
+        const db = await openAppDatabase();
+        const [items, userRow] = await Promise.all([
+          getQueueForSource(db, practiceSource, loaded),
           db.getFirstAsync<{ level: number }>('SELECT level FROM user WHERE id = 1'),
-        ]),
-      ),
-      loadSettings(),
-    ])
-      .then(([[items, userRow], loaded]) => {
-        if (isMounted) {
-          setQueueItems(items);
-          setUserLevel(userRow?.level);
-          setAppSettings(loaded);
-        }
-      })
-      .catch((caught: unknown) => {
+        ]);
+        if (!isMounted) return;
+        setQueueItems(items);
+        setUserLevel(userRow?.level);
+      } catch (caught) {
         if (isMounted) {
           setError(caught instanceof Error ? caught.message : String(caught));
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoading(false);
         }
-      });
+      }
+    })();
     return () => {
       isMounted = false;
     };
@@ -133,6 +157,44 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     session.nextTask();
     setRevision((r) => r + 1);
   }, [practiceSource, queueItems, settings, userLevel]);
+
+  useEffect(() => {
+    if (!feedback?.item) {
+      setSubjectDetailData(null);
+      setShowAllDetails(false);
+      return;
+    }
+
+    let isMounted = true;
+    const item = feedback.item;
+    (async () => {
+      try {
+        const db = await openAppDatabase();
+        const compIds = item.subject.componentSubjectIds ?? [];
+        const amalIds = (item.subject.amalgamationSubjectIds ?? []).slice(0, 10);
+        const [compMap, amalMap] = await Promise.all([
+          compIds.length > 0 ? getSubjectsByIds(db, compIds) : Promise.resolve(new Map()),
+          amalIds.length > 0 ? getSubjectsByIds(db, amalIds) : Promise.resolve(new Map()),
+        ]);
+        const sm = await findBySubjectId(db, item.subjectId);
+        const studyMaterial = sm
+          ? (() => {
+              const parsed = JSON.parse(sm.payload) as { data: { meaning_synonyms?: string[]; meaning_note?: string; reading_note?: string } };
+              return { meaningSynonyms: parsed.data.meaning_synonyms ?? [], meaningNote: parsed.data.meaning_note ?? '', readingNote: parsed.data.reading_note ?? '' };
+            })()
+          : { meaningSynonyms: [] as string[], meaningNote: '', readingNote: '' };
+
+        if (isMounted) {
+          setSubjectDetailData({ componentSubjects: compMap, amalgamationSubjects: amalMap, studyMaterial });
+        }
+      } catch {
+        if (isMounted) {
+          setSubjectDetailData(null);
+        }
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [feedback?.item?.subjectId]);
 
   const session = sessionRef.current;
   const currentItem = session?.currentItem ?? null;
@@ -595,6 +657,30 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
       {session?.wrappingUp ? <Text style={styles.wrapUpText}>Wrap-up mode: finish the current review batch. No new reviews will be added.</Text> : null}
 
+      {feedback && subjectDetailData && displayItem ? (
+        showAllDetails || appSettings.showFullAnswer ? (
+          <SubjectDetailsContent
+            subject={displayItem.subject}
+            componentSubjects={subjectDetailData.componentSubjects}
+            amalgamationSubjects={subjectDetailData.amalgamationSubjects}
+            studyMaterial={subjectDetailData.studyMaterial}
+            meaningAttempted={true}
+            readingAttempted={true}
+            showFullAnswer={true}
+            isReview={true}
+            onNavigateToSubject={(id) => navigation.navigate('SubjectDetail', { subjectId: id })}
+          />
+        ) : (
+          <InlineReviewDetails
+            item={displayItem}
+            taskType={feedback.taskType}
+            subjectDetailData={subjectDetailData}
+            onShowAll={() => setShowAllDetails(true)}
+            onNavigateToSubject={(id) => navigation.navigate('SubjectDetail', { subjectId: id })}
+          />
+        )
+      ) : null}
+
       <ReviewQuickSettings
         visible={quickSettingsOpen}
         settings={appSettings}
@@ -703,6 +789,61 @@ function wrongCountText(item: ReviewItem) {
     parts.push(`${item.readingWrongCount} reading`);
   }
   return parts.join(' · ');
+}
+
+function InlineReviewDetails({
+  item,
+  taskType,
+  subjectDetailData,
+  onShowAll,
+  onNavigateToSubject,
+}: {
+  item: ReviewItem;
+  taskType: TaskType;
+  subjectDetailData: {
+    componentSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
+    amalgamationSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
+    studyMaterial: { meaningSynonyms: string[]; meaningNote: string; readingNote: string };
+  };
+  onShowAll: () => void;
+  onNavigateToSubject: (subjectId: number) => void;
+}) {
+  const meaningAttempted = taskType === 'meaning' || item.answeredMeaning || item.meaningWrong;
+  const readingAttempted = taskType === 'reading' || item.answeredReading || item.readingWrong;
+
+  const hasHidden = !meaningAttempted || !readingAttempted;
+
+  return (
+    <View style={{ gap: 12 }}>
+      <SubjectDetailsContent
+        subject={item.subject}
+        componentSubjects={subjectDetailData.componentSubjects}
+        amalgamationSubjects={subjectDetailData.amalgamationSubjects}
+        studyMaterial={subjectDetailData.studyMaterial}
+        meaningAttempted={meaningAttempted}
+        readingAttempted={readingAttempted}
+        showFullAnswer={false}
+        isReview={true}
+        onNavigateToSubject={onNavigateToSubject}
+      />
+      {hasHidden ? (
+        <Pressable
+          onPress={onShowAll}
+          style={({ pressed }) => [
+            {
+              alignItems: 'center',
+              paddingVertical: 10,
+              borderRadius: 999,
+              backgroundColor: 'rgba(128, 128, 128, 0.08)',
+              opacity: pressed ? 0.72 : 1,
+            },
+          ]}
+        >
+          <Text style={{ color: '#666', fontSize: 13, fontWeight: '800' }}>Show all information</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 function makeStyles(theme: AppTheme) {

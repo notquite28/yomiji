@@ -62,7 +62,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [~] Add recent lessons section. *(removed — dashboard now focuses on available work and recent mistakes practice)*
 - [x] Add recent mistakes section.
 - [x] Add apprentice leeches and all leeches sections.
-- [~] Add burned item practice entry point. *(count displayed; practice requires M8 implementation)*
+- [x] Add burned item practice entry point.
 - [x] Add excluded items entry point.
 - [x] Update dashboard counts immediately after local review and lesson actions.
 - [x] Refresh dashboard on hour boundaries while foregrounded without continuous background timers.
@@ -102,6 +102,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Support newest available, oldest available, and longest-relative-wait review order.
 - [x] Support Anki mode variants.
 - [x] Add quick settings during review.
+- [x] Add inline subject details after answer feedback with task-aware section hiding.
 - [~] Add hardware keyboard shortcuts where practical. *(not planned — tablet-only, low ROI)*
 
 ## M4: Lesson Flow Parity
@@ -162,10 +163,10 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Track recent mistakes for 24 hours.
 - [x] Add recent mistake practice.
 - [~] Add recent lesson practice. *(not planned — limited utility given lesson picker and lesson quiz flow)*
-- [ ] Add apprentice leech practice.
-- [ ] Add all leech practice with configurable threshold.
-- [ ] Add burned item practice.
-- [ ] Ensure practice sessions never submit WaniKani SRS progress.
+- [x] Add apprentice leech practice.
+- [x] Add all leech practice with configurable threshold.
+- [x] Add burned item practice.
+- [x] Ensure practice sessions never submit WaniKani SRS progress.
 - [ ] Decide whether katakana practice should ship in the cross-platform app.
 
 ## M9: Settings Parity
@@ -207,9 +208,9 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ## Current Known Gaps
 
-- Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support. Hardware keyboard shortcuts are not planned.
+- Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, exact-match support, and inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
 - Lessons have ordering, max session size, per-quiz batch size, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
-- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches, and shortcuts for burned practice and excluded items.
+- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice buttons), and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject catalog by level, search, and detail screens are implemented. SRS browsing, remaining items, and excluded items browsing are not yet wired to screens.
 - Audio playback, offline audio, and voice actor selection are not implemented.

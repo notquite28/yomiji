@@ -4,7 +4,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Diagnostics: undefined;
   RadicalImagePreview: undefined;
-  ReviewSession: { practiceSource?: 'recentMistakes' } | undefined;
+  ReviewSession: { practiceSource?: 'recentMistakes' | 'apprenticeLeeches' | 'allLeeches' | 'burnedItems' } | undefined;
   LessonSession: { selectedIds?: number[] };
   LessonPicker: undefined;
   SubjectCatalog: { level: number };

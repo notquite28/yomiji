@@ -327,14 +327,30 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
 
         {allLeeches.length > 0 ? (
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Leeches</Text>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Leeches</Text>
+              <Pressable
+                onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'allLeeches' })}
+                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.inlineButtonText}>Practice</Text>
+              </Pressable>
+            </View>
             <LeechItemList items={allLeeches} colors={theme.colors} />
           </View>
         ) : null}
 
         {apprenticeLeeches.length > 0 && allLeeches.length === 0 ? (
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Apprentice Leeches</Text>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Apprentice Leeches</Text>
+              <Pressable
+                onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'apprenticeLeeches' })}
+                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.inlineButtonText}>Practice</Text>
+              </Pressable>
+            </View>
             <LeechItemList items={apprenticeLeeches} colors={theme.colors} />
           </View>
         ) : null}
@@ -343,11 +359,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Shortcuts</Text>
             {burnedCount > 0 ? (
-              <View style={[styles.shortcutRow, { opacity: 0.6 }]}>
+              <Pressable
+                onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'burnedItems' })}
+                style={({ pressed }) => [styles.shortcutRow, pressed && styles.pressed]}
+              >
                 <View style={[styles.typeDot, { backgroundColor: theme.colors.burned }]} />
-                <Text style={[styles.shortcutLabel, { color: theme.colors.mutedText }]}>Burned Item Practice</Text>
+                <Text style={styles.shortcutLabel}>Burned Item Practice</Text>
                 <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{burnedCount}</Text>
-              </View>
+              </Pressable>
             ) : null}
             {excludedCount > 0 ? (
               <View style={[styles.shortcutRow, { opacity: 0.6 }]}>
