@@ -9,5 +9,6 @@ export type RootStackParamList = {
   LessonPicker: undefined;
   SubjectCatalog: { level: number };
   SubjectSearch: undefined;
+  SubjectBrowse: { title: string; srsMin?: number; srsMax?: number; excluded?: boolean; remaining?: boolean };
   SubjectDetail: { subjectId: number };
 };

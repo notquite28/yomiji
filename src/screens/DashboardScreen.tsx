@@ -154,11 +154,11 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
   const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
   const srsEntries = [
-    { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice },
-    { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru },
-    { label: 'Master', count: summary?.master ?? 0, color: theme.colors.master },
-    { label: 'Enlightened', count: summary?.enlightened ?? 0, color: theme.colors.enlightened },
-    { label: 'Burned', count: summary?.burned ?? 0, color: theme.colors.burned },
+    { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice, srsMin: 1, srsMax: 4 },
+    { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru, srsMin: 5, srsMax: 6 },
+    { label: 'Master', count: summary?.master ?? 0, color: theme.colors.master, srsMin: 7, srsMax: 7 },
+    { label: 'Enlightened', count: summary?.enlightened ?? 0, color: theme.colors.enlightened, srsMin: 8, srsMax: 8 },
+    { label: 'Burned', count: summary?.burned ?? 0, color: theme.colors.burned, srsMin: 9, srsMax: 9 },
   ];
   const totalSrs = srsEntries.reduce((total, row) => total + row.count, 0);
   const actionCardTheme: StudyActionTheme = {
@@ -307,6 +307,15 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             textColor={theme.colors.text}
             mutedColor={theme.colors.mutedText}
             trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+            onEntryPress={(entry) => {
+              if (entry.srsMin != null && entry.srsMax != null) {
+                navigation.navigate('SubjectBrowse', {
+                  title: entry.label,
+                  srsMin: entry.srsMin,
+                  srsMax: entry.srsMax,
+                });
+              }
+            }}
           />
         </View>
 
@@ -369,11 +378,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
               </Pressable>
             ) : null}
             {excludedCount > 0 ? (
-              <View style={[styles.shortcutRow, { opacity: 0.6 }]}>
+              <Pressable
+                onPress={() => navigation.navigate('SubjectBrowse', { title: 'Excluded Items', excluded: true })}
+                style={({ pressed }) => [styles.shortcutRow, pressed && styles.pressed]}
+              >
                 <View style={[styles.typeDot, { backgroundColor: theme.colors.mutedText }]} />
-                <Text style={[styles.shortcutLabel, { color: theme.colors.mutedText }]}>Excluded Items</Text>
+                <Text style={styles.shortcutLabel}>Excluded Items</Text>
                 <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{excludedCount}</Text>
-              </View>
+              </Pressable>
             ) : null}
           </View>
         ) : null}
@@ -849,6 +861,7 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       flex: 1,
       fontSize: 15,
       fontWeight: '800',
+      color: theme.colors.text,
     },
     shortcutMeta: {
       fontSize: 12,

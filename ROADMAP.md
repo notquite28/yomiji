@@ -123,9 +123,9 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 ## M5: Subject Browsing And Search
 
 - [x] Add subject catalog by level.
-- [ ] Add SRS category browsing.
+- [x] Add SRS category browsing.
 - [ ] Add remaining subjects browsing.
-- [ ] Add excluded vocabulary browsing.
+- [x] Add excluded vocabulary browsing.
 - [x] Add local search by Japanese text, meaning, and kana reading prefixes.
 - [x] Sort exact search matches first, then by level.
 - [x] Limit search results to 50.
@@ -212,10 +212,11 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Lessons have ordering, max session size, per-quiz batch size, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
 - Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice buttons), and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject catalog by level, search, and detail screens are implemented. SRS browsing, remaining items, and excluded items browsing are not yet wired to screens.
+- Subject catalog by level, search, and detail screens are implemented. SRS bucket browsing and excluded items browsing are wired to the dashboard. Remaining items browsing is not yet wired.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
+- Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is undecided.
 - Settings exposes Appearance, Reviews, Lessons, Diagnostics, and Log Out. Audio, font, notification, and subject detail settings UI are not yet exposed.
 
 ## Feature Reference

@@ -18,6 +18,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { SubjectCatalogScreen } from '../screens/SubjectCatalogScreen';
 import { SubjectDetailScreen } from '../screens/SubjectDetailScreen';
 import { SubjectSearchScreen } from '../screens/SubjectSearchScreen';
+import { SubjectBrowseScreen } from '../screens/SubjectBrowseScreen';
 import { useAppTheme } from '../theme/AppThemeProvider';
 import { RootStackParamList } from './types';
 
@@ -205,6 +206,7 @@ export function AppNavigator() {
           <Stack.Screen name="LessonSession" component={LessonSessionScreen} />
           <Stack.Screen name="SubjectCatalog" component={SubjectCatalogScreen} />
           <Stack.Screen name="SubjectSearch" component={SubjectSearchScreen} />
+          <Stack.Screen name="SubjectBrowse" component={SubjectBrowseScreen} />
           <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} />
         </>
       ) : (

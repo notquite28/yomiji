@@ -14,7 +14,7 @@ See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for his
 
 ## Current Status
 
-The app is an offline-first WaniKani client with a local SQLite cache, incremental sync, pending-write queues, error logging, and working dashboard, lesson, and review flows.
+The app is an offline-first WaniKani client with a local SQLite cache, incremental sync, pending-write queues, error logging, working dashboard, lesson, review, and practice flows.
 
 ## Features
 
@@ -46,8 +46,8 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 - Current-level progress bars for radicals, kanji, and vocabulary (passed/total).
 - SRS bucket counts (Apprentice, Guru, Master, Enlightened, Burned) with progress bar.
 - Recent mistakes section showing items answered incorrectly in the last 24 hours.
-- Leeches section showing items with highest incorrect-to-correct ratio.
-- Shortcuts section with burned item practice count and excluded items count.
+- Leeches section showing items with highest incorrect-to-correct ratio, with practice buttons.
+- Shortcuts section with burned item practice (navigable) and excluded items browsing.
 - Vacation mode banner.
 - Sync status, last sync time, and error display.
 - Lesson Picker button (visible when lessons are available).
@@ -61,6 +61,8 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 - Per-item tracking of meaning/reading wrong counts.
 - Items marked finished when both meaning and reading are answered, or one side is unavailable/skipped.
 - Practice mode that never submits WaniKani SRS progress.
+- Inline subject details after answer feedback with task-aware section hiding (meaning/reading sections hidden until attempted). Respects `showFullAnswer` setting.
+- Mnemonic markup rendering for all WaniKani tag types (radical, kanji, vocabulary, reading, meaning, ja, jp, kan, bold/italic) with subject-type–colored highlights.
 - Review summary with success rate and incorrect items grouped by level.
 - Wrap-up mode that stops adding new items and finishes only active items.
 
@@ -73,6 +75,15 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 **Anki Mode** — Self-grading with immediate answer reveal. Supports both, reading-only, meaning-only, and combined reading/meaning variants.
 
 **Quick Settings** — Mid-session settings modal for toggling exact match, cheats, Anki mode, answer reveal, and full answer display without leaving the review. Includes Wrap Up and End Session actions. Changes persist to the main settings screen.
+
+### Practice Modes
+
+Practice sessions use the same review UI but never submit WaniKani SRS progress. Available from the dashboard:
+
+- **Recent Mistakes** — Items answered incorrectly in the last 24 hours.
+- **Apprentice Leeches** — Apprentice-stage items with the highest incorrect-to-correct ratio.
+- **All Leeches** — All items with high incorrect-to-correct ratio, filtered by the configurable `leechThreshold` setting.
+- **Burned Items** — Items at SRS stage 9 (Burned) for review practice.
 
 ### Lesson Sessions
 
@@ -113,6 +124,7 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 - `SubjectHeroCard` for displaying Japanese characters and radical images.
 - `SrsBar` for SRS stage progress visualization.
 - `ReviewQuickSettings` modal for in-session setting toggles.
+- `SubjectDetailsContent` reusable component for rendering subject detail sections (meanings, readings, mnemonics, components, context sentences) in both standalone detail screens and inline in reviews.
 - `TooltipPressable` and `ToastHost` for long-press help toasts on ambiguous icons and controls.
 - CSS-aware SVG rendering for image-only radicals with inline style fallbacks.
 
@@ -135,6 +147,7 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 
 ### Subject Browsing and Search
 
+- **SRS Bucket Browsing** — Tap any SRS bar row on the dashboard to browse all subjects in that bucket.
 - **Level Catalog** — Browse subjects grouped by type (radical, kanji, vocabulary) at the current level, with navigation to detail screens.
 - **Local Search** — Search by Japanese text, meaning, and kana reading prefixes. Exact matches sorted first, then prefix matches, then contains; ties broken by level ascending. Results limited to 50.
 - **Rich Subject Detail** — Meanings, readings, component radicals/kanji with navigation, meaning and reading mnemonics with inline Japanese rendering, hints, context sentences, parts of speech, "Used In" amalgamation chips, SRS stage, and review accuracy percentage.
@@ -155,14 +168,15 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 
 ## Known Major Gaps
 
-- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches, and shortcuts.
+- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice), and burned item practice shortcut.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject catalog by level, local search, and rich detail screen are implemented. SRS browsing, remaining items, and excluded items screens are not yet wired.
+- Subject catalog by level, local search, and rich detail screen are implemented. SRS bucket browsing and excluded items browsing are wired to the dashboard. Remaining items browsing is not yet wired.
+- Review sessions have inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
-- Quick settings during review is implemented. Hardware keyboard shortcuts are not planned.
-- Diagnostics screen is implemented. Audio, font, and notification settings UI are not yet exposed.
+- Practice modes for apprentice leeches, all leeches, and burned items are implemented. Katakana practice is undecided.
+- Diagnostics screen is implemented. Audio, font, notification, and subject detail settings UI are not yet exposed.
 
 ## Getting Started
 
@@ -200,9 +214,10 @@ src/
     subjects/       # Radical image handling and SVG rendering
     sync/           # Incremental sync + pending-write flush (syncService.ts)
   navigation/       # React Navigation routes, auth gate, AppState lifecycle
-  screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview, SubjectCatalog, SubjectSearch, SubjectDetail)
-  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SrsBar, ReviewQuickSettings, ReviewForecastChart, LevelProgressChart, DashboardItemList)
+  screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview, SubjectCatalog, SubjectSearch, SubjectBrowse, SubjectDetail)
+  components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SubjectDetailsContent, SrsBar, ReviewQuickSettings, ReviewForecastChart, LevelProgressChart, DashboardItemList)
   theme/            # WaniKani color palette, subject-type colors, theme provider
+scripts/            # Release tooling (version-bump.sh)
 App.tsx             # App root
 tsurukame/          # Original iOS Swift/UIKit source — behavior reference only
 ```

@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export type SrsBarEntry = {
   label: string;
   count: number;
   color: string;
+  srsMin?: number;
+  srsMax?: number;
 };
 
 export function SrsBar({
@@ -11,28 +13,34 @@ export function SrsBar({
   textColor,
   mutedColor,
   trackColor,
+  onEntryPress,
 }: {
   entries: SrsBarEntry[];
   textColor: string;
   mutedColor: string;
   trackColor: string;
+  onEntryPress?: (entry: SrsBarEntry) => void;
 }) {
   const maxCount = Math.max(1, ...entries.map((e) => e.count));
 
   return (
     <View style={styles.container}>
-      {entries.map((entry) => (
-        <SrsRow
-          key={entry.label}
-          label={entry.label}
-          count={entry.count}
-          color={entry.color}
-          maxCount={maxCount}
-          textColor={textColor}
-          mutedColor={mutedColor}
-          trackColor={trackColor}
-        />
-      ))}
+      {entries.map((entry) => {
+        const handlePress = onEntryPress && entry.count > 0 ? () => onEntryPress(entry) : undefined;
+        return (
+          <SrsRow
+            key={entry.label}
+            label={entry.label}
+            count={entry.count}
+            color={entry.color}
+            maxCount={maxCount}
+            textColor={textColor}
+            mutedColor={mutedColor}
+            trackColor={trackColor}
+            onPress={handlePress}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -45,6 +53,7 @@ function SrsRow({
   textColor,
   mutedColor,
   trackColor,
+  onPress,
 }: {
   label: string;
   count: number;
@@ -53,10 +62,11 @@ function SrsRow({
   textColor: string;
   mutedColor: string;
   trackColor: string;
+  onPress?: () => void;
 }) {
   const fillWidth = `${Math.round((count / maxCount) * 100)}%` as `${number}%`;
-  return (
-    <View style={styles.row}>
+  const content = (
+    <>
       <View style={styles.textRow}>
         <View style={[styles.dot, { backgroundColor: color }]} />
         <Text style={[styles.label, { color: mutedColor }]}>{label}</Text>
@@ -65,13 +75,29 @@ function SrsRow({
       <View style={[styles.track, { backgroundColor: trackColor }]}>
         <View style={[styles.fill, { backgroundColor: color, width: fillWidth }]} />
       </View>
-    </View>
+    </>
+  );
+
+  if (!onPress) return <View style={styles.row}>{content}</View>;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityHint={`Browse ${label} items`}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     gap: 14,
+  },
+  pressed: {
+    opacity: 0.72,
   },
   row: {
     gap: 8,
