@@ -161,7 +161,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 - [x] Track recent mistakes for 24 hours.
 - [x] Add recent mistake practice.
-- [ ] Add recent lesson practice.
+- [~] Add recent lesson practice. *(not planned — limited utility given lesson picker and lesson quiz flow)*
 - [ ] Add apprentice leech practice.
 - [ ] Add all leech practice with configurable threshold.
 - [ ] Add burned item practice.

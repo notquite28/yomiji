@@ -2,7 +2,9 @@
 
 A WaniKani study app for Android, built with React Native and Expo. Named for 読 (よ, reading) + 路 (じ, path): the reading path.
 
-The original Tsurukame iOS app in `tsurukame/` remains the behavior reference. See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
+読路 is based on [Tsurukame](https://github.com/davidsansome/tsurukame), an unofficial WaniKani iOS app by David Sansome and contributors. Core domain logic — including the review state machine, answer checker, lesson flow, sync architecture, and settings — was derived from the Tsurukame Swift/UIKit source code in `tsurukame/`, with original flows and UI where the cross-platform app diverges. Tsurukame is licensed under the [Apache License 2.0](tsurukame/LICENSE).
+
+See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
 
 ## Screenshots
 
