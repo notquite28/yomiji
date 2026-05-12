@@ -1,0 +1,116 @@
+# WaniKani Recommended Lessons Algorithm
+
+Research conducted May 2026. Data verified against a level 10 account with 23 available lessons (4 kanji, 19 vocabulary).
+
+## Confirmed Algorithm
+
+WaniKani's web dashboard determines "recommended lessons" using two pieces of data:
+
+1. **`lesson_position`** — a per-subject integer defining WaniKani's canonical pedagogical ordering. Stored in the subject's JSON `payload` at `data.lesson_position`. Currently not extracted or used by our app.
+
+2. **`lessons_batch_size`** — a WaniKani user preference (API: `GET /user → data.preferences.lessons_batch_size`). Currently not read from the preferences blob during sync. Controls how many items are introduced before each lesson quiz.
+
+### Batching
+
+Available lessons are separated by type (radical, kanji, vocabulary), sorted by `lesson_position` ascending within each type queue, then distributed proportionally across batches of `lessons_batch_size`.
+
+**Per-batch type allocation:**
+- `kanji_slots = ceil(batch_size × kanji_count / total_count)`
+- Remaining slots filled with vocabulary (and radicals if present)
+
+**Verified example (batch_size=5, 4 kanji, 19 vocab, total=23):**
+
+| Batch | Kanji (pos) | Vocab (pos) | Items |
+|-------|-------------|-------------|-------|
+| 1 | 農 (51) | 始める (84), 飲む (118), 投げ付ける (175), 化かす (176) | 1K + 4V |
+| 2 | 親 (62) | 話 (177), 出会う (178), 私大 (183), 千葉 (188) | 1K + 4V |
+| 3 | 最 (66) | 思わず (189), 立ち飲み (190), 部首 (193), 葉 (194) | 1K + 4V |
+
+All three batches verified against the live WaniKani webapp.
+
+### "Avoid Small Batches" Rule
+
+From the WaniKani webapp's lesson settings UI:
+
+> "Set the preferred number of new lessons to do before each lesson quiz. The actual number may sometimes be higher to avoid small lesson batches at the end."
+
+The batch size is a preference, not a hard limit. The algorithm redistributes items from the final batch if it would be too small. For example, with 12 items and batch_size=5, instead of `[5, 5, 2]` it might produce `[4, 4, 4]` or `[6, 6]`.
+
+### Recommended vs Advanced Split
+
+The webapp shows a subset of available lessons as "Today's Lessons" (recommended). The full pool is accessible via the "Advanced" button (Lesson Picker). In the verified case: 15 recommended out of 23 available, leaving 8 in advanced-only.
+
+### Generalization with Radicals (Unverified)
+
+When all three types are present, the proportional distribution should extend naturally:
+
+**Example (5 radicals, 5 kanji, 30 vocab, batch_size=5):**
+- `radical_slots = ceil(5 × 5/40) = 1`
+- `kanji_slots = ceil(remaining × 5/remaining_total)` ≈ 1
+- `vocab_slots = 5 - 1 - 1 = 3`
+- Result: 1R + 1K + 3V per batch
+
+This extrapolation has NOT been verified against a live account.
+
+## API Verification Commands
+
+```bash
+# Step 1 — user preferences
+curl -sS "https://api.wanikani.com/v2/user" \
+  -H "Authorization: Bearer ${WK_API_TOKEN}" \
+  -H "Wanikani-Revision: 20170710" | \
+  node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const j = JSON.parse(s); console.log(JSON.stringify({level: j.data.level, batch_size: j.data.preferences.lessons_batch_size}, null, 2)); })'
+
+# Step 2 — lesson-stage assignments
+curl -sS "https://api.wanikani.com/v2/assignments?unlocked=true&started=false&srs_stages=0" \
+  -H "Authorization: Bearer ${WK_API_TOKEN}" \
+  -H "Wanikani-Revision: 20170710" | \
+  node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const j = JSON.parse(s); const ids = j.data.map(a => a.data.subject_id); console.log("Subject IDs:", ids.join(",")); console.log("Count:", ids.length); })'
+
+# Step 3 — subjects with lesson_position
+curl -sS "https://api.wanikani.com/v2/subjects?ids=<IDS_FROM_STEP_2>" \
+  -H "Authorization: Bearer ${WK_API_TOKEN}" \
+  -H "Wanikani-Revision: 20170710" | \
+  node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const j = JSON.parse(s); const sorted = j.data.map(s => ({id: s.id, chars: s.data.characters, type: s.object, level: s.data.level, pos: s.data.lesson_position})).sort((a,b) => a.pos - b.pos); console.log(JSON.stringify(sorted, null, 2)); })'
+```
+
+## Open Questions
+
+1. **Total recommended cutoff** — Why 15 out of 23? Could be `3 × batch_size`, could be based on current-level items, could be a separate setting. Not confirmed.
+
+2. **Within-batch ordering** — Items within a batch don't appear in pure `lesson_position` order. Batch 2 was presented as: 話(177), 出会う(178), 親(62), 私大(183), 千葉(188). The kanji 親(62) was in the middle, not sorted by position. The within-batch sort algorithm is unknown.
+
+3. **3-type radical distribution** — Only the 2-type (kanji + vocab) case has been verified. The radical interleaving pattern is extrapolated.
+
+4. **Recommended count decay** — Does the recommended count change as the user completes batches within a session? Does it track "presented but not completed" items client-side?
+
+## Implementation Plan
+
+### Data Layer
+
+1. **Extract `lessons_batch_size` from user preferences** during sync. The preferences blob is already stored on the user object (`WaniKaniUserData.preferences`) but never read. Store as a dedicated column or parse at query time.
+
+2. **Sort lesson queue by `lesson_position`** using `json_extract(subjects.payload, '$.data.lesson_position')` in SQL. No schema migration needed — the field exists in the JSON blob.
+
+3. **New batching function** in `src/domain/study/studyRepository.ts` that:
+   - Separates items by type
+   - Sorts each type queue by `lesson_position`
+   - Distributes types proportionally across batches of `lessons_batch_size`
+   - Applies the "avoid small batches" rule for the final batch
+
+### Dashboard UI
+
+4. **"Lessons" card** shows recommended count (`min(available, N × batch_size)` where N is TBD) and starts a session with the first batch in canonical order.
+
+5. **Lesson Picker** remains the advanced pool (all available lessons). Already implemented.
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/domain/api/types.ts` | Optionally type `lessons_batch_size` on preferences |
+| `src/domain/db/database.ts` | Extract and store `lessons_batch_size` during user sync |
+| `src/domain/study/studyRepository.ts` | New proportional batching function, sort by `lesson_position` |
+| `src/domain/dashboard/dashboardRepository.ts` | Add recommended lesson count to summary |
+| `src/screens/DashboardScreen.tsx` | Wire recommended count to Lessons card |
+| `src/domain/db/schema.ts` | Optional: add `lesson_position` column to subjects table |

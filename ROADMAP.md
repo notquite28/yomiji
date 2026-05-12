@@ -56,7 +56,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 ## M2: Dashboard Parity
 
 - [x] Match the iOS dashboard information hierarchy more closely.
-- [ ] Show WaniKani recommended lessons separately from Advanced lesson pool if the needed data is available.
+- [ ] Show WaniKani recommended lessons separately from Advanced lesson pool. *(research complete — see `docs/recommended-lessons-research.md`; algorithm uses proportional type distribution across batches sorted by `lesson_position`, driven by `lessons_batch_size` user preference)*
 - [x] Add upcoming reviews chart for next 24 hours.
 - [x] Add current-level progress charts for radicals, kanji, and vocabulary.
 - [~] Add recent lessons section. *(removed — dashboard now focuses on available work and recent mistakes practice)*
@@ -124,7 +124,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 - [x] Add subject catalog by level.
 - [x] Add SRS category browsing.
-- [ ] Add remaining subjects browsing.
+- [~] Add remaining subjects browsing. *(not planned — individual SRS bucket rows cover the use case without a single heavy query)*
 - [x] Add excluded vocabulary browsing.
 - [x] Add local search by Japanese text, meaning, and kana reading prefixes.
 - [x] Sort exact search matches first, then by level.
@@ -211,8 +211,8 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, exact-match support, and inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
 - Lessons have ordering, max session size, per-quiz batch size, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
 - Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice buttons), and shortcuts for burned practice and excluded items.
-- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject catalog by level, search, and detail screens are implemented. SRS bucket browsing and excluded items browsing are wired to the dashboard. Remaining items browsing is not yet wired.
+- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
+- Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.

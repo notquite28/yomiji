@@ -170,7 +170,7 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 - Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice), and burned item practice shortcut.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject catalog by level, local search, and rich detail screen are implemented. SRS bucket browsing and excluded items browsing are wired to the dashboard. Remaining items browsing is not yet wired.
+- Subject catalog by level, local search, rich detail screen, SRS bucket browsing, and excluded items browsing are implemented.
 - Review sessions have inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
 - Audio playback, offline audio, and voice actor selection are not implemented.
 - Notifications, badges, and deep links are not implemented.
