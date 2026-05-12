@@ -19,7 +19,7 @@ let databasePromise: Promise<AppDatabase> | null = null;
 
 export async function openAppDatabase() {
   if (!databasePromise) {
-    databasePromise = SQLite.openDatabaseAsync('tsurukame-rn.db').then(async (db) => {
+    databasePromise = SQLite.openDatabaseAsync('yomichi.db').then(async (db) => {
       await applyMigrations(db);
       return db;
     });

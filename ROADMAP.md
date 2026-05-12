@@ -1,6 +1,6 @@
 # React Native Port Roadmap
 
-This roadmap tracks the React Native port in the repository root. The Swift/UIKit app in `tsurukame/` remains the behavior reference, and `tsurukame/REACT_NATIVE_PORT_PRD.md` remains the product requirements source.
+This roadmap tracks the React Native port in the repository root. The Swift/UIKit app in `tsurukame/` remains the behavior reference, and `REACT_NATIVE_PORT_PRD.md` remains the product requirements source.
 
 ## Guiding Principles
 
