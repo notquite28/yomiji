@@ -8,6 +8,7 @@ import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMess
 import { openAppDatabase } from '../domain/db/database';
 import { defaultSettings, loadSettings, AppSettings } from '../domain/settings/settings';
 import {
+  chunkLessonItems,
   getLessonItemsByIds,
   getLessonQueue,
   getSubjectsByIds,
@@ -48,6 +49,9 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   const [phase, setPhase] = useState<LessonPhase>('intro');
   const [introIndex, setIntroIndex] = useState(0);
   const [componentSubjects, setComponentSubjects] = useState<Map<number, SubjectAnswerData>>(new Map());
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [completedTasks, setCompletedTasks] = useState(0);
+  const [completedTasksCorrectly, setCompletedTasksCorrectly] = useState(0);
 
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -86,6 +90,12 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     [queueItems, componentSubjects],
   );
 
+  const lessonBatches = useMemo(
+    () => chunkLessonItems(queueItems, settings.lessonBatchSize),
+    [queueItems, settings.lessonBatchSize],
+  );
+  const activeBatch = lessonBatches[batchIndex] ?? [];
+
   useEffect(() => {
     let isMounted = true;
     const selectedIds = route.params?.selectedIds;
@@ -96,7 +106,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         setSettings(loadedSettings);
         const items = selectedSet && selectedSet.size > 0
           ? await getLessonItemsByIds(db, loadedSettings, selectedSet)
-          : await getLessonQueue(db, loadedSettings, loadedSettings.lessonBatchSize);
+          : await getLessonQueue(db, loadedSettings, loadedSettings.lessonSessionSize);
         if (isMounted) {
           setQueueItems(items);
         }
@@ -131,7 +141,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   }, []);
 
   const startQuiz = () => {
-    const session = new ReviewSession(queueItems, reviewSettings, true);
+    const session = new ReviewSession(activeBatch, reviewSettings, true);
     sessionRef.current = session;
     session.nextTask();
     setPhase('quiz');
@@ -143,9 +153,15 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   const displayItem = feedback?.item ?? currentItem;
   const displayTaskType = feedback?.taskType ?? taskType;
   const isQuizComplete = phase === 'quiz' && !feedback && (session?.isComplete ?? false);
+  const hasNextBatch = batchIndex < lessonBatches.length - 1;
   const quizProgress = session
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
     : '0/0';
+  const currentCompletedTasks = completedTasks + (session?.tasksAnswered ?? 0);
+  const currentCompletedTasksCorrectly = completedTasksCorrectly + (session?.tasksAnsweredCorrectly ?? 0);
+  const overallSuccessRate = currentCompletedTasks > 0
+    ? `${Math.round((currentCompletedTasksCorrectly / currentCompletedTasks) * 100)}%`
+    : '100%';
 
   const submitQuizAnswer = () => {
     if (!session || !currentItem || feedback) {
@@ -207,6 +223,21 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     setAnswer(taskType === 'reading' ? convertRomajiToKanaInput(text) : text);
   };
 
+  const continueToNextBatch = () => {
+    if (!session || !isQuizComplete || !hasNextBatch) {
+      return;
+    }
+
+    setCompletedTasks((value) => value + session.tasksAnswered);
+    setCompletedTasksCorrectly((value) => value + session.tasksAnsweredCorrectly);
+    sessionRef.current = null;
+    setAnswer('');
+    setFeedback(null);
+    setIntroIndex(0);
+    setBatchIndex((value) => value + 1);
+    setPhase('intro');
+  };
+
   if (isLoading) {
     return <CenteredMessage label="Loading lessons..." />;
   }
@@ -230,8 +261,10 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   if (phase === 'intro') {
     return (
       <IntroPhase
-        items={queueItems}
+        items={activeBatch}
         index={introIndex}
+        batchIndex={batchIndex}
+        batchCount={lessonBatches.length}
         onIndexChange={setIntroIndex}
         onStartQuiz={startQuiz}
         onBack={() => navigation.goBack()}
@@ -243,13 +276,19 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   }
 
   if (isQuizComplete) {
-    const completed = session?.reviewsCompleted ?? 0;
-    const rate = session?.successRateText ?? '100%';
+    const completedInBatch = session?.reviewsCompleted ?? 0;
+    const completedBeforeBatch = lessonBatches
+      .slice(0, batchIndex)
+      .reduce((total, batch) => total + batch.length, 0);
     return (
       <LessonQuizSummary
-        completed={completed}
-        successRate={rate}
-        totalItems={queueItems.length}
+        completed={hasNextBatch ? completedInBatch : completedBeforeBatch + completedInBatch}
+        successRate={overallSuccessRate}
+        totalItems={hasNextBatch ? activeBatch.length : queueItems.length}
+        batchIndex={batchIndex}
+        batchCount={lessonBatches.length}
+        hasNextBatch={hasNextBatch}
+        onContinue={continueToNextBatch}
         onBack={() => navigation.goBack()}
       />
     );
@@ -343,6 +382,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 function IntroPhase({
   items,
   index,
+  batchIndex,
+  batchCount,
   onIndexChange,
   onStartQuiz,
   onBack,
@@ -352,6 +393,8 @@ function IntroPhase({
 }: {
   items: StudyQueueItem[];
   index: number;
+  batchIndex: number;
+  batchCount: number;
   onIndexChange: (index: number) => void;
   onStartQuiz: () => void;
   onBack: () => void;
@@ -366,7 +409,9 @@ function IntroPhase({
 
   const subjectColor = colorForSubjectType(theme.colors, item.subjectType);
   const isLast = index === items.length - 1;
-  const progress = `${index + 1}/${items.length}`;
+  const progress = batchCount > 1
+    ? `Batch ${batchIndex + 1}/${batchCount} · ${index + 1}/${items.length}`
+    : `${index + 1}/${items.length}`;
 
   return (
     <ScreenLayout scrollable>
@@ -709,11 +754,19 @@ function LessonQuizSummary({
   completed,
   successRate,
   totalItems,
+  batchIndex,
+  batchCount,
+  hasNextBatch,
+  onContinue,
   onBack,
 }: {
   completed: number;
   successRate: string;
   totalItems: number;
+  batchIndex: number;
+  batchCount: number;
+  hasNextBatch: boolean;
+  onContinue: () => void;
   onBack: () => void;
 }) {
   const theme = useAppTheme();
@@ -721,23 +774,23 @@ function LessonQuizSummary({
 
   return (
     <ScreenLayout scrollable>
-      <SessionHeader onBack={onBack} progress="Complete" />
+      <SessionHeader onBack={onBack} progress={hasNextBatch ? `Batch ${batchIndex + 1}/${batchCount}` : 'Complete'} />
 
       <View style={styles.summaryHero}>
-        <Text style={styles.summaryKicker}>Lessons Complete</Text>
+        <Text style={styles.summaryKicker}>{hasNextBatch ? 'Batch Complete' : 'Lessons Complete'}</Text>
         <Text style={styles.summaryRate}>{successRate}</Text>
         <Text style={styles.summaryMeta}>{completed} of {totalItems} lessons completed</Text>
       </View>
 
       <Pressable
-        onPress={onBack}
+        onPress={hasNextBatch ? onContinue : onBack}
         style={({ pressed }) => [
           styles.primaryButton,
           styles.summaryActionButton,
           pressed && styles.pressed,
         ]}
       >
-        <Text style={styles.primaryButtonText}>Back to Dashboard</Text>
+        <Text style={styles.primaryButtonText}>{hasNextBatch ? 'Continue Lessons' : 'Back to Dashboard'}</Text>
       </Pressable>
     </ScreenLayout>
   );

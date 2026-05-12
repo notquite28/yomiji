@@ -21,8 +21,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Incremental sync for user, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
 - [x] Pending queue sync for review submissions, lesson starts, and study material edits.
 - [x] Battery-conscious lifecycle sync: stale foreground sync and pending-write-only background flush.
-- [x] Dashboard with username, level, lesson count (with apprentice-limit gating), review count, SRS bucket counts, sync status, and cache stats.
-- [x] Lesson session with configurable ordering, filtering, batch size, and interleaving.
+- [x] Dashboard with username, level, lesson count, review count, SRS bucket counts, sync status, and cache stats.
+- [x] Lesson session with configurable ordering, filtering, max session size, per-quiz batch size, and interleaving.
 - [x] Lesson picker grouped by level and subject type with multi-select.
 - [x] Interactive review flow using cached available review assignments and the two-queue review state machine.
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
@@ -59,7 +59,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [ ] Show WaniKani recommended lessons separately from Advanced lesson pool if the needed data is available.
 - [x] Add upcoming reviews chart for next 24 hours.
 - [x] Add current-level progress charts for radicals, kanji, and vocabulary.
-- [x] Add recent lessons section.
+- [~] Add recent lessons section. *(removed — dashboard now focuses on available work and recent mistakes practice)*
 - [x] Add recent mistakes section.
 - [x] Add apprentice leeches and all leeches sections.
 - [~] Add burned item practice entry point. *(count displayed; filtering requires M8 practice modes)*
@@ -109,8 +109,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 - [x] Port iOS lesson selection behavior.
 - [x] Apply lesson ordering by radical, kanji, and vocabulary.
 - [x] Support current-level priority.
-- [x] Support lesson batch size.
-- [x] Support apprentice lesson limit.
+- [x] Support lesson session size and per-quiz lesson batch size.
+- [~] Support apprentice lesson limit. *(removed — WaniKani web does not block lessons by apprentice count)*
 - [x] Support kana-only vocabulary visibility setting.
 - [x] Support vocabulary exclusion setting.
 - [x] Add lesson picker grouped by level and subject type.
@@ -172,7 +172,7 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 - [x] Add root settings sections for Appearance and Notifications, Lessons, Reviews, Radicals/Kanji/Vocabulary, Diagnostics, and Log Out.
 - [ ] Add typed settings migrations.
-- [x] Add lesson settings UI (batch size, apprentice limit, prioritize current level, interleave, kana-only vocab).
+- [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
 - [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
 - [ ] Add subject detail settings UI.
 - [ ] Add audio settings UI.
@@ -206,8 +206,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 ## Current Known Gaps
 
 - Review sessions have cheats, wrap-up, quick settings, Anki mode, full ordering, and exact-match support, but still lack hardware keyboard shortcuts.
-- Lessons have ordering, batch size, apprentice limit, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
-- Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts for burned practice and excluded items.
+- Lessons have ordering, max session size, per-quiz batch size, interleaving, kana-only filtering, lesson picker, subject introduction pages with detail sections, and a full quiz flow that queues lesson starts on completion.
+- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches, and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject catalog by level, search, and detail screens are implemented. SRS browsing, remaining items, and excluded items browsing are not yet wired to screens.
 - Audio and notifications are scaffold dependencies only, not implemented features.
@@ -219,8 +219,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `lessonBatchSize` | number | 5 | Max items per lesson session (1–10). |
-| `apprenticeLessonsLimit` | number | MAX_SAFE_INTEGER | Disable lessons when apprentice SRS items exceed this threshold (25–999). |
+| `lessonBatchSize` | number | 5 | New items introduced before each lesson quiz (1–10). |
+| `lessonSessionSize` | number | 15 | Max lessons pulled from the dashboard Lessons card (1–50). |
 | `lessonOrder` | SubjectType[] | `['radical','kanji','vocabulary']` | Sort order for subject types within each level. |
 | `prioritizeCurrentLevel` | boolean | false | Sort current-level items first (descending level) instead of lower levels first. |
 | `interleaveLessons` | boolean | false | Shuffle items within level groups for a mixed subject-type experience. |

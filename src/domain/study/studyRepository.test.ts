@@ -1,7 +1,7 @@
 import { AppSettings, defaultSettings, SubjectType } from '../settings/settings';
 import { AppDatabase } from '../db/database';
 import { StudyQueueItem } from './studyRepository';
-import { getCharacterImageUrl, isCharacterImageSvg, isLessonFiltered, queueReviewResult, recentMistakeCutoff, sortLessonItems } from './studyRepository';
+import { chunkLessonItems, getCharacterImageUrl, isCharacterImageSvg, isLessonFiltered, queueReviewResult, recentMistakeCutoff, sortLessonItems } from './studyRepository';
 import { SubjectData } from '../api/types';
 
 function makeSubject(images: SubjectData['character_images']): SubjectData {
@@ -246,6 +246,20 @@ describe('sortLessonItems', () => {
   it('returns empty array unchanged', () => {
     const result = sortLessonItems([], defaultSettings);
     expect(result).toEqual([]);
+  });
+});
+
+describe('chunkLessonItems', () => {
+  it('splits lessons into quiz-sized batches', () => {
+    expect(chunkLessonItems([1, 2, 3, 4, 5, 6], 2)).toEqual([[1, 2], [3, 4], [5, 6]]);
+  });
+
+  it('keeps a smaller final batch when needed', () => {
+    expect(chunkLessonItems([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it('treats invalid batch sizes as one item per batch', () => {
+    expect(chunkLessonItems([1, 2, 3], 0)).toEqual([[1], [2], [3]]);
   });
 });
 

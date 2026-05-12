@@ -196,6 +196,15 @@ export function sortLessonItems<T extends { item: StudyQueueItem }>(items: T[], 
   return items;
 }
 
+export function chunkLessonItems<T>(items: T[], batchSize: number): T[][] {
+  const size = Math.max(1, Math.floor(batchSize));
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
   const createdAt = new Date().toISOString();
   await db.execAsync('BEGIN TRANSACTION;');

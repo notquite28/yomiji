@@ -38,18 +38,17 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 ### Dashboard
 
 - Username, level, and cache stats header.
-- Available lessons count with apprentice-limit gating (button disabled when apprentice items exceed the configured limit).
+- Available lessons count from the unlocked pool.
 - Available reviews count based on current time.
 - Upcoming reviews forecast chart showing review counts for the next 24 hours.
 - Current-level progress bars for radicals, kanji, and vocabulary (passed/total).
 - SRS bucket counts (Apprentice, Guru, Master, Enlightened, Burned) with progress bar.
-- Recent lessons section showing last 5 started lessons.
 - Recent mistakes section showing items answered incorrectly in the last 24 hours.
 - Leeches section showing items with highest incorrect-to-correct ratio.
 - Shortcuts section with burned item practice count and excluded items count.
 - Vacation mode banner.
 - Sync status, last sync time, and error display.
-- Lesson Picker button (visible when lessons are available and apprentice limit is not reached).
+- Lesson Picker button (visible when lessons are available).
 - Immediate dashboard refresh when returning from review or lesson sessions.
 - Hour-boundary refresh while foregrounded via AppState listener.
 
@@ -75,11 +74,11 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ### Lesson Sessions
 
-- Fetches lesson-stage assignments from local cache with configurable ordering, filtering, and batch size.
+- Fetches lesson-stage assignments from local cache with configurable ordering, filtering, session size, and quiz batch size.
 - Ordering by level (ascending by default, or descending with current-level priority), then by subject type per `lessonOrder` setting (default: radical → kanji → vocabulary), then by subject ID.
 - Interleave mode shuffles items within level groups for a mixed-type experience.
-- Batch size caps items per session (default 5, configurable 1–10).
-- Apprentice limit gates the lesson button when apprentice SRS items exceed the threshold.
+- Max lessons per session caps the dashboard Lessons card (default 15, configurable 1–50).
+- New items per quiz controls how many subjects are introduced before each lesson quiz (default 5, configurable 1–10).
 - Filters kana-only vocabulary when `showKanaOnlyVocab` is disabled.
 - Filters hidden/excluded vocabulary based on study material data.
 
@@ -91,14 +90,14 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 - Browses all available lesson items grouped by level and subject type (radicals, kanji, vocabulary).
 - Multi-select with checkmark toggles on each item.
-- "Begin (N)" button passes selected items directly to the lesson session, bypassing batch size and ordering.
+- "Begin (N)" button passes selected items directly to the lesson session, bypassing the dashboard session cap and automatic ordering while still using quiz-sized batches.
 - Respects the same kana-only and hidden/excluded filters as the lesson queue.
 
 ### Settings
 
 **Appearance** — Light, dark, and system theme with immediate persistence.
 
-**Lessons** — Batch size (1–10), apprentice lessons limit (25–999), prioritize current level, interleave lessons, show kana-only vocabulary.
+**Lessons** — New items per quiz (1–10), max lessons per session (1–50), prioritize current level, interleave lessons, show kana-only vocabulary.
 
 **Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
 
@@ -154,7 +153,7 @@ The app is an offline-first React Native port with a local SQLite cache, increme
 
 ## Known Major Gaps
 
-- Dashboard has upcoming reviews chart, current-level progress, recent lessons/mistakes, leeches, and shortcuts.
+- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches, and shortcuts.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject catalog by level, local search, and rich detail screen are implemented. SRS browsing, remaining items, and excluded items screens are not yet wired.
 - Audio playback, offline audio, and voice actor selection are not implemented.

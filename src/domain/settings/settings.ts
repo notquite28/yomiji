@@ -26,7 +26,7 @@ export type AppSettings = {
   interleaveLessons: boolean;
   lessonOrder: SubjectType[];
   lessonBatchSize: number;
-  apprenticeLessonsLimit: number;
+  lessonSessionSize: number;
   reviewOrder: ReviewOrder;
   reviewBatchSize: number;
   reviewItemsLimit: number;
@@ -59,7 +59,7 @@ export const defaultSettings: AppSettings = {
   interleaveLessons: false,
   lessonOrder: ['radical', 'kanji', 'vocabulary'],
   lessonBatchSize: 5,
-  apprenticeLessonsLimit: Number.MAX_SAFE_INTEGER,
+  lessonSessionSize: 15,
   reviewOrder: 'random',
   reviewBatchSize: 5,
   reviewItemsLimit: 15,

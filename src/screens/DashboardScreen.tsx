@@ -150,7 +150,6 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   };
 
   const isVacation = Boolean(summary?.vacationStartedAt);
-  const apprenticeLimitReached = (summary?.apprentice ?? 0) >= settings.apprenticeLessonsLimit;
   const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
   const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
@@ -238,12 +237,12 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
         <Animated.View key={theme.isDark ? 'dark-actions' : 'light-actions'} style={[styles.actionStack, entranceStyle]}>
           <StudyAction
             label="Lessons"
-            hint={apprenticeLimitReached ? 'Apprentice limit reached' : 'Unlocked pool'}
+            hint="Unlocked pool"
             value={summary?.availableLessons ?? 0}
             color={theme.colors.radical}
             cardTheme={actionCardTheme}
             isCompact={isCompact}
-            disabled={isVacation || apprenticeLimitReached}
+            disabled={isVacation}
             featured
             onPress={() => navigation.navigate('LessonSession', {})}
           />
@@ -259,7 +258,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
           />
         </Animated.View>
 
-        {(summary?.availableLessons ?? 0) > 0 && !apprenticeLimitReached && !isVacation ? (
+        {(summary?.availableLessons ?? 0) > 0 && !isVacation ? (
           <Animated.View style={entranceStyle}>
             <Pressable onPress={() => navigation.navigate('LessonPicker')} style={({ pressed }) => [styles.pickerButton, pressed && styles.pressed]}>
               <Text style={styles.pickerButtonText}>Lesson Picker</Text>

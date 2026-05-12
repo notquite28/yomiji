@@ -209,8 +209,8 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           <Text style={styles.panelTitle}>Lessons</Text>
 
           <SettingStepper
-            label="Batch Size"
-            detail="Items per lesson session."
+            label="New Items Per Quiz"
+            detail="New lessons introduced before each lesson quiz."
             value={settings.lessonBatchSize}
             min={1}
             max={10}
@@ -219,13 +219,12 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
           />
 
           <SettingStepper
-            label="Apprentice Limit"
-            detail="Block new lessons when apprentice items exceed this."
-            value={settings.apprenticeLessonsLimit >= 999 ? 999 : settings.apprenticeLessonsLimit}
-            min={25}
-            max={999}
-            step={25}
-            onChange={(v) => updateSetting('apprenticeLessonsLimit', v >= 999 ? Number.MAX_SAFE_INTEGER : v)}
+            label="Max Lessons Per Session"
+            detail="Maximum lessons pulled from the dashboard Lessons card."
+            value={settings.lessonSessionSize}
+            min={1}
+            max={50}
+            onChange={(v) => updateSetting('lessonSessionSize', v)}
             theme={theme}
           />
 
