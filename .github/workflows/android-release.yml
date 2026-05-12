@@ -27,8 +27,8 @@ jobs:
 
       - run: pnpm test
 
-      - name: Setup EAS
-        uses: expo/setup-eas@v0
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
 
       - name: Build APK
         run: eas build --platform android --profile production --local --output build.apk
