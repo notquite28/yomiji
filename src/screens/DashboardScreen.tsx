@@ -10,7 +10,6 @@ import {
   getCurrentLevelProgress,
   getExcludedItemCount,
   getLeechedItems,
-  getRecentLessons,
   getRecentMistakes,
   getReviewForecast,
   DashboardSummary,
@@ -57,7 +56,6 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [forecast, setForecast] = useState<ReviewForecastHour[]>([]);
   const [levelProgress, setLevelProgress] = useState<LevelProgress[]>([]);
-  const [recentLessons, setRecentLessons] = useState<RecentItem[]>([]);
   const [recentMistakes, setRecentMistakes] = useState<RecentItem[]>([]);
   const [apprenticeLeeches, setApprenticeLeeches] = useState<LeechedItem[]>([]);
   const [allLeeches, setAllLeeches] = useState<LeechedItem[]>([]);
@@ -83,11 +81,10 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
 
   const refreshSummary = useCallback(async () => {
     const db = await openAppDatabase();
-    const [s, f, lp, rl, rm, al, allL, bc, ec] = await Promise.all([
+    const [s, f, lp, rm, al, allL, bc, ec] = await Promise.all([
       getDashboardSummary(db),
       getReviewForecast(db, 24),
       getCurrentLevelProgress(db),
-      getRecentLessons(db, 5),
       getRecentMistakes(db, 5),
       getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
       getLeechedItems(db, { limit: 5 }),
@@ -97,7 +94,6 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
     setSummary(s);
     setForecast(f);
     setLevelProgress(lp);
-    setRecentLessons(rl);
     setRecentMistakes(rm);
     setApprenticeLeeches(al);
     setAllLeeches(allL);
@@ -315,16 +311,17 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
           />
         </View>
 
-        {recentLessons.length > 0 ? (
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Recent Lessons</Text>
-            <RecentItemList items={recentLessons} colors={theme.colors} />
-          </View>
-        ) : null}
-
         {recentMistakes.length > 0 ? (
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Recent Mistakes</Text>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Recent Mistakes</Text>
+              <Pressable
+                onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'recentMistakes' })}
+                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.inlineButtonText}>Practice</Text>
+              </Pressable>
+            </View>
             <RecentItemList items={recentMistakes} colors={theme.colors} />
           </View>
         ) : null}
@@ -802,6 +799,20 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       fontSize: 14,
       fontWeight: '900',
       letterSpacing: 0.3,
+    },
+    inlineButton: {
+      minHeight: 34,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 999,
+      backgroundColor: theme.colors.kanji,
+    },
+    inlineButtonText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '900',
+      letterSpacing: 0.2,
     },
     shortcutRow: {
       flexDirection: 'row',

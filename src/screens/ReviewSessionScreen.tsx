@@ -13,7 +13,7 @@ import {
   ReviewSession,
   ReviewSessionSettings,
 } from '../domain/study/reviewSession';
-import { getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
+import { getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
@@ -31,7 +31,23 @@ type Feedback = {
   subjectFinished: boolean;
 };
 
-export function ReviewSessionScreen({ navigation }: Props) {
+type PracticeSource = NonNullable<RootStackParamList['ReviewSession']>['practiceSource'];
+
+function getQueueForSource(db: Awaited<ReturnType<typeof openAppDatabase>>, source: PracticeSource) {
+  if (source === 'recentMistakes') {
+    return getRecentMistakePracticeQueue(db);
+  }
+  return getReviewQueue(db);
+}
+
+function emptyStateLabel(source: PracticeSource) {
+  if (source === 'recentMistakes') {
+    return 'No recent mistakes are available for practice.';
+  }
+  return 'No reviews are available in the local cache.';
+}
+
+export function ReviewSessionScreen({ navigation, route }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
@@ -48,6 +64,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
   const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
 
   const sessionRef = useRef<ReviewSession | null>(null);
+  const practiceSource = route.params?.practiceSource;
 
   const settings = useMemo<ReviewSessionSettings>(
     () => ({
@@ -71,7 +88,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
     Promise.all([
       openAppDatabase().then((db) =>
         Promise.all([
-          getReviewQueue(db),
+          getQueueForSource(db, practiceSource),
           db.getFirstAsync<{ level: number }>('SELECT level FROM user WHERE id = 1'),
         ]),
       ),
@@ -97,7 +114,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [practiceSource]);
 
   useEffect(() => {
     if (queueItems.length === 0 || sessionRef.current) {
@@ -111,11 +128,11 @@ export function ReviewSessionScreen({ navigation }: Props) {
       }
     }
 
-    const session = new ReviewSession(queueItems, settings, false, availableAtMap, userLevel);
+    const session = new ReviewSession(queueItems, settings, Boolean(practiceSource), availableAtMap, userLevel);
     sessionRef.current = session;
     session.nextTask();
     setRevision((r) => r + 1);
-  }, [queueItems, settings, userLevel]);
+  }, [practiceSource, queueItems, settings, userLevel]);
 
   const session = sessionRef.current;
   const currentItem = session?.currentItem ?? null;
@@ -342,7 +359,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
   const canAddSynonym = showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0;
 
   if (isLoading) {
-    return <CenteredMessage label="Loading reviews..." />;
+    return <CenteredMessage label={practiceSource ? 'Loading practice...' : 'Loading reviews...'} />;
   }
 
   if (error && !displayItem && !isComplete) {
@@ -368,7 +385,7 @@ export function ReviewSessionScreen({ navigation }: Props) {
   if (!displayItem) {
     return (
       <CenteredMessage
-        label="No reviews are available in the local cache."
+        label={emptyStateLabel(practiceSource)}
         actionLabel="Back"
         onAction={() => navigation.goBack()}
       />

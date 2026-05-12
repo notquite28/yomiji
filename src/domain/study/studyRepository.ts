@@ -77,6 +77,35 @@ export async function getReviewQueue(db: AppDatabase, limit = 100) {
   return rows.map(rowToStudyQueueItem).filter(hasPrompt);
 }
 
+export async function getRecentMistakePracticeQueue(db: AppDatabase, limit = 100) {
+  const cutoff = recentMistakeCutoff().toISOString();
+  const rows = await db.getAllAsync<StudyQueueRow>(
+    `SELECT
+       assignments.id AS assignment_id,
+       assignments.subject_id,
+       assignments.subject_type,
+       assignments.level,
+       assignments.srs_stage,
+       assignments.available_at,
+       assignments.payload AS assignment_payload,
+       subjects.payload AS subject_payload,
+       study_materials.payload AS study_material_payload
+     FROM subject_progress
+     INNER JOIN assignments ON assignments.subject_id = subject_progress.subject_id
+     INNER JOIN subjects ON subjects.id = assignments.subject_id
+     LEFT JOIN study_materials ON study_materials.subject_id = assignments.subject_id
+     WHERE subject_progress.last_mistake_at IS NOT NULL
+       AND subject_progress.last_mistake_at >= ?
+       AND assignments.srs_stage BETWEEN 1 AND 8
+     ORDER BY subject_progress.last_mistake_at DESC, assignments.id ASC
+     LIMIT ?`,
+    cutoff,
+    limit,
+  );
+
+  return rows.map(rowToStudyQueueItem).filter(hasPrompt);
+}
+
 export async function getLessonQueue(db: AppDatabase, settings: AppSettings, limit = 100) {
   const rows = await db.getAllAsync<StudyQueueRow>(
     `SELECT
@@ -183,12 +212,52 @@ export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
       }),
       createdAt,
     );
+    if (result.incorrectMeaningAnswers > 0 || result.incorrectReadingAnswers > 0) {
+      await markRecentMistake(db, result.assignmentId, createdAt);
+    }
     await clearAssignmentAvailableAt(db, result.assignmentId);
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
     throw error;
   }
+}
+
+async function markRecentMistake(db: AppDatabase, assignmentId: number, mistakeAt: string) {
+  const row = await db.getFirstAsync<{
+    subject_id: number;
+    level: number | null;
+    srs_stage: number;
+    subject_type: string | null;
+  }>(
+    `SELECT subject_id, level, srs_stage, subject_type
+     FROM assignments
+     WHERE id = ?`,
+    assignmentId,
+  );
+
+  if (!row) {
+    return;
+  }
+
+  await db.runAsync(
+    `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(subject_id) DO UPDATE SET
+       level = excluded.level,
+       srs_stage = excluded.srs_stage,
+       subject_type = excluded.subject_type,
+       last_mistake_at = excluded.last_mistake_at`,
+    row.subject_id,
+    row.level,
+    row.srs_stage,
+    row.subject_type,
+    mistakeAt,
+  );
+}
+
+export function recentMistakeCutoff(now = new Date()) {
+  return new Date(now.getTime() - 24 * 3600_000);
 }
 
 export async function queueLessonStart(db: AppDatabase, assignmentId: number) {

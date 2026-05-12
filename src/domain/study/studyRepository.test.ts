@@ -1,6 +1,7 @@
 import { AppSettings, defaultSettings, SubjectType } from '../settings/settings';
+import { AppDatabase } from '../db/database';
 import { StudyQueueItem } from './studyRepository';
-import { getCharacterImageUrl, isCharacterImageSvg, isLessonFiltered, sortLessonItems } from './studyRepository';
+import { getCharacterImageUrl, isCharacterImageSvg, isLessonFiltered, queueReviewResult, recentMistakeCutoff, sortLessonItems } from './studyRepository';
 import { SubjectData } from '../api/types';
 
 function makeSubject(images: SubjectData['character_images']): SubjectData {
@@ -245,5 +246,57 @@ describe('sortLessonItems', () => {
   it('returns empty array unchanged', () => {
     const result = sortLessonItems([], defaultSettings);
     expect(result).toEqual([]);
+  });
+});
+
+describe('recent mistakes', () => {
+  it('uses a 24 hour cutoff', () => {
+    expect(recentMistakeCutoff(new Date('2026-05-11T12:00:00.000Z')).toISOString()).toBe('2026-05-10T12:00:00.000Z');
+  });
+
+  it('records last mistake time when a queued review had incorrect answers', async () => {
+    const runAsync = jest.fn().mockResolvedValue(undefined);
+    const db = {
+      execAsync: jest.fn().mockResolvedValue(undefined),
+      runAsync,
+      getFirstAsync: jest.fn().mockResolvedValue({
+        subject_id: 42,
+        level: 7,
+        srs_stage: 3,
+        subject_type: 'kanji',
+      }),
+    } as unknown as AppDatabase;
+
+    await queueReviewResult(db, {
+      assignmentId: 99,
+      incorrectMeaningAnswers: 1,
+      incorrectReadingAnswers: 0,
+    });
+
+    expect(db.getFirstAsync).toHaveBeenCalledWith(expect.stringContaining('FROM assignments'), 99);
+    expect(runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO subject_progress'),
+      42,
+      7,
+      3,
+      'kanji',
+      expect.any(String),
+    );
+  });
+
+  it('does not record a recent mistake for fully correct reviews', async () => {
+    const db = {
+      execAsync: jest.fn().mockResolvedValue(undefined),
+      runAsync: jest.fn().mockResolvedValue(undefined),
+      getFirstAsync: jest.fn().mockResolvedValue(null),
+    } as unknown as AppDatabase;
+
+    await queueReviewResult(db, {
+      assignmentId: 99,
+      incorrectMeaningAnswers: 0,
+      incorrectReadingAnswers: 0,
+    });
+
+    expect(db.getFirstAsync).not.toHaveBeenCalled();
   });
 });

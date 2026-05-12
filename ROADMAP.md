@@ -159,8 +159,8 @@ This roadmap tracks the React Native port in the repository root. The Swift/UIKi
 
 ## M8: Practice Modes
 
-- [ ] Track recent mistakes for 24 hours.
-- [ ] Add recent mistake practice.
+- [x] Track recent mistakes for 24 hours.
+- [x] Add recent mistake practice.
 - [ ] Add recent lesson practice.
 - [ ] Add apprentice leech practice.
 - [ ] Add all leech practice with configurable threshold.
