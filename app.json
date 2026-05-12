@@ -19,11 +19,16 @@
       },
       "permissions": []
     },
-    "plugins": ["expo-secure-store", "expo-sqlite", "expo-notifications"],
+    "plugins": [
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-notifications"
+    ],
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "1027f19d-260b-4b0e-8d14-88a52844763a"
       }
-    }
+    },
+    "owner": "notquite"
   }
 }
