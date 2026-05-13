@@ -83,6 +83,7 @@ export function parseSubjectPayload(id: number, payload: string): SubjectAnswerD
       reading: reading.reading,
       primary: reading.primary ?? reading.accepted_answer ?? false,
       acceptedAnswer: reading.accepted_answer ?? reading.primary ?? true,
+      type: reading.type,
     })),
     componentSubjectIds: resource.data.component_subject_ids ?? [],
     meaningMnemonic: resource.data.meaning_mnemonic,

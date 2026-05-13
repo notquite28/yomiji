@@ -14,8 +14,6 @@ import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 type BooleanSettingKey =
   | 'exactMatch'
   | 'enableCheats'
-  | 'ankiMode'
-  | 'showAnswerImmediately'
   | 'showFullAnswer'
   | 'playAudioAutomatically'
   | 'interruptBackgroundAudio';
@@ -95,20 +93,6 @@ export function ReviewQuickSettings({
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Display</Text>
-            <ToggleRow
-              label="Anki mode"
-              value={settings.ankiMode}
-              onToggle={() => toggle('ankiMode')}
-              theme={theme}
-              styles={styles}
-            />
-            <ToggleRow
-              label="Show answer immediately"
-              value={settings.showAnswerImmediately}
-              onToggle={() => toggle('showAnswerImmediately')}
-              theme={theme}
-              styles={styles}
-            />
             <ToggleRow
               label="Show full answer"
               value={settings.showFullAnswer}

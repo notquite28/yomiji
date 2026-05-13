@@ -43,7 +43,7 @@ export async function getVocabularyAudioUrls(db: AppDatabase, subjectId: number)
   const rows = await db.getAllAsync<AudioUrlRow>(
     `SELECT remote_url, voice_actor_id
      FROM audio_urls
-     WHERE subject_id = ? AND lower(remote_url) LIKE '%.mp3%'
+     WHERE subject_id = ?
      ORDER BY
        voice_actor_id IS NULL,
        voice_actor_id,

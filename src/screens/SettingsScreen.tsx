@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getVoiceActorOptions, VoiceActorOption } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase, resetLocalData } from '../domain/db/database';
-import { AppSettings, defaultSettings, loadSettings, saveSettings, ReviewOrder } from '../domain/settings/settings';
+import { AppSettings, defaultSettings, loadSettings, saveSettings, ReviewOrder, SubjectType } from '../domain/settings/settings';
 import { deleteApiToken } from '../domain/storage/secureToken';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, AppearanceMode, useAppTheme } from '../theme/AppThemeProvider';
@@ -31,6 +31,12 @@ const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ];
+
+const LESSON_ORDER_LABELS: Record<SubjectType, string> = {
+  radical: 'Radicals',
+  kanji: 'Kanji',
+  vocabulary: 'Vocabulary',
+};
 
 export function SettingsScreen({ navigation, onLoggedOut }: Props) {
   const theme = useAppTheme();
@@ -129,7 +135,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 
           <SettingToggle
             label="Anki Mode"
-            detail="Reveal the answer first, then self-grade."
+            detail="Reveal the answer first, then self-grade. One card per item."
             value={settings.ankiMode}
             onValueChange={(v) => updateSetting('ankiMode', v)}
             theme={theme}
@@ -143,22 +149,26 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
             theme={theme}
           />
 
-          <SettingToggle
-            label="Group Meaning & Reading"
-            detail="Ask meaning and reading back-to-back for each item."
-            value={settings.groupMeaningReading}
-            onValueChange={(v) => updateSetting('groupMeaningReading', v)}
-            theme={theme}
-          />
+          {!settings.ankiMode ? (
+            <>
+              <SettingToggle
+                label="Group Meaning & Reading"
+                detail="Ask meaning and reading back-to-back for each item."
+                value={settings.groupMeaningReading}
+                onValueChange={(v) => updateSetting('groupMeaningReading', v)}
+                theme={theme}
+              />
 
-          {settings.groupMeaningReading ? (
-            <SettingToggle
-              label="Meaning First"
-              detail="Ask meaning before reading when grouped."
-              value={settings.meaningFirst}
-              onValueChange={(v) => updateSetting('meaningFirst', v)}
-              theme={theme}
-            />
+              {settings.groupMeaningReading ? (
+                <SettingToggle
+                  label="Meaning First"
+                  detail="Ask meaning before reading when grouped."
+                  value={settings.meaningFirst}
+                  onValueChange={(v) => updateSetting('meaningFirst', v)}
+                  theme={theme}
+                />
+              ) : null}
+            </>
           ) : null}
 
           <SettingToggle
@@ -174,14 +184,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
             detail="Allow override correct, try again later, and add synonym."
             value={settings.enableCheats}
             onValueChange={(v) => updateSetting('enableCheats', v)}
-            theme={theme}
-          />
-
-          <SettingToggle
-            label="Skip Kanji Readings"
-            detail="Skip reading prompts for kanji subjects."
-            value={settings.skipKanjiReadings}
-            onValueChange={(v) => updateSetting('skipKanjiReadings', v)}
             theme={theme}
           />
 
@@ -215,6 +217,16 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
               theme={theme}
             />
           ) : null}
+
+          <SettingStepper
+            label="Leech Threshold"
+            detail="Incorrect/correct ratio threshold for leech detection."
+            value={settings.leechThreshold}
+            min={1}
+            max={10}
+            onChange={(v) => updateSetting('leechThreshold', v)}
+            theme={theme}
+          />
         </View>
 
         <View style={styles.panel}>
@@ -307,6 +319,34 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
             detail="Include kana-only vocabulary in lessons."
             value={settings.showKanaOnlyVocab}
             onValueChange={(v) => updateSetting('showKanaOnlyVocab', v)}
+            theme={theme}
+          />
+
+          <Text style={styles.sectionLabel}>Subject Type Order</Text>
+          <Text style={styles.bodyText}>Drag to reorder priority during lessons.</Text>
+          <LessonOrderEditor
+            order={settings.lessonOrder}
+            onChange={(order) => updateSetting('lessonOrder', order)}
+            theme={theme}
+          />
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Subject Details</Text>
+
+          <SettingToggle
+            label="Katakana for Onyomi"
+            detail="Display onyomi (Chinese-origin) kanji readings in katakana."
+            value={settings.useKatakanaForOnyomi}
+            onValueChange={(v) => updateSetting('useKatakanaForOnyomi', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Show All Readings"
+            detail="Show all accepted readings, not just primary."
+            value={settings.showAllReadings}
+            onValueChange={(v) => updateSetting('showAllReadings', v)}
             theme={theme}
           />
         </View>
@@ -411,6 +451,51 @@ function SettingStepper({
           <Text style={styles.stepperButtonText}>+</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function LessonOrderEditor({ order, onChange, theme }: {
+  order: SubjectType[];
+  onChange: (order: SubjectType[]) => void;
+  theme: AppTheme;
+}) {
+  const styles = makeStyles(theme);
+
+  function move(fromIndex: number, toIndex: number) {
+    const next = [...order];
+    const removed = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, removed[0]!);
+    onChange(next);
+  }
+
+  return (
+    <View style={styles.lessonOrderList}>
+      {order.map((type, idx) => (
+        <View key={type} style={styles.lessonOrderRow}>
+          <Text style={styles.lessonOrderLabel}>{LESSON_ORDER_LABELS[type]}</Text>
+          <View style={styles.lessonOrderButtons}>
+            <Pressable
+              disabled={idx === 0}
+              onPress={() => move(idx, idx - 1)}
+              style={[styles.stepperButton, idx === 0 && styles.stepperDisabled]}
+              accessibilityLabel={`Move ${LESSON_ORDER_LABELS[type]} up`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.stepperButtonText}>↑</Text>
+            </Pressable>
+            <Pressable
+              disabled={idx === order.length - 1}
+              onPress={() => move(idx, idx + 1)}
+              style={[styles.stepperButton, idx === order.length - 1 && styles.stepperDisabled]}
+              accessibilityLabel={`Move ${LESSON_ORDER_LABELS[type]} down`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.stepperButtonText}>↓</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -656,6 +741,29 @@ function makeStyles(theme: AppTheme) {
     pressed: {
       opacity: 0.72,
       transform: [{ scale: 0.99 }],
+    },
+    lessonOrderList: {
+      gap: 6,
+    },
+    lessonOrderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    lessonOrderLabel: {
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    lessonOrderButtons: {
+      flexDirection: 'row',
+      gap: 6,
     },
   });
 }

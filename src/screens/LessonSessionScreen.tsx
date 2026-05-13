@@ -68,8 +68,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
       groupMeaningReading: settings.groupMeaningReading,
       meaningFirst: settings.meaningFirst,
       minimizeReviewPenalty: settings.minimizeReviewPenalty,
-      skipKanjiReadings: settings.skipKanjiReadings,
       enableCheats: false,
+      ankiMode: false,
     }),
     [settings],
   );

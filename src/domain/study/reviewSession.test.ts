@@ -48,8 +48,8 @@ function makeSettings(
     groupMeaningReading: false,
     meaningFirst: true,
     minimizeReviewPenalty: false,
-    skipKanjiReadings: false,
     enableCheats: true,
+    ankiMode: false,
     ...overrides,
   };
 }
@@ -200,6 +200,32 @@ describe('ReviewSession', () => {
 
       const result2 = session.markAnswer(true);
       expect(result2.subjectFinished).toBe(true);
+    });
+
+    it('finishes vocabulary with one combined grade in anki mode', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(items, makeSettings({ ankiMode: true }));
+      session.nextTask();
+
+      const result = session.markAnswer(true);
+
+      expect(result.subjectFinished).toBe(true);
+      expect(session.tasksAnswered).toBe(2);
+      expect(session.tasksAnsweredCorrectly).toBe(2);
+    });
+
+    it('does not count a reading side for radicals in anki mode', () => {
+      const items = [makeRadicalItem(1)];
+      const session = new ReviewSession(items, makeSettings({ ankiMode: true }));
+      session.nextTask();
+
+      const item = session.currentItem!;
+      const result = session.markAnswer(false);
+
+      expect(result.subjectFinished).toBe(false);
+      expect(item.meaningWrongCount).toBe(1);
+      expect(item.readingWrongCount).toBe(0);
+      expect(session.tasksAnswered).toBe(1);
     });
   });
 
@@ -355,30 +381,6 @@ describe('ReviewSession', () => {
       expect(completed.meaningWrongCount).toBe(1);
     });
 
-    it('skips kanji readings when setting enabled', () => {
-      const items = [makeKanjiItem(1)];
-      const session = new ReviewSession(
-        items,
-        makeSettings({ skipKanjiReadings: true, groupMeaningReading: true }),
-      );
-
-      session.nextTask();
-      expect(session.currentTaskType).toBe('meaning');
-      const result = session.markAnswer(true);
-      expect(result.subjectFinished).toBe(true);
-    });
-
-    it('does not select kanji reading prompts when skipped outside grouped mode', () => {
-      const items = [makeKanjiItem(1)];
-      const session = new ReviewSession(
-        items,
-        makeSettings({ skipKanjiReadings: true, groupMeaningReading: false }),
-      );
-
-      session.nextTask();
-      expect(session.currentTaskType).toBe('meaning');
-      expect(session.markAnswer(true).subjectFinished).toBe(true);
-    });
   });
 
   describe('grouped meaning/reading mode', () => {
@@ -558,6 +560,27 @@ describe('ReviewSession', () => {
       const result = session.overrideCorrect();
       expect(result.subjectFinished).toBe(false);
       expect(session.reviewsCompleted).toBe(0);
+    });
+
+    it('clears both sides when overriding a combined anki answer', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(items, makeSettings({ ankiMode: true }));
+
+      session.nextTask();
+      session.markAnswer(false);
+
+      expect(session.currentItem!.meaningWrong).toBe(true);
+      expect(session.currentItem!.readingWrong).toBe(true);
+
+      const result = session.overrideCorrect();
+
+      expect(result.subjectFinished).toBe(true);
+      expect(session.reviewsCompleted).toBe(1);
+      const completed = session.completedItems[0]!;
+      expect(completed.meaningWrong).toBe(false);
+      expect(completed.readingWrong).toBe(false);
+      expect(completed.answeredMeaning).toBe(true);
+      expect(completed.answeredReading).toBe(true);
     });
   });
 

@@ -106,8 +106,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       groupMeaningReading: appSettings.groupMeaningReading,
       meaningFirst: appSettings.meaningFirst,
       minimizeReviewPenalty: appSettings.minimizeReviewPenalty,
-      skipKanjiReadings: appSettings.skipKanjiReadings,
       enableCheats: appSettings.enableCheats,
+      ankiMode: appSettings.ankiMode,
     }),
     [appSettings],
   );
@@ -321,7 +321,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       message: correct ? 'Correct' : 'Incorrect',
       detail: correct
         ? 'Continue to the next prompt.'
-        : correctAnswerText(currentItem, answeredTaskType),
+        : combinedAnkiAnswerText(currentItem),
       item: currentItem,
       taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
@@ -510,13 +510,15 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     );
   }
 
-  const ankiAnswerText = () => {
-    if (!displayItem) return '';
-    if (displayTaskType === 'reading') {
-      return displayItem.subject.readings?.filter((r) => r.acceptedAnswer !== false).map((r) => r.reading).join(', ') || '';
-    }
-    return displayItem.subject.meanings.filter((m) => m.acceptedAnswer !== false && m.type !== 'blacklist').map((m) => m.meaning).join(', ');
-  };
+  const acceptedMeanings = displayItem.subject.meanings
+    .filter((m) => m.acceptedAnswer !== false && m.type !== 'blacklist')
+    .map((m) => m.meaning)
+    .join(', ');
+  const acceptedReadings = displayItem.subject.readings
+    ?.filter((r) => r.acceptedAnswer !== false)
+    .map((r) => r.reading)
+    .join(', ') ?? '';
+  const showsReadingInAnki = Boolean(acceptedReadings);
 
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
@@ -527,7 +529,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       />
 
       <SubjectHeroCard
-        kicker={displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
+        kicker={ankiMode && showsReadingInAnki ? 'Meaning + Reading' : displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
         japanese={displayItem.subject.japanese}
         characterImageUrl={displayItem.subject.characterImageUrl}
         characterImageIsSvg={displayItem.subject.characterImageIsSvg}
@@ -551,9 +553,15 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         ) : ankiRevealed && !feedback ? (
           <View style={[styles.ankiAnswerCard, { borderColor: subjectColor }]}>
             <Text style={styles.ankiAnswerLabel}>
-              {displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
+              Meaning
             </Text>
-            <Text style={styles.ankiAnswerText}>{ankiAnswerText()}</Text>
+            <Text style={styles.ankiAnswerText}>{acceptedMeanings}</Text>
+            {showsReadingInAnki ? (
+              <>
+                <Text style={[styles.ankiAnswerLabel, styles.ankiAnswerSecondaryLabel]}>Reading</Text>
+                <Text style={styles.ankiAnswerText}>{acceptedReadings}</Text>
+              </>
+            ) : null}
           </View>
         ) : null
       ) : (
@@ -744,6 +752,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
             readingAttempted={true}
             showFullAnswer={true}
             isReview={true}
+            useKatakanaForOnyomi={appSettings.useKatakanaForOnyomi}
+            showAllReadings={appSettings.showAllReadings}
             onNavigateToSubject={(id) => navigation.navigate('SubjectDetail', { subjectId: id })}
           />
         ) : (
@@ -753,6 +763,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
             subjectDetailData={subjectDetailData}
             onShowAll={() => setShowAllDetails(true)}
             onNavigateToSubject={(id) => navigation.navigate('SubjectDetail', { subjectId: id })}
+            appSettings={appSettings}
           />
         )
       ) : null}
@@ -867,12 +878,29 @@ function wrongCountText(item: ReviewItem) {
   return parts.join(' · ');
 }
 
+function combinedAnkiAnswerText(item: ReviewItem) {
+  const meanings = item.subject.meanings
+    .filter((meaning) => meaning.acceptedAnswer !== false && meaning.type !== 'blacklist')
+    .map((meaning) => meaning.meaning)
+    .join(', ');
+  const readings = item.subject.readings
+    ?.filter((reading) => reading.acceptedAnswer !== false)
+    .map((reading) => reading.reading)
+    .join(', ') ?? '';
+
+  if (!readings) {
+    return `Accepted meanings: ${meanings}`;
+  }
+  return `Accepted meanings: ${meanings}. Accepted readings: ${readings}`;
+}
+
 function InlineReviewDetails({
   item,
   taskType,
   subjectDetailData,
   onShowAll,
   onNavigateToSubject,
+  appSettings,
 }: {
   item: ReviewItem;
   taskType: TaskType;
@@ -883,6 +911,7 @@ function InlineReviewDetails({
   };
   onShowAll: () => void;
   onNavigateToSubject: (subjectId: number) => void;
+  appSettings: AppSettings;
 }) {
   const meaningAttempted = taskType === 'meaning' || item.answeredMeaning || item.meaningWrong;
   const readingAttempted = taskType === 'reading' || item.answeredReading || item.readingWrong;
@@ -900,6 +929,8 @@ function InlineReviewDetails({
         readingAttempted={readingAttempted}
         showFullAnswer={false}
         isReview={true}
+        useKatakanaForOnyomi={appSettings.useKatakanaForOnyomi}
+        showAllReadings={appSettings.showAllReadings}
         onNavigateToSubject={onNavigateToSubject}
       />
       {hasHidden ? (
@@ -1164,6 +1195,9 @@ function makeStyles(theme: AppTheme) {
       fontSize: 13,
       fontWeight: '900',
       textTransform: 'uppercase',
+    },
+    ankiAnswerSecondaryLabel: {
+      marginTop: 8,
     },
     ankiAnswerText: {
       color: theme.colors.text,

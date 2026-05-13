@@ -13,7 +13,6 @@ export type ReviewOrder =
   | 'oldestAvailableFirst'
   | 'longestRelativeWait';
 
-export type AnkiModeTaskType = 'both' | 'readingOnly' | 'meaningOnly';
 export type AppearanceMode = 'system' | 'light' | 'dark';
 export type SubjectType = 'radical' | 'kanji' | 'vocabulary';
 
@@ -33,15 +32,11 @@ export type AppSettings = {
   reviewItemsLimitEnabled: boolean;
   groupMeaningReading: boolean;
   meaningFirst: boolean;
-  showAnswerImmediately: boolean;
   showFullAnswer: boolean;
   exactMatch: boolean;
   enableCheats: boolean;
-  skipKanjiReadings: boolean;
   minimizeReviewPenalty: boolean;
   ankiMode: boolean;
-  ankiModeTaskType: AnkiModeTaskType;
-  ankiModeCombineReadingMeaning: boolean;
   showKanaOnlyVocab: boolean;
   leechThreshold: number;
   playAudioAutomatically: boolean;
@@ -49,6 +44,8 @@ export type AppSettings = {
   preferredVoiceActorId: number | null;
   offlineAudio: boolean;
   offlineAudioCellular: boolean;
+  useKatakanaForOnyomi: boolean;
+  showAllReadings: boolean;
 };
 
 export const defaultSettings: AppSettings = {
@@ -67,15 +64,11 @@ export const defaultSettings: AppSettings = {
   reviewItemsLimitEnabled: false,
   groupMeaningReading: false,
   meaningFirst: true,
-  showAnswerImmediately: true,
   showFullAnswer: false,
   exactMatch: false,
   enableCheats: true,
-  skipKanjiReadings: false,
   minimizeReviewPenalty: true,
   ankiMode: false,
-  ankiModeTaskType: 'both',
-  ankiModeCombineReadingMeaning: false,
   showKanaOnlyVocab: true,
   leechThreshold: 1,
   playAudioAutomatically: false,
@@ -83,6 +76,8 @@ export const defaultSettings: AppSettings = {
   preferredVoiceActorId: null,
   offlineAudio: false,
   offlineAudioCellular: false,
+  useKatakanaForOnyomi: false,
+  showAllReadings: false,
 };
 
 export async function loadSettings(): Promise<AppSettings> {

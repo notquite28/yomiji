@@ -25,6 +25,7 @@ export type ReadingCandidate = {
   reading: string;
   primary?: boolean;
   acceptedAnswer?: boolean;
+  type?: 'onyomi' | 'kunyomi' | 'nanori' | string;
 };
 
 export type SubjectAnswerData = {

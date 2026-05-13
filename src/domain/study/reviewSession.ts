@@ -10,8 +10,8 @@ export type ReviewSessionSettings = {
   groupMeaningReading: boolean;
   meaningFirst: boolean;
   minimizeReviewPenalty: boolean;
-  skipKanjiReadings: boolean;
   enableCheats: boolean;
+  ankiMode: boolean;
 };
 
 export type ReviewItem = {
@@ -57,9 +57,16 @@ export function createReviewItem(item: StudyQueueItem, availableAt?: string): Re
   };
 }
 
-export function tasksForItem(item: ReviewItem): TaskType[] {
+export function tasksForItem(item: ReviewItem, settings?: ReviewSessionSettings): TaskType[] {
+  const hasReading = hasAcceptedReading(item);
+
+  if (settings?.ankiMode) {
+    if (hasReading) return ['meaning', 'reading'];
+    return ['meaning'];
+  }
+
   const tasks: TaskType[] = ['meaning'];
-  if (hasAcceptedReading(item)) {
+  if (hasReading) {
     tasks.push('reading');
   }
   return tasks;
@@ -69,12 +76,8 @@ function hasAcceptedReading(item: ReviewItem) {
   return item.subject.readings?.some((r) => r.acceptedAnswer !== false) ?? false;
 }
 
-function shouldSkipReading(item: ReviewItem, settings: ReviewSessionSettings) {
-  return item.subjectType === 'kanji' && settings.skipKanjiReadings;
-}
-
 function canAskReading(item: ReviewItem, settings: ReviewSessionSettings) {
-  return hasAcceptedReading(item) && !shouldSkipReading(item, settings);
+  return hasAcceptedReading(item);
 }
 
 function shuffle<T>(array: T[]): T[] {
@@ -315,7 +318,9 @@ export class ReviewSession {
     const hasMeaning = task.subject.meanings.length > 0;
     const hasReading = canAskReading(task, this._settings);
 
-    if (task.answeredMeaning || !hasMeaning) {
+    if (this._settings.ankiMode) {
+      this.activeTaskType = this._settings.meaningFirst || !hasReading ? 'meaning' : 'reading';
+    } else if (task.answeredMeaning || !hasMeaning) {
       this.activeTaskType = hasReading ? 'reading' : 'meaning';
     } else if (task.answeredReading || !hasReading) {
       this.activeTaskType = 'meaning';
@@ -333,7 +338,24 @@ export class ReviewSession {
       return { subjectFinished: false, correct };
     }
 
-    if (taskType === 'meaning') {
+    const isCombined = this._settings.ankiMode;
+    const hasReading = canAskReading(task, this._settings);
+
+    if (isCombined) {
+      if (!task.meaningWrong) task.meaningWrong = !correct;
+      task.answeredMeaning = correct;
+      if (!correct) {
+        task.meaningWrongCount += 1;
+      }
+      if (hasReading) {
+        if (!task.readingWrong) task.readingWrong = !correct;
+        task.answeredReading = correct;
+        if (!correct) {
+          task.readingWrongCount += 1;
+        }
+      }
+      this._tasksAnswered += hasReading ? 2 : 1;
+    } else if (taskType === 'meaning') {
       if (!task.meaningWrong) {
         task.meaningWrong = !correct;
       }
@@ -341,6 +363,7 @@ export class ReviewSession {
       if (!correct) {
         task.meaningWrongCount += 1;
       }
+      this._tasksAnswered += 1;
     } else {
       if (!task.readingWrong) {
         task.readingWrong = !correct;
@@ -349,11 +372,11 @@ export class ReviewSession {
       if (!correct) {
         task.readingWrongCount += 1;
       }
+      this._tasksAnswered += 1;
     }
 
-    this._tasksAnswered += 1;
     if (correct) {
-      this._tasksAnsweredCorrectly += 1;
+      this._tasksAnsweredCorrectly += isCombined && hasReading ? 2 : 1;
       task.returnDelay = 0;
     } else {
       if (!this._settings.groupMeaningReading && !this._isPracticeSession) {
@@ -392,7 +415,20 @@ export class ReviewSession {
       return { subjectFinished: false, correct: true };
     }
 
-    if (taskType === 'meaning') {
+    if (this._settings.ankiMode) {
+      task.meaningWrong = false;
+      if (task.meaningWrongCount > 0) {
+        task.meaningWrongCount -= 1;
+      }
+      task.answeredMeaning = true;
+      if (canAskReading(task, this._settings)) {
+        task.readingWrong = false;
+        if (task.readingWrongCount > 0) {
+          task.readingWrongCount -= 1;
+        }
+        task.answeredReading = true;
+      }
+    } else if (taskType === 'meaning') {
       task.meaningWrong = false;
       if (task.meaningWrongCount > 0) {
         task.meaningWrongCount -= 1;

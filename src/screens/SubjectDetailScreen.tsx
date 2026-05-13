@@ -12,6 +12,7 @@ import { queueStudyMaterialUpdate } from '../domain/study/studyRepository';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
+import { loadSettings } from '../domain/settings/settings';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
@@ -34,12 +35,22 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
   const [editingField, setEditingField] = useState<'meaningNote' | 'readingNote' | 'synonym' | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [subjectSettings, setSubjectSettings] = useState<{ useKatakanaForOnyomi: boolean; showAllReadings: boolean }>({
+    useKatakanaForOnyomi: false,
+    showAllReadings: false,
+  });
 
   const loadSubject = useCallback(async () => {
     const db = await openAppDatabase();
     const s = await getSubjectById(db, subjectId);
     if (!s) return;
     setSubject(s);
+
+    const settings = await loadSettings();
+    setSubjectSettings({
+      useKatakanaForOnyomi: settings.useKatakanaForOnyomi,
+      showAllReadings: settings.showAllReadings,
+    });
 
     if ((s.componentSubjectIds ?? []).length > 0) {
       const comps = await getSubjectsByIds(db, s.componentSubjectIds ?? []);
@@ -160,6 +171,8 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           readingAttempted={true}
           showFullAnswer={true}
           isReview={false}
+          useKatakanaForOnyomi={subjectSettings.useKatakanaForOnyomi}
+          showAllReadings={subjectSettings.showAllReadings}
           onNavigateToSubject={(id) => navigation.push('SubjectDetail', { subjectId: id })}
           onEditMeaningNote={(value) => handleSave('meaningNote', value)}
           onEditReadingNote={(value) => handleSave('readingNote', value)}

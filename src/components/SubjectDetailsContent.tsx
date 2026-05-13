@@ -14,6 +14,8 @@ export type SubjectDetailsContentProps = {
   readingAttempted: boolean;
   showFullAnswer: boolean;
   isReview: boolean;
+  useKatakanaForOnyomi?: boolean;
+  showAllReadings?: boolean;
   onNavigateToSubject?: (subjectId: number) => void;
   onEditMeaningNote?: (value: string) => void;
   onEditReadingNote?: (value: string) => void;
@@ -28,6 +30,8 @@ export function SubjectDetailsContent({
   readingAttempted,
   showFullAnswer,
   isReview,
+  useKatakanaForOnyomi = false,
+  showAllReadings = false,
   onNavigateToSubject,
   onEditMeaningNote,
   onEditReadingNote,
@@ -41,8 +45,16 @@ export function SubjectDetailsContent({
   const secondaryMeanings = subject.meanings
     .filter((m) => m.type !== 'primary' && m.type !== 'blacklist' && m.acceptedAnswer !== false)
     .map((m) => m.meaning);
-  const primaryReadings = (subject.readings ?? []).filter((r) => r.primary).map((r) => r.reading);
-  const alternateReadings = (subject.readings ?? []).filter((r) => !r.primary && r.acceptedAnswer !== false).map((r) => r.reading);
+  const primaryReadings = (subject.readings ?? []).filter((r) => r.primary).map((r) => {
+    if (useKatakanaForOnyomi && r.type === 'onyomi') return hiraganaToKatakana(r.reading);
+    return r.reading;
+  });
+  const alternateReadings = showAllReadings
+    ? (subject.readings ?? []).filter((r) => !r.primary && r.acceptedAnswer !== false).map((r) => {
+        if (useKatakanaForOnyomi && r.type === 'onyomi') return hiraganaToKatakana(r.reading);
+        return r.reading;
+      })
+    : [];
 
   const meaningShown = !isReview || showFullAnswer || meaningAttempted;
   const readingShown = !isReview || showFullAnswer || readingAttempted;
@@ -387,6 +399,22 @@ export function MnemonicText({ text, subjectLookup, styles, theme }: {
       })}
     </Text>
   );
+}
+
+function hiraganaToKatakana(text: string): string {
+  const HIRAGANA_OFFSET = 0x3041;
+  const KATAKANA_OFFSET = 0x30a1;
+  const HIRAGANA_END = 0x3096;
+  let result = '';
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= HIRAGANA_OFFSET && code <= HIRAGANA_END) {
+      result += String.fromCharCode(code - HIRAGANA_OFFSET + KATAKANA_OFFSET);
+    } else {
+      result += text[i];
+    }
+  }
+  return result;
 }
 
 function makeStyles(theme: AppTheme) {
