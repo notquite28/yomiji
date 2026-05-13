@@ -43,10 +43,10 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ## M1: Sync Reliability
 
-- [ ] Add integration tests for WaniKani pagination.
-- [ ] Add integration tests for incremental `updated_after` cursors.
-- [ ] Add integration tests for pending review progress and lesson starts.
-- [ ] Add integration tests for study material create/update flows.
+- [x] Add integration tests for WaniKani pagination.
+- [x] Add integration tests for incremental `updated_after` cursors.
+- [x] Add integration tests for pending review progress and lesson starts.
+- [x] Add integration tests for study material create/update flows.
 - [x] Handle 401 and 403 by marking the token unauthorized and prompting re-authentication.
 - [x] Handle hibernating-account errors with actionable copy.
 - [x] Handle 429 rate limiting with retry timing and visible status.
@@ -78,7 +78,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Track meaningWrong/readingWrong/meaningWrongCount/readingWrongCount per item.
 - [x] Mark item finished only when both meaning and reading answered, or one side is unavailable/skipped.
 - [x] Support practice mode flag that skips progress submission.
-- [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, minimizeReviewPenalty, and skipKanjiReadings.
+- [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, and minimizeReviewPenalty. *(skip-kanji-reading was removed to keep review behavior predictable)*
 - [x] Consume exact-match settings in review answer checking.
 - [x] Load persisted settings into review session instead of hardcoded defaults.
 - [x] Add unit tests for review queue state machine in `src/domain/study/`.
@@ -100,7 +100,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Support ascending, descending, and alternating SRS review order.
 - [x] Support current-level-first and lowest-level-first review order.
 - [x] Support newest available, oldest available, and longest-relative-wait review order.
-- [x] Support Anki mode variants.
+- [x] Support simplified combined-card Anki mode.
 - [x] Add quick settings during review.
 - [x] Add inline subject details after answer feedback with task-aware section hiding.
 - [~] Add hardware keyboard shortcuts where practical. *(not planned — tablet-only, low ROI)*
@@ -167,17 +167,17 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Add all leech practice with configurable threshold.
 - [x] Add burned item practice.
 - [x] Ensure practice sessions never submit WaniKani SRS progress.
-- [ ] Decide whether katakana practice should ship in the cross-platform app.
+- [~] Decide whether katakana practice should ship in the cross-platform app. *(not planned — outside the current app focus)*
 
 ## M9: Settings Parity
 
 - [x] Add root settings sections for Appearance, Lessons, Reviews, Diagnostics, and Log Out.
 - [ ] Add Notifications settings section.
-- [ ] Add Radicals/Kanji/Vocabulary (subject detail) settings section.
+- [x] Add Radicals/Kanji/Vocabulary (subject detail) settings section.
 - [ ] Add typed settings migrations.
 - [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
 - [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
-- [ ] Add subject detail settings UI.
+- [x] Add subject detail settings UI.
 - [x] Add audio settings UI.
 - [ ] Add font settings UI.
 - [x] Add diagnostics and sanitized log export UI.
@@ -216,8 +216,8 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
-- Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is undecided.
-- Settings exposes Appearance, Reviews, Lessons, Audio, Diagnostics, and Log Out. Font, notification, and subject detail settings UI are not yet exposed.
+- Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
+- Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Diagnostics, and Log Out. Font and notification settings UI are not yet exposed.
 
 ## Feature Reference
 
@@ -242,15 +242,12 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | `reviewItemsLimitEnabled` | boolean | false | Whether to cap the review session size. |
 | `groupMeaningReading` | boolean | false | Ask meaning and reading back-to-back for each item. |
 | `meaningFirst` | boolean | true | Ask meaning before reading when grouped. |
-| `showAnswerImmediately` | boolean | true | Immediately reveal the answer in Anki mode. |
 | `showFullAnswer` | boolean | false | Show the full correct answer instead of a partial reveal. |
 | `exactMatch` | boolean | false | Disable fuzzy matching for meaning answers. |
 | `enableCheats` | boolean | true | Allow override correct, try again later, and add synonym. |
-| `skipKanjiReadings` | boolean | false | Skip reading prompts for kanji subjects. |
 | `minimizeReviewPenalty` | boolean | true | Cap wrong counts to 1 per task type. |
-| `ankiMode` | boolean | false | Self-grading mode with answer reveal. |
-| `ankiModeTaskType` | AnkiModeTaskType | `'both'` | Which tasks to show in Anki mode: both, reading-only, or meaning-only. |
-| `ankiModeCombineReadingMeaning` | boolean | false | Combine reading and meaning into one card in Anki mode. |
+| `ankiMode` | boolean | false | Self-grading mode with one combined meaning/reading reveal card per item. |
+| `leechThreshold` | number | 1 | Threshold for leech detection in practice modes. |
 
 ### Appearance Settings
 
@@ -266,6 +263,13 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | `interruptBackgroundAudio` | boolean | false | Interrupt background audio when playing vocabulary. |
 | `preferredVoiceActorId` | number \| null | null | Preferred voice actor for streamed vocabulary audio; null uses automatic selection. |
 
+### Subject Detail Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `useKatakanaForOnyomi` | boolean | false | Display onyomi readings in katakana on subject details and review answer details. |
+| `showAllReadings` | boolean | false | Show accepted alternate readings instead of only primary readings. |
+
 ### Other Settings (Defined, Not Yet Wired)
 
 | Setting | Type | Default | Description |
@@ -273,6 +277,5 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | `notificationsAllReviews` | boolean | false | Notify for all reviews (not just upcoming). |
 | `notificationsBadging` | boolean | true | Show badge count for available reviews. |
 | `notificationSounds` | boolean | false | Play sound for review notifications. |
-| `leechThreshold` | number | 1 | Threshold for leech detection in practice modes. |
 | `offlineAudio` | boolean | false | Download vocabulary audio for offline playback. |
 | `offlineAudioCellular` | boolean | false | Allow offline audio downloads over cellular. |
