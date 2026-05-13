@@ -72,9 +72,9 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 
 **Cheats** — Override incorrect as correct, try again later (re-queue without penalty), and add synonym (queued for WaniKani API sync).
 
-**Anki Mode** — Self-grading with immediate answer reveal. Supports both, reading-only, meaning-only, and combined reading/meaning variants.
+**Anki Mode** — Self-grading with immediate combined answer reveal (meaning and reading together on one card).
 
-**Quick Settings** — Mid-session settings modal for toggling exact match, cheats, Anki mode, answer reveal, and full answer display without leaving the review. Includes Wrap Up and End Session actions. Changes persist to the main settings screen.
+**Quick Settings** — Mid-session settings modal for toggling exact match, cheats, and full answer display without leaving the review. Includes Wrap Up and End Session actions. Changes persist to the main settings screen.
 
 ### Practice Modes
 
@@ -112,7 +112,9 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Lessons** — New items per quiz (1–10), max lessons per session (1–50), prioritize current level, interleave lessons, show kana-only vocabulary.
 
-**Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
+**Reviews** — Review order (9 options), Anki mode (combined card), exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, batch size (1–15), review count limit with configurable cap, leech threshold.
+
+**Subject Details** — Display onyomi readings in katakana, show all accepted alternate readings.
 
 **Audio** — Streamed vocabulary pronunciation playback in reviews, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
 
@@ -167,18 +169,16 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 - Unit tests for lesson selection filtering and ordering (kana-only, hidden, level, subject type, interleave).
 - Unit tests for leech score calculation and dashboard repository logic.
 - Unit tests for search result ranking (exact, prefix, contains match ordering).
+- Integration tests for WaniKani API pagination and `updated_after` cursors.
+- Integration tests for sync service incremental cursors and pending-write flush (reviews, lessons, study materials).
 
 ## Known Major Gaps
 
-- Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice), and burned item practice shortcut.
-- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
-- Subject catalog by level, local search, rich detail screen, SRS bucket browsing, and excluded items browsing are implemented.
-- Review sessions have inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
-- Streaming vocabulary audio playback and voice actor selection are implemented in reviews. Offline audio downloads are not implemented.
+- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
+- Offline audio downloads are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
-- Practice modes for apprentice leeches, all leeches, and burned items are implemented. Katakana practice is undecided.
-- Diagnostics screen is implemented. Font, notification, and subject detail settings UI are not yet exposed.
+- Katakana practice is not planned.
 
 ## Getting Started
 
