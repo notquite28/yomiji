@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getVoiceActorOptions, VoiceActorOption } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase, resetLocalData } from '../domain/db/database';
 import { AppSettings, defaultSettings, loadSettings, saveSettings, ReviewOrder } from '../domain/settings/settings';
 import { deleteApiToken } from '../domain/storage/secureToken';
@@ -35,11 +36,22 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [voiceActors, setVoiceActors] = useState<VoiceActorOption[]>([]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSettings().then(setSettings);
+    let isMounted = true;
+    (async () => {
+      const [loadedSettings, db] = await Promise.all([loadSettings(), openAppDatabase()]);
+      const loadedVoiceActors = await getVoiceActorOptions(db);
+      if (!isMounted) {
+        return;
+      }
+      setSettings(loadedSettings);
+      setVoiceActors(loadedVoiceActors);
+    })().catch(() => {});
+    return () => { isMounted = false; };
   }, []);
 
   const updateSetting = useCallback(<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
@@ -203,6 +215,52 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
               theme={theme}
             />
           ) : null}
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Audio</Text>
+          <Text style={styles.bodyText}>Stream vocabulary pronunciation audio during reviews. Offline downloads are not enabled yet.</Text>
+
+          <Text style={styles.sectionLabel}>Voice Actor</Text>
+          <View style={styles.pillGroup}>
+            <Pressable
+              onPress={() => updateSetting('preferredVoiceActorId', null)}
+              style={[styles.pill, settings.preferredVoiceActorId === null && styles.pillActive]}
+            >
+              <Text style={[styles.pillText, settings.preferredVoiceActorId === null && styles.pillTextActive]}>Auto</Text>
+            </Pressable>
+            {voiceActors.map((voiceActor) => {
+              const active = settings.preferredVoiceActorId === voiceActor.id;
+              const subtitle = [voiceActor.description, voiceActor.gender].filter(Boolean).join(' - ');
+              return (
+                <Pressable
+                  key={voiceActor.id}
+                  onPress={() => updateSetting('preferredVoiceActorId', voiceActor.id)}
+                  style={[styles.pill, active && styles.pillActive]}
+                  accessibilityLabel={subtitle ? `${voiceActor.name}, ${subtitle}` : voiceActor.name}
+                >
+                  <Text style={[styles.pillText, active && styles.pillTextActive]}>{voiceActor.name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {voiceActors.length === 0 ? <Text style={styles.bodyText}>Voice actors will appear after sync downloads them.</Text> : null}
+
+          <SettingToggle
+            label="Play Audio Automatically"
+            detail="Play vocabulary audio after correct reading answers."
+            value={settings.playAudioAutomatically}
+            onValueChange={(v) => updateSetting('playAudioAutomatically', v)}
+            theme={theme}
+          />
+
+          <SettingToggle
+            label="Interrupt Background Audio"
+            detail="Duck other audio while pronunciation audio plays."
+            value={settings.interruptBackgroundAudio}
+            onValueChange={(v) => updateSetting('interruptBackgroundAudio', v)}
+            theme={theme}
+          />
         </View>
 
         <View style={styles.panel}>

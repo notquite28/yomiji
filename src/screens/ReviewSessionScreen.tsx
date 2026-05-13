@@ -1,10 +1,12 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
+import { playVocabularyAudio, stopVocabularyAudio } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase } from '../domain/db/database';
 import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
 import {
@@ -84,6 +86,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const [ankiRevealed, setAnkiRevealed] = useState(false);
   const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
   const [showAllDetails, setShowAllDetails] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [audioMessage, setAudioMessage] = useState<string | null>(null);
   const [subjectDetailData, setSubjectDetailData] = useState<{
     componentSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
     amalgamationSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
@@ -158,10 +162,25 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     setRevision((r) => r + 1);
   }, [practiceSource, queueItems, settings, userLevel]);
 
+  useEffect(() => () => {
+    stopVocabularyAudio().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOffline(state.isConnected === false || state.isInternetReachable === false);
+    });
+    NetInfo.fetch().then((state) => {
+      setIsOffline(state.isConnected === false || state.isInternetReachable === false);
+    }).catch(() => {});
+    return unsubscribe;
+  }, []);
+
   useEffect(() => {
     if (!feedback?.item) {
       setSubjectDetailData(null);
       setShowAllDetails(false);
+      setAudioMessage(null);
       return;
     }
 
@@ -217,6 +236,39 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
   const shouldShowAnkiReveal = ankiMode && !feedback && !ankiRevealed;
 
+  const playAudioForItem = (item: ReviewItem) => {
+    if (item.subjectType !== 'vocabulary') {
+      return;
+    }
+    if (isOffline) {
+      setAudioMessage('Audio streaming is unavailable while offline.');
+      return;
+    }
+
+    openAppDatabase()
+      .then((db) => playVocabularyAudio(db, item.subjectId, {
+        interruptBackgroundAudio: appSettings.interruptBackgroundAudio,
+        preferredVoiceActorId: appSettings.preferredVoiceActorId,
+      }))
+      .then((played) => {
+        setAudioMessage(played ? null : 'No audio is available for this vocabulary item.');
+      })
+      .catch(() => {
+        setAudioMessage('Audio could not be played. Check your connection and try again.');
+      });
+  };
+
+  const maybeAutoplayAudio = (item: ReviewItem, answeredTaskType: TaskType, correct: boolean) => {
+    if (!correct || !appSettings.playAudioAutomatically || isOffline) {
+      return;
+    }
+    if (answeredTaskType !== 'reading' && (item.subject.readings?.length ?? 0) > 0) {
+      return;
+    }
+
+    playAudioForItem(item);
+  };
+
   const submit = () => {
     if (!session || !currentItem || feedback) {
       return;
@@ -239,6 +291,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     });
     const correct = result.kind === 'precise' || result.kind === 'imprecise';
 
+    const answeredTaskType = taskType ?? 'meaning';
     const markResult = session.markAnswer(correct);
     setLastMarkResult(markResult);
     setFeedback({
@@ -246,11 +299,12 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       message: feedbackTitle(result),
       detail: correct
         ? 'Continue to the next prompt.'
-        : correctAnswerText(currentItem, taskType ?? 'meaning'),
+        : correctAnswerText(currentItem, answeredTaskType),
       item: currentItem,
-      taskType: taskType ?? 'meaning',
+      taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
     });
+    maybeAutoplayAudio(currentItem, answeredTaskType, correct);
     setRevision((r) => r + 1);
   };
 
@@ -259,6 +313,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       return;
     }
 
+    const answeredTaskType = taskType ?? 'meaning';
     const markResult = session.markAnswer(correct);
     setLastMarkResult(markResult);
     setFeedback({
@@ -266,11 +321,12 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       message: correct ? 'Correct' : 'Incorrect',
       detail: correct
         ? 'Continue to the next prompt.'
-        : correctAnswerText(currentItem, taskType ?? 'meaning'),
+        : correctAnswerText(currentItem, answeredTaskType),
       item: currentItem,
-      taskType: taskType ?? 'meaning',
+      taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
     });
+    maybeAutoplayAudio(currentItem, answeredTaskType, correct);
     setAnkiRevealed(false);
     setRevision((r) => r + 1);
   };
@@ -535,6 +591,26 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
             {feedback.message}
           </Text>
           <Text style={styles.feedbackDetail}>{feedback.detail}</Text>
+          {feedback.item.subjectType === 'vocabulary' ? (
+            <>
+              <Pressable
+                disabled={isOffline}
+                onPress={() => playAudioForItem(feedback.item)}
+                style={({ pressed }) => [
+                  styles.audioButton,
+                  isOffline && styles.audioButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={isOffline ? 'Vocabulary audio unavailable offline' : 'Play vocabulary audio'}
+              >
+                <Text style={[styles.audioButtonText, isOffline && styles.audioButtonTextDisabled]}>
+                  {isOffline ? 'Audio unavailable offline' : 'Play Audio'}
+                </Text>
+              </Pressable>
+              {audioMessage ? <Text style={styles.audioMessage}>{audioMessage}</Text> : null}
+            </>
+          ) : null}
         </View>
       ) : null}
 
@@ -874,6 +950,33 @@ function makeStyles(theme: AppTheme) {
       color: theme.colors.mutedText,
       fontSize: 15,
       lineHeight: 22,
+      fontWeight: '700',
+    },
+    audioButton: {
+      alignSelf: 'flex-start',
+      marginTop: 4,
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    audioButtonText: {
+      color: theme.colors.text,
+      fontSize: 13,
+      fontWeight: '900',
+    },
+    audioButtonDisabled: {
+      opacity: 0.6,
+    },
+    audioButtonTextDisabled: {
+      color: theme.colors.mutedText,
+    },
+    audioMessage: {
+      color: theme.colors.mutedText,
+      fontSize: 13,
+      lineHeight: 18,
       fontWeight: '700',
     },
     errorText: {

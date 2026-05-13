@@ -16,7 +16,9 @@ type BooleanSettingKey =
   | 'enableCheats'
   | 'ankiMode'
   | 'showAnswerImmediately'
-  | 'showFullAnswer';
+  | 'showFullAnswer'
+  | 'playAudioAutomatically'
+  | 'interruptBackgroundAudio';
 
 type Props = {
   visible: boolean;
@@ -111,6 +113,24 @@ export function ReviewQuickSettings({
               label="Show full answer"
               value={settings.showFullAnswer}
               onToggle={() => toggle('showFullAnswer')}
+              theme={theme}
+              styles={styles}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Audio</Text>
+            <ToggleRow
+              label="Autoplay audio"
+              value={settings.playAudioAutomatically}
+              onToggle={() => toggle('playAudioAutomatically')}
+              theme={theme}
+              styles={styles}
+            />
+            <ToggleRow
+              label="Interrupt background audio"
+              value={settings.interruptBackgroundAudio}
+              onToggle={() => toggle('interruptBackgroundAudio')}
               theme={theme}
               styles={styles}
             />

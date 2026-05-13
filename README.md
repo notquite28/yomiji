@@ -114,6 +114,8 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Reviews** — Review order (9 options), Anki mode, exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, skip kanji readings, batch size (1–15), review count limit with configurable cap.
 
+**Audio** — Streamed vocabulary pronunciation playback in reviews, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
+
 **Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, sanitized export via Share sheet, and full refresh (clear cache and resync).
 
 **Log Out** — Clears token, cache, and pending queues.
@@ -172,11 +174,11 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation.
 - Subject catalog by level, local search, rich detail screen, SRS bucket browsing, and excluded items browsing are implemented.
 - Review sessions have inline subject details after answer feedback. Hardware keyboard shortcuts are not planned.
-- Audio playback, offline audio, and voice actor selection are not implemented.
+- Streaming vocabulary audio playback and voice actor selection are implemented in reviews. Offline audio downloads are not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for apprentice leeches, all leeches, and burned items are implemented. Katakana practice is undecided.
-- Diagnostics screen is implemented. Audio, font, notification, and subject detail settings UI are not yet exposed.
+- Diagnostics screen is implemented. Font, notification, and subject detail settings UI are not yet exposed.
 
 ## Getting Started
 
@@ -206,6 +208,7 @@ src/
   domain/           # Pure logic layer — no React, no UI imports
     answers/        # Answer checking, romaji-to-kana conversion
     api/            # WaniKani v2 REST client (WaniKaniClient.ts) + types
+    audio/          # Vocabulary pronunciation audio selection and streaming playback
     db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts, subjectRepository.ts, assignmentRepository.ts, studyMaterialRepository.ts)
     dashboard/      # Dashboard query aggregation
     settings/       # AppSettings, load/save via AsyncStorage

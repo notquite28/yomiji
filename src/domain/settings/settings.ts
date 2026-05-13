@@ -46,6 +46,7 @@ export type AppSettings = {
   leechThreshold: number;
   playAudioAutomatically: boolean;
   interruptBackgroundAudio: boolean;
+  preferredVoiceActorId: number | null;
   offlineAudio: boolean;
   offlineAudioCellular: boolean;
 };
@@ -79,6 +80,7 @@ export const defaultSettings: AppSettings = {
   leechThreshold: 1,
   playAudioAutomatically: false,
   interruptBackgroundAudio: false,
+  preferredVoiceActorId: null,
   offlineAudio: false,
   offlineAudioCellular: false,
 };

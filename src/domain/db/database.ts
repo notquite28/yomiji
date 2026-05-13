@@ -334,6 +334,10 @@ async function putSubjectAudioUrls(db: AppDatabase, subject: ApiResource<Subject
   }
 
   for (const audio of subject.data.pronunciation_audios) {
+    if (audio.content_type !== 'audio/mpeg') {
+      continue;
+    }
+
     await db.runAsync(
       `INSERT INTO audio_urls (subject_id, voice_actor_id, remote_url, status)
        VALUES (?, ?, ?, 'remote')

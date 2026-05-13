@@ -138,11 +138,11 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ## M6: Audio, Fonts, And Appearance
 
-- [ ] Add vocabulary pronunciation playback.
+- [x] Add vocabulary pronunciation playback.
 - [ ] Prefer cached audio files when available.
 - [ ] Add offline audio download queue.
-- [ ] Add voice actor selection.
-- [ ] Add autoplay and interrupt-background-audio settings.
+- [x] Add voice actor selection.
+- [x] Add autoplay and interrupt-background-audio settings.
 - [ ] Add custom Japanese review font support.
 - [ ] Add review font-size setting.
 - [x] Add light, dark, and system appearance controls in settings.
@@ -178,7 +178,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
 - [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
 - [ ] Add subject detail settings UI.
-- [ ] Add audio settings UI.
+- [x] Add audio settings UI.
 - [ ] Add font settings UI.
 - [x] Add diagnostics and sanitized log export UI.
 
@@ -213,11 +213,11 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard has upcoming reviews chart, current-level progress, recent mistakes, leeches (with practice buttons), and shortcuts for burned practice and excluded items.
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
-- Audio playback, offline audio, and voice actor selection are not implemented.
+- Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
 - Notifications, badges, and deep links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is undecided.
-- Settings exposes Appearance, Reviews, Lessons, Diagnostics, and Log Out. Audio, font, notification, and subject detail settings UI are not yet exposed.
+- Settings exposes Appearance, Reviews, Lessons, Audio, Diagnostics, and Log Out. Font, notification, and subject detail settings UI are not yet exposed.
 
 ## Feature Reference
 
@@ -258,6 +258,14 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | --- | --- | --- | --- |
 | `appearance` | AppearanceMode | `'system'` | Theme: system, light, or dark. Applied immediately and persisted. |
 
+### Audio Settings
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `playAudioAutomatically` | boolean | false | Auto-play vocabulary audio during reviews. |
+| `interruptBackgroundAudio` | boolean | false | Interrupt background audio when playing vocabulary. |
+| `preferredVoiceActorId` | number \| null | null | Preferred voice actor for streamed vocabulary audio; null uses automatic selection. |
+
 ### Other Settings (Defined, Not Yet Wired)
 
 | Setting | Type | Default | Description |
@@ -266,7 +274,5 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | `notificationsBadging` | boolean | true | Show badge count for available reviews. |
 | `notificationSounds` | boolean | false | Play sound for review notifications. |
 | `leechThreshold` | number | 1 | Threshold for leech detection in practice modes. |
-| `playAudioAutomatically` | boolean | false | Auto-play vocabulary audio during reviews. |
-| `interruptBackgroundAudio` | boolean | false | Interrupt background audio when playing vocabulary. |
 | `offlineAudio` | boolean | false | Download vocabulary audio for offline playback. |
 | `offlineAudioCellular` | boolean | false | Allow offline audio downloads over cellular. |
