@@ -3,18 +3,18 @@
     "name": "読路 (Yomiji)",
     "slug": "yomiji",
     "scheme": "yomiji",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/yomiji.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.yomiji",
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "package": "app.yomiji",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/yomiji.png",
         "backgroundColor": "#f7f4ef"
