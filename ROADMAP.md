@@ -214,7 +214,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
-- Local notifications and badge counts are implemented for upcoming reviews with vacation suppression. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
+- Local notifications and badge counts are implemented for upcoming reviews with vacation suppression, quiet hours, configurable schedule window, and minimum review count threshold. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
 - Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Notifications, Diagnostics, and Log Out. Font settings UI is not yet exposed.
@@ -272,11 +272,16 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ### Notification Settings
 
-| Setting                   | Type    | Default | Description                                                                  |
-| ------------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
-| `notificationsAllReviews` | boolean | false   | Show alert notifications for upcoming review availability.                   |
-| `notificationsBadging`    | boolean | true    | Show badge count for available reviews.                                      |
-| `notificationSounds`      | boolean | false   | Play sound for review notifications (iOS only; Android uses channel sound). |
+| Setting                          | Type     | Default | Description                                                                  |
+| -------------------------------- | -------- | ------- | ---------------------------------------------------------------------------- |
+| `notificationsAllReviews`        | boolean  | false   | Show alert notifications for upcoming review availability.                   |
+| `notificationsBadging`           | boolean  | true    | Show badge count for available reviews.                                      |
+| `notificationSounds`             | boolean  | false   | Play sound for review notifications (iOS only; Android uses channel sound). |
+| `notificationQuietHoursEnabled`  | boolean  | false   | Suppress notifications during configured quiet hours.                       |
+| `notificationQuietHoursStart`    | number   | 22      | Quiet hours start hour (0–23, local time).                                  |
+| `notificationQuietHoursEnd`      | number   | 7       | Quiet hours end hour (0–23, local time). Wraps past midnight.               |
+| `notificationScheduleWindow`     | 12\|24\|48\|72 | 48 | How many hours ahead to schedule notifications.                             |
+| `notificationMinReviewCount`     | number   | 1       | Minimum cumulative reviews to trigger a notification.                       |
 
 ### Other Settings (Defined, Not Yet Wired)
 
