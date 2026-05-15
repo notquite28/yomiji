@@ -52,6 +52,18 @@ pnpm exec expo install --check      # verify Expo SDK-compatible dependency vers
 - SQLite foreign keys are enforced. In cache resets, delete child tables before `subjects` (`assignments`, `study_materials`, `review_stats`, `audio_urls`, `subject_progress`, `pending_study_materials`).
 - Full refresh must clear cached remote data and cursors without dropping pending local writes.
 
+## Android Release Signing
+
+- Release APKs are signed with a production keystore (not the debug key).
+- The keystore lives at `~/.local/share/yomiji/release.keystore` with credentials in `~/.local/share/yomiji/credentials`.
+- **Do not lose the keystore** — without it, the app cannot be updated under the same package name.
+- CI uses GitHub Secrets:
+  - `YOMIJI_KEYSTORE_BASE64` — base64-encoded keystore file
+  - `YOMIJI_KEYSTORE_PASSWORD` — keystore password (same for key password)
+  - `KEY_ALIAS` is hardcoded as `yomiji` in the workflow
+- Gradle reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars. Falls back to debug signing when these are unset (local dev).
+- When preparing for Google Play Store, upload this keystore to Google Play App Signing.
+
 ## Versioning And Releases
 
 - Versioning uses semver. While pre-1.0, bump **patch** for bug fixes, **minor** for new features, and **major** for milestone releases.
@@ -65,5 +77,5 @@ pnpm exec expo install --check      # verify Expo SDK-compatible dependency vers
 
 - Offline audio download/caching, notifications/badges/deep links, custom fonts, and font-size settings are not implemented.
 - Dashboard recommended lessons vs. advanced lesson-pool separation is pending (algorithm research is in `docs/recommended-lessons-research.md`).
-- Typed settings migrations and beta-hardening tests (mocked API integration tests, performance tests, device QA) are pending.
+- Typed settings migrations and beta-hardening device QA are pending. Mocked API integration tests were added in M10.
 - Several features were explicitly removed or deferred: remaining-item browsing, recent lesson practice, apprentice lesson limit, skip-kanji-reading, and hardware keyboard shortcuts.

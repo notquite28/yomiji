@@ -32,10 +32,22 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.YOMIJI_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+
       - name: Build APK
         run: eas build --platform android --profile production --local --output build.apk
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          KEYSTORE_FILE: release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: yomiji
+          KEY_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f android/app/release.keystore
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
