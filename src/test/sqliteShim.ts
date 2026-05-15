@@ -21,7 +21,25 @@ export function createTestDb(): AppDatabase {
 
   return {
     execAsync(source: string): Promise<void> {
-      db.exec(source);
+      // Extract and apply PRAGMA statements via db.pragma() for reliable
+      // enforcement across all SQLite builds, then exec the rest.
+      const lines = source.split('\n');
+      const pragmas: string[] = [];
+      const rest: string[] = [];
+      for (const line of lines) {
+        if (/^\s*PRAGMA\s+/i.test(line)) {
+          pragmas.push(line.replace(/^\s*PRAGMA\s+/i, '').replace(/;\s*$/, ''));
+        } else {
+          rest.push(line);
+        }
+      }
+      for (const p of pragmas) {
+        db.pragma(p);
+      }
+      const remaining = rest.join('\n').trim();
+      if (remaining) {
+        db.exec(remaining);
+      }
       return Promise.resolve();
     },
 

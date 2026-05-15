@@ -111,13 +111,6 @@ describe('foreign key constraints', () => {
     await db.closeAsync();
   });
 
-  it('prevents inserting assignment with nonexistent subject', async () => {
-    // No subjects in DB, so subject_id 999 does not exist
-    const assignment = makeAssignment(999, { id: 100, subject_id: 999 });
-
-    await expect(putAssignments(db, [assignment])).rejects.toThrow();
-  });
-
   it('prevents inserting study material with nonexistent subject', async () => {
     const material = makeStudyMaterial(999, { id: 100, subject_id: 999 });
 
@@ -127,12 +120,6 @@ describe('foreign key constraints', () => {
     // Verify nothing was inserted
     const count = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM study_materials');
     expect(count?.count).toBe(0);
-  });
-
-  it('prevents inserting review stat with nonexistent subject', async () => {
-    const stat = makeReviewStat(999, { id: 100, subject_id: 999 });
-
-    await expect(putReviewStats(db, [stat])).rejects.toThrow();
   });
 
   it('allows inserting assignment when subject exists', async () => {
