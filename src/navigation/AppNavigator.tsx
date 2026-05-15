@@ -1,26 +1,43 @@
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, AppStateStatus, View } from 'react-native';
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	ActivityIndicator,
+	AppState,
+	type AppStateStatus,
+	View,
+} from "react-native";
 
-import { WaniKaniClient } from '../domain/api/WaniKaniClient';
-import { getLastSyncTime, openAppDatabase } from '../domain/db/database';
-import { describeSyncError } from '../domain/db/errorLog';
-import { deleteApiToken, getApiToken } from '../domain/storage/secureToken';
-import { hasPendingWrites, isSyncAuthError, runIncrementalSync, runPendingSync, SyncProgress } from '../domain/sync/syncService';
-import { DashboardScreen } from '../screens/DashboardScreen';
-import { DiagnosticsScreen } from '../screens/DiagnosticsScreen';
-import { LessonPickerScreen } from '../screens/LessonPickerScreen';
-import { LessonSessionScreen } from '../screens/LessonSessionScreen';
-import { LoginScreen } from '../screens/LoginScreen';
-import { RadicalImagePreviewScreen } from '../screens/RadicalImagePreviewScreen';
-import { ReviewSessionScreen } from '../screens/ReviewSessionScreen';
-import { SettingsScreen } from '../screens/SettingsScreen';
-import { SubjectCatalogScreen } from '../screens/SubjectCatalogScreen';
-import { SubjectDetailScreen } from '../screens/SubjectDetailScreen';
-import { SubjectSearchScreen } from '../screens/SubjectSearchScreen';
-import { SubjectBrowseScreen } from '../screens/SubjectBrowseScreen';
-import { useAppTheme } from '../theme/AppThemeProvider';
-import { RootStackParamList } from './types';
+import { WaniKaniClient } from "../domain/api/WaniKaniClient";
+import { getLastSyncTime, openAppDatabase } from "../domain/db/database";
+import { describeSyncError } from "../domain/db/errorLog";
+import {
+	ensureReviewNotificationChannel,
+	getNotificationPermissionStatus,
+	requestNotificationPermissions,
+	rescheduleReviewNotifications,
+} from "../domain/notifications";
+import { deleteApiToken, getApiToken } from "../domain/storage/secureToken";
+import {
+	hasPendingWrites,
+	isSyncAuthError,
+	runIncrementalSync,
+	runPendingSync,
+	type SyncProgress,
+} from "../domain/sync/syncService";
+import { DashboardScreen } from "../screens/DashboardScreen";
+import { DiagnosticsScreen } from "../screens/DiagnosticsScreen";
+import { LessonPickerScreen } from "../screens/LessonPickerScreen";
+import { LessonSessionScreen } from "../screens/LessonSessionScreen";
+import { LoginScreen } from "../screens/LoginScreen";
+import { RadicalImagePreviewScreen } from "../screens/RadicalImagePreviewScreen";
+import { ReviewSessionScreen } from "../screens/ReviewSessionScreen";
+import { SettingsScreen } from "../screens/SettingsScreen";
+import { SubjectCatalogScreen } from "../screens/SubjectCatalogScreen";
+import { SubjectDetailScreen } from "../screens/SubjectDetailScreen";
+import { SubjectSearchScreen } from "../screens/SubjectSearchScreen";
+import { SubjectBrowseScreen } from "../screens/SubjectBrowseScreen";
+import { useAppTheme } from "../theme/AppThemeProvider";
+import type { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const FOREGROUND_FULL_SYNC_INTERVAL_MS = 15 * 60 * 1000;
@@ -28,192 +45,263 @@ const FOREGROUND_CHECK_INTERVAL_MS = 60 * 1000;
 const BACKGROUND_PENDING_FLUSH_INTERVAL_MS = 60 * 1000;
 
 export function AppNavigator() {
-  const theme = useAppTheme();
-  const [apiToken, setApiToken] = useState<string | null>(null);
-  const [isBooting, setIsBooting] = useState(true);
-  const [lifecycleSyncProgress, setLifecycleSyncProgress] = useState<SyncProgress | null>(null);
-  const [lifecycleSyncError, setLifecycleSyncError] = useState<string | null>(null);
-  const [syncRevision, setSyncRevision] = useState(0);
-  const appState = useRef<AppStateStatus>(AppState.currentState);
-  const lastForegroundCheckAt = useRef(0);
-  const lastPendingFlushAt = useRef(0);
+	const theme = useAppTheme();
+	const [apiToken, setApiToken] = useState<string | null>(null);
+	const [isBooting, setIsBooting] = useState(true);
+	const [lifecycleSyncProgress, setLifecycleSyncProgress] =
+		useState<SyncProgress | null>(null);
+	const [lifecycleSyncError, setLifecycleSyncError] = useState<string | null>(
+		null,
+	);
+	const [syncRevision, setSyncRevision] = useState(0);
+	const appState = useRef<AppStateStatus>(AppState.currentState);
+	const lastForegroundCheckAt = useRef(0);
+	const lastPendingFlushAt = useRef(0);
 
-  const handleSyncError = useCallback(async (caught: unknown) => {
-    if (isSyncAuthError(caught)) {
-      await deleteApiToken();
-      setApiToken(null);
-      return;
-    }
-    setLifecycleSyncError(describeSyncError(caught).message);
-  }, []);
+	const handleSyncError = useCallback(async (caught: unknown) => {
+		if (isSyncAuthError(caught)) {
+			await deleteApiToken();
+			setApiToken(null);
+			return;
+		}
+		setLifecycleSyncError(describeSyncError(caught).message);
+	}, []);
 
-  useEffect(() => {
-    let isMounted = true;
+	useEffect(() => {
+		let isMounted = true;
 
-    getApiToken()
-      .then((token) => {
-        if (isMounted) {
-          setApiToken(token);
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsBooting(false);
-        }
-      });
+		getApiToken()
+			.then((token) => {
+				if (isMounted) {
+					setApiToken(token);
+				}
+			})
+			.finally(() => {
+				if (isMounted) {
+					setIsBooting(false);
+				}
+			});
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+		return () => {
+			isMounted = false;
+		};
+	}, []);
 
-  const syncOnForeground = useCallback(async () => {
-    if (!apiToken) {
-      return;
-    }
+	const syncOnForeground = useCallback(async () => {
+		if (!apiToken) {
+			return;
+		}
 
-    const now = Date.now();
-    if (now - lastForegroundCheckAt.current < FOREGROUND_CHECK_INTERVAL_MS) {
-      return;
-    }
-    lastForegroundCheckAt.current = now;
+		const now = Date.now();
+		if (now - lastForegroundCheckAt.current < FOREGROUND_CHECK_INTERVAL_MS) {
+			return;
+		}
+		lastForegroundCheckAt.current = now;
 
-    setLifecycleSyncError(null);
-    try {
-      const db = await openAppDatabase();
-      const hasLocalWrites = await hasPendingWrites(db);
-      const lastSyncTime = await getLastSyncTime(db);
-      const cacheIsStale = lastSyncTime === 0 || now - lastSyncTime >= FOREGROUND_FULL_SYNC_INTERVAL_MS;
+		setLifecycleSyncError(null);
+		try {
+			const db = await openAppDatabase();
+			const hasLocalWrites = await hasPendingWrites(db);
+			const lastSyncTime = await getLastSyncTime(db);
+			const cacheIsStale =
+				lastSyncTime === 0 ||
+				now - lastSyncTime >= FOREGROUND_FULL_SYNC_INTERVAL_MS;
 
-      if (hasLocalWrites) {
-        await runPendingSync({
-          db,
-          client: new WaniKaniClient(apiToken),
-          onProgress: setLifecycleSyncProgress,
-        });
-        setSyncRevision((value) => value + 1);
-      }
+			if (hasLocalWrites) {
+				await runPendingSync({
+					db,
+					client: new WaniKaniClient(apiToken),
+					onProgress: setLifecycleSyncProgress,
+				});
+				setSyncRevision((value) => value + 1);
+			}
 
-      if (cacheIsStale) {
-        await runIncrementalSync({
-          db,
-          client: new WaniKaniClient(apiToken),
-          onProgress: setLifecycleSyncProgress,
-          onCheckpoint: () => setSyncRevision((value) => value + 1),
-        });
-        setSyncRevision((value) => value + 1);
-      }
-    } catch (caught) {
-      await handleSyncError(caught);
-    }
-  }, [apiToken, handleSyncError]);
+			if (cacheIsStale) {
+				await runIncrementalSync({
+					db,
+					client: new WaniKaniClient(apiToken),
+					onProgress: setLifecycleSyncProgress,
+					onCheckpoint: () => setSyncRevision((value) => value + 1),
+				});
+				setSyncRevision((value) => value + 1);
+			}
+		} catch (caught) {
+			await handleSyncError(caught);
+		}
 
-  const syncOnBackground = useCallback(async () => {
-    if (!apiToken) {
-      return;
-    }
+		// Always reschedule notifications based on local data, regardless of
+		// whether sync succeeded. The local DB may have stale-but-usable data
+		// when offline; notification scheduling itself needs zero network.
+		try {
+			await rescheduleReviewNotifications();
+		} catch {
+			// Notification scheduling is best-effort; failures are non-critical
+			// and should not disrupt the user experience.
+		}
+	}, [apiToken, handleSyncError]);
 
-    const now = Date.now();
-    if (now - lastPendingFlushAt.current < BACKGROUND_PENDING_FLUSH_INTERVAL_MS) {
-      return;
-    }
-    lastPendingFlushAt.current = now;
+	const syncOnBackground = useCallback(async () => {
+		if (!apiToken) {
+			return;
+		}
 
-    try {
-      const db = await openAppDatabase();
-      if (!(await hasPendingWrites(db))) {
-        return;
-      }
+		const now = Date.now();
+		if (
+			now - lastPendingFlushAt.current <
+			BACKGROUND_PENDING_FLUSH_INTERVAL_MS
+		) {
+			return;
+		}
+		lastPendingFlushAt.current = now;
 
-      await runPendingSync({
-        db,
-        client: new WaniKaniClient(apiToken),
-        onProgress: setLifecycleSyncProgress,
-      });
-      setSyncRevision((value) => value + 1);
-    } catch (caught) {
-      await handleSyncError(caught);
-    }
-  }, [apiToken, handleSyncError]);
+		try {
+			const db = await openAppDatabase();
+			if (!(await hasPendingWrites(db))) {
+				return;
+			}
 
-  useEffect(() => {
-    if (apiToken) {
-      void syncOnForeground();
-    }
-  }, [apiToken, syncOnForeground]);
+			await runPendingSync({
+				db,
+				client: new WaniKaniClient(apiToken),
+				onProgress: setLifecycleSyncProgress,
+			});
+			setSyncRevision((value) => value + 1);
+		} catch (caught) {
+			await handleSyncError(caught);
+		}
+	}, [apiToken, handleSyncError]);
 
-  useEffect(() => {
-    if (!apiToken) {
-      return undefined;
-    }
+	// Set up Android notification channel on mount.
+	useEffect(() => {
+		void ensureReviewNotificationChannel();
+	}, []);
 
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      const previousState = appState.current;
-      appState.current = nextState;
+	// Request notification permission once after login. The permission dialog
+	// is a local OS feature and should not depend on network availability.
+	const hasRequestedPermission = useRef(false);
+	useEffect(() => {
+		if (!apiToken || hasRequestedPermission.current) {
+			return;
+		}
 
-      if (previousState.match(/inactive|background/) && nextState === 'active') {
-        void syncOnForeground();
-      } else if (previousState === 'active' && nextState.match(/inactive|background/)) {
-        void syncOnBackground();
-      }
-    });
+		hasRequestedPermission.current = true;
+		void (async () => {
+			try {
+				const status = await getNotificationPermissionStatus();
+				if (status === "undetermined") {
+					await requestNotificationPermissions();
+				}
+			} catch {
+				// Best-effort — don't disrupt the user.
+			}
+		})();
+	}, [apiToken]);
 
-    return () => subscription.remove();
-  }, [apiToken, syncOnBackground, syncOnForeground]);
+	useEffect(() => {
+		if (apiToken) {
+			void syncOnForeground();
+		}
+	}, [apiToken, syncOnForeground]);
 
-  if (isBooting) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-        <ActivityIndicator color={theme.colors.kanji} />
-      </View>
-    );
-  }
+	useEffect(() => {
+		if (!apiToken) {
+			return undefined;
+		}
 
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {apiToken ? (
-        <>
-          <Stack.Screen name="Dashboard">
-            {(props) => (
-              <DashboardScreen
-                {...props}
-                apiToken={apiToken}
-                lifecycleSyncProgress={lifecycleSyncProgress}
-                lifecycleSyncError={lifecycleSyncError}
-                syncRevision={syncRevision}
-                onAuthError={() => {
-                  deleteApiToken().then(() => setApiToken(null));
-                }}
-              />
-            )}
-          </Stack.Screen>
-          <Stack.Screen name="Settings">
-            {(props) => <SettingsScreen {...props} onLoggedOut={() => setApiToken(null)} />}
-          </Stack.Screen>
-          <Stack.Screen name="Diagnostics">
-            {(props) => (
-              <DiagnosticsScreen
-                {...props}
-                onForceLogout={() => {
-                  deleteApiToken().then(() => setApiToken(null));
-                }}
-              />
-            )}
-          </Stack.Screen>
-          <Stack.Screen name="RadicalImagePreview" component={RadicalImagePreviewScreen} />
-          <Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
-          <Stack.Screen name="LessonPicker" component={LessonPickerScreen} />
-          <Stack.Screen name="LessonSession" component={LessonSessionScreen} />
-          <Stack.Screen name="SubjectCatalog" component={SubjectCatalogScreen} />
-          <Stack.Screen name="SubjectSearch" component={SubjectSearchScreen} />
-          <Stack.Screen name="SubjectBrowse" component={SubjectBrowseScreen} />
-          <Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} />
-        </>
-      ) : (
-        <Stack.Screen name="Login">
-          {(props) => <LoginScreen {...props} onAuthenticated={setApiToken} />}
-        </Stack.Screen>
-      )}
-    </Stack.Navigator>
-  );
+		const subscription = AppState.addEventListener("change", (nextState) => {
+			const previousState = appState.current;
+			appState.current = nextState;
+
+			if (
+				previousState.match(/inactive|background/) &&
+				nextState === "active"
+			) {
+				void syncOnForeground();
+			} else if (
+				previousState === "active" &&
+				nextState.match(/inactive|background/)
+			) {
+				// Flush pending writes. Reschedule notifications independently so
+				// they still update from local data even when the network is offline.
+				void syncOnBackground();
+				void rescheduleReviewNotifications().catch(() => {});
+			}
+		});
+
+		return () => subscription.remove();
+	}, [apiToken, syncOnBackground, syncOnForeground]);
+
+	if (isBooting) {
+		return (
+			<View
+				style={{
+					flex: 1,
+					alignItems: "center",
+					justifyContent: "center",
+					backgroundColor: theme.colors.background,
+				}}
+			>
+				<ActivityIndicator color={theme.colors.kanji} />
+			</View>
+		);
+	}
+
+	return (
+		<Stack.Navigator screenOptions={{ headerShown: false }}>
+			{apiToken ? (
+				<>
+					<Stack.Screen name="Dashboard">
+						{(props) => (
+							<DashboardScreen
+								{...props}
+								apiToken={apiToken}
+								lifecycleSyncProgress={lifecycleSyncProgress}
+								lifecycleSyncError={lifecycleSyncError}
+								syncRevision={syncRevision}
+								onAuthError={() => {
+									deleteApiToken().then(() => setApiToken(null));
+								}}
+							/>
+						)}
+					</Stack.Screen>
+					<Stack.Screen name="Settings">
+						{(props) => (
+							<SettingsScreen
+								{...props}
+								onLoggedOut={() => setApiToken(null)}
+							/>
+						)}
+					</Stack.Screen>
+					<Stack.Screen name="Diagnostics">
+						{(props) => (
+							<DiagnosticsScreen
+								{...props}
+								onForceLogout={() => {
+									deleteApiToken().then(() => setApiToken(null));
+								}}
+							/>
+						)}
+					</Stack.Screen>
+					<Stack.Screen
+						name="RadicalImagePreview"
+						component={RadicalImagePreviewScreen}
+					/>
+					<Stack.Screen name="ReviewSession" component={ReviewSessionScreen} />
+					<Stack.Screen name="LessonPicker" component={LessonPickerScreen} />
+					<Stack.Screen name="LessonSession" component={LessonSessionScreen} />
+					<Stack.Screen
+						name="SubjectCatalog"
+						component={SubjectCatalogScreen}
+					/>
+					<Stack.Screen name="SubjectSearch" component={SubjectSearchScreen} />
+					<Stack.Screen name="SubjectBrowse" component={SubjectBrowseScreen} />
+					<Stack.Screen name="SubjectDetail" component={SubjectDetailScreen} />
+				</>
+			) : (
+				<Stack.Screen name="Login">
+					{(props) => <LoginScreen {...props} onAuthenticated={setApiToken} />}
+				</Stack.Screen>
+			)}
+		</Stack.Navigator>
+	);
 }

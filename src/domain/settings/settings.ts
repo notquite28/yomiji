@@ -16,11 +16,18 @@ export type ReviewOrder =
 export type AppearanceMode = 'system' | 'light' | 'dark';
 export type SubjectType = 'radical' | 'kanji' | 'vocabulary';
 
+export type NotificationScheduleWindow = 12 | 24 | 48 | 72;
+
 export type AppSettings = {
   appearance: AppearanceMode;
   notificationsAllReviews: boolean;
   notificationsBadging: boolean;
   notificationSounds: boolean;
+  notificationQuietHoursEnabled: boolean;
+  notificationQuietHoursStart: number;
+  notificationQuietHoursEnd: number;
+  notificationScheduleWindow: NotificationScheduleWindow;
+  notificationMinReviewCount: number;
   prioritizeCurrentLevel: boolean;
   interleaveLessons: boolean;
   lessonOrder: SubjectType[];
@@ -53,6 +60,11 @@ export const defaultSettings: AppSettings = {
   notificationsAllReviews: false,
   notificationsBadging: true,
   notificationSounds: false,
+  notificationQuietHoursEnabled: false,
+  notificationQuietHoursStart: 22,
+  notificationQuietHoursEnd: 7,
+  notificationScheduleWindow: 48,
+  notificationMinReviewCount: 1,
   prioritizeCurrentLevel: false,
   interleaveLessons: false,
   lessonOrder: ['radical', 'kanji', 'vocabulary'],

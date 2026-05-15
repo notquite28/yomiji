@@ -118,6 +118,8 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Audio** — Streamed vocabulary pronunciation playback in reviews, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
 
+**Notifications** — Local notifications for upcoming review availability, badge count management, vacation-mode suppression, and notification-tap navigation to the review session. Notification scheduling uses hourly bucket aggregation over a 48-hour window with a 50-notification cap. Settings for all-review alerts, badging, and sounds (iOS only).
+
 **Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, sanitized export via Share sheet, and full refresh (clear cache and resync).
 
 **Log Out** — Clears token, cache, and pending queues.
@@ -176,7 +178,7 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Offline audio downloads are not implemented.
-- Notifications, badges, and deep links are not implemented.
+- Deep links and universal/app links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Katakana practice is not planned.
 
@@ -184,8 +186,8 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 ```sh
 pnpm install
-pnpm start
-pnpm android
+pnpm start       # expo start --dev-client (requires dev build)
+pnpm android     # expo run:android
 ```
 
 ## Commands
@@ -193,9 +195,9 @@ pnpm android
 ```sh
 pnpm typecheck             # tsc --noEmit
 pnpm test                  # jest --runInBand
-pnpm start                 # expo start
-pnpm android               # expo start --android
-pnpm ios                   # expo start --ios
+pnpm start                 # expo start --dev-client
+pnpm android               # expo run:android
+pnpm ios                   # expo run:ios
 pnpm exec expo install --check
 ```
 
@@ -211,6 +213,7 @@ src/
     audio/          # Vocabulary pronunciation audio selection and streaming playback
     db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts, subjectRepository.ts, assignmentRepository.ts, studyMaterialRepository.ts)
     dashboard/      # Dashboard query aggregation
+    notifications/  # Local notification scheduling, badge management, Expo Go shim
     settings/       # AppSettings, load/save via AsyncStorage
     storage/        # Secure token storage (expo-secure-store)
     study/          # Review/lesson queue queries, result queueing, ordering, filtering

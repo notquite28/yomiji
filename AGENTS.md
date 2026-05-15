@@ -63,6 +63,7 @@ pnpm exec expo install --check      # verify Expo SDK-compatible dependency vers
 
 ## Current Product Gaps
 
-- Audio playback/offline audio, notifications/badges/deep links, custom fonts/font size, and related settings UI are scaffolded or pending.
-- SRS browsing, remaining-item browsing, excluded vocabulary browsing, and several practice modes are not fully wired.
-- Dashboard recommended lessons vs. advanced lesson-pool separation is still pending.
+- Offline audio download/caching, notifications/badges/deep links, custom fonts, and font-size settings are not implemented.
+- Dashboard recommended lessons vs. advanced lesson-pool separation is pending (algorithm research is in `docs/recommended-lessons-research.md`).
+- Typed settings migrations and beta-hardening tests (mocked API integration tests, performance tests, device QA) are pending.
+- Several features were explicitly removed or deferred: remaining-item browsing, recent lesson practice, apprentice lesson limit, skip-kanji-reading, and hardware keyboard shortcuts.

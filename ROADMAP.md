@@ -56,10 +56,10 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 ## M2: Dashboard Parity
 
 - [x] Match the iOS dashboard information hierarchy more closely.
-- [ ] Show WaniKani recommended lessons separately from Advanced lesson pool. *(research complete — see `docs/recommended-lessons-research.md`; algorithm uses proportional type distribution across batches sorted by `lesson_position`, driven by `lessons_batch_size` user preference)*
+- [ ] Show WaniKani recommended lessons separately from Advanced lesson pool. _(research complete — see `docs/recommended-lessons-research.md`; **blocked on additional webapp data collection** — need to verify recommended count cutoff, within-batch ordering, anti-small-batch redistribution, and 3-type radical distribution before implementing)_
 - [x] Add upcoming reviews chart for next 24 hours.
 - [x] Add current-level progress charts for radicals, kanji, and vocabulary.
-- [~] Add recent lessons section. *(removed — dashboard now focuses on available work and recent mistakes practice)*
+- [~] Add recent lessons section. _(removed — dashboard now focuses on available work and recent mistakes practice)_
 - [x] Add recent mistakes section.
 - [x] Add apprentice leeches and all leeches sections.
 - [x] Add burned item practice entry point.
@@ -78,7 +78,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Track meaningWrong/readingWrong/meaningWrongCount/readingWrongCount per item.
 - [x] Mark item finished only when both meaning and reading answered, or one side is unavailable/skipped.
 - [x] Support practice mode flag that skips progress submission.
-- [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, and minimizeReviewPenalty. *(skip-kanji-reading was removed to keep review behavior predictable)*
+- [x] Consume review settings from `settings.ts`: reviewOrder, reviewBatchSize, reviewItemsLimit, groupMeaningReading, meaningFirst, and minimizeReviewPenalty. _(skip-kanji-reading was removed to keep review behavior predictable)_
 - [x] Consume exact-match settings in review answer checking.
 - [x] Load persisted settings into review session instead of hardcoded defaults.
 - [x] Add unit tests for review queue state machine in `src/domain/study/`.
@@ -103,7 +103,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Support simplified combined-card Anki mode.
 - [x] Add quick settings during review.
 - [x] Add inline subject details after answer feedback with task-aware section hiding.
-- [~] Add hardware keyboard shortcuts where practical. *(not planned — tablet-only, low ROI)*
+- [~] Add hardware keyboard shortcuts where practical. _(not planned — tablet-only, low ROI)_
 
 ## M4: Lesson Flow Parity
 
@@ -111,7 +111,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Apply lesson ordering by radical, kanji, and vocabulary.
 - [x] Support current-level priority.
 - [x] Support lesson session size and per-quiz lesson batch size.
-- [~] Support apprentice lesson limit. *(removed — WaniKani web does not block lessons by apprentice count)*
+- [~] Support apprentice lesson limit. _(removed — WaniKani web does not block lessons by apprentice count)_
 - [x] Support kana-only vocabulary visibility setting.
 - [x] Support vocabulary exclusion setting.
 - [x] Add lesson picker grouped by level and subject type.
@@ -124,7 +124,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 - [x] Add subject catalog by level.
 - [x] Add SRS category browsing.
-- [~] Add remaining subjects browsing. *(not planned — individual SRS bucket rows cover the use case without a single heavy query)*
+- [~] Add remaining subjects browsing. _(not planned — individual SRS bucket rows cover the use case without a single heavy query)_
 - [x] Add excluded vocabulary browsing.
 - [x] Add local search by Japanese text, meaning, and kana reading prefixes.
 - [x] Sort exact search matches first, then by level.
@@ -150,29 +150,29 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ## M7: Notifications, Badges, And Links
 
-- [ ] Add notification permission flow.
-- [ ] Schedule local notifications for upcoming review availability.
-- [ ] Set badge count where supported.
-- [ ] Suppress notifications and badges in vacation mode.
+- [x] Add notification permission flow.
+- [x] Schedule local notifications for upcoming review availability.
+- [x] Set badge count where supported.
+- [x] Suppress notifications and badges in vacation mode.
 - [ ] Add custom scheme deep links for reviews, lessons, subject IDs, subject text routes, and wrap-up.
 - [ ] Add universal/app link configuration where feasible.
-- [ ] Add platform support matrix for iOS and Android notification limitations.
+- [x] Add platform support matrix for iOS and Android notification limitations.
 
 ## M8: Practice Modes
 
 - [x] Track recent mistakes for 24 hours.
 - [x] Add recent mistake practice.
-- [~] Add recent lesson practice. *(not planned — limited utility given lesson picker and lesson quiz flow)*
+- [~] Add recent lesson practice. _(not planned — limited utility given lesson picker and lesson quiz flow)_
 - [x] Add apprentice leech practice.
 - [x] Add all leech practice with configurable threshold.
 - [x] Add burned item practice.
 - [x] Ensure practice sessions never submit WaniKani SRS progress.
-- [~] Decide whether katakana practice should ship in the cross-platform app. *(not planned — outside the current app focus)*
+- [~] Decide whether katakana practice should ship in the cross-platform app. _(not planned — outside the current app focus)_
 
 ## M9: Settings Parity
 
 - [x] Add root settings sections for Appearance, Lessons, Reviews, Diagnostics, and Log Out.
-- [ ] Add Notifications settings section.
+- [x] Add Notifications settings section.
 - [x] Add Radicals/Kanji/Vocabulary (subject detail) settings section.
 - [ ] Add typed settings migrations.
 - [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
@@ -214,68 +214,73 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
-- Notifications, badges, and deep links are not implemented.
+- Local notifications and badge counts are implemented for upcoming reviews with vacation suppression. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
-- Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Diagnostics, and Log Out. Font and notification settings UI are not yet exposed.
+- Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Notifications, Diagnostics, and Log Out. Font settings UI is not yet exposed.
 
 ## Feature Reference
 
 ### Lesson Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `lessonBatchSize` | number | 5 | New items introduced before each lesson quiz (1–10). |
-| `lessonSessionSize` | number | 15 | Max lessons pulled from the dashboard Lessons card (1–50). |
-| `lessonOrder` | SubjectType[] | `['radical','kanji','vocabulary']` | Sort order for subject types within each level. |
-| `prioritizeCurrentLevel` | boolean | false | Sort current-level items first (descending level) instead of lower levels first. |
-| `interleaveLessons` | boolean | false | Shuffle items within level groups for a mixed subject-type experience. |
-| `showKanaOnlyVocab` | boolean | true | Include kana-only vocabulary in lessons and lesson picker. |
+| Setting                  | Type          | Default                            | Description                                                                      |
+| ------------------------ | ------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| `lessonBatchSize`        | number        | 5                                  | New items introduced before each lesson quiz (1–10).                             |
+| `lessonSessionSize`      | number        | 15                                 | Max lessons pulled from the dashboard Lessons card (1–50).                       |
+| `lessonOrder`            | SubjectType[] | `['radical','kanji','vocabulary']` | Sort order for subject types within each level.                                  |
+| `prioritizeCurrentLevel` | boolean       | false                              | Sort current-level items first (descending level) instead of lower levels first. |
+| `interleaveLessons`      | boolean       | false                              | Shuffle items within level groups for a mixed subject-type experience.           |
+| `showKanaOnlyVocab`      | boolean       | true                               | Include kana-only vocabulary in lessons and lesson picker.                       |
 
 ### Review Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `reviewOrder` | ReviewOrder | `'random'` | Sort order for review items. Options: random, ascending/descending/alternating SRS, current/lowest level first, newest/oldest available, longest wait. |
-| `reviewBatchSize` | number | 5 | Items in the active review queue (1–15). |
-| `reviewItemsLimit` | number | 15 | Maximum reviews per session (5–500, step 5). |
-| `reviewItemsLimitEnabled` | boolean | false | Whether to cap the review session size. |
-| `groupMeaningReading` | boolean | false | Ask meaning and reading back-to-back for each item. |
-| `meaningFirst` | boolean | true | Ask meaning before reading when grouped. |
-| `showFullAnswer` | boolean | false | Show the full correct answer instead of a partial reveal. |
-| `exactMatch` | boolean | false | Disable fuzzy matching for meaning answers. |
-| `enableCheats` | boolean | true | Allow override correct, try again later, and add synonym. |
-| `minimizeReviewPenalty` | boolean | true | Cap wrong counts to 1 per task type. |
-| `ankiMode` | boolean | false | Self-grading mode with one combined meaning/reading reveal card per item. |
-| `leechThreshold` | number | 1 | Threshold for leech detection in practice modes. |
+| Setting                   | Type        | Default    | Description                                                                                                                                            |
+| ------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reviewOrder`             | ReviewOrder | `'random'` | Sort order for review items. Options: random, ascending/descending/alternating SRS, current/lowest level first, newest/oldest available, longest wait. |
+| `reviewBatchSize`         | number      | 5          | Items in the active review queue (1–15).                                                                                                               |
+| `reviewItemsLimit`        | number      | 15         | Maximum reviews per session (5–500, step 5).                                                                                                           |
+| `reviewItemsLimitEnabled` | boolean     | false      | Whether to cap the review session size.                                                                                                                |
+| `groupMeaningReading`     | boolean     | false      | Ask meaning and reading back-to-back for each item.                                                                                                    |
+| `meaningFirst`            | boolean     | true       | Ask meaning before reading when grouped.                                                                                                               |
+| `showFullAnswer`          | boolean     | false      | Show the full correct answer instead of a partial reveal.                                                                                              |
+| `exactMatch`              | boolean     | false      | Disable fuzzy matching for meaning answers.                                                                                                            |
+| `enableCheats`            | boolean     | true       | Allow override correct, try again later, and add synonym.                                                                                              |
+| `minimizeReviewPenalty`   | boolean     | true       | Cap wrong counts to 1 per task type.                                                                                                                   |
+| `ankiMode`                | boolean     | false      | Self-grading mode with one combined meaning/reading reveal card per item.                                                                              |
+| `leechThreshold`          | number      | 1          | Threshold for leech detection in practice modes.                                                                                                       |
 
 ### Appearance Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
+| Setting      | Type           | Default    | Description                                                       |
+| ------------ | -------------- | ---------- | ----------------------------------------------------------------- |
 | `appearance` | AppearanceMode | `'system'` | Theme: system, light, or dark. Applied immediately and persisted. |
 
 ### Audio Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `playAudioAutomatically` | boolean | false | Auto-play vocabulary audio during reviews. |
-| `interruptBackgroundAudio` | boolean | false | Interrupt background audio when playing vocabulary. |
-| `preferredVoiceActorId` | number \| null | null | Preferred voice actor for streamed vocabulary audio; null uses automatic selection. |
+| Setting                    | Type           | Default | Description                                                                         |
+| -------------------------- | -------------- | ------- | ----------------------------------------------------------------------------------- |
+| `playAudioAutomatically`   | boolean        | false   | Auto-play vocabulary audio during reviews.                                          |
+| `interruptBackgroundAudio` | boolean        | false   | Interrupt background audio when playing vocabulary.                                 |
+| `preferredVoiceActorId`    | number \| null | null    | Preferred voice actor for streamed vocabulary audio; null uses automatic selection. |
 
 ### Subject Detail Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `useKatakanaForOnyomi` | boolean | false | Display onyomi readings in katakana on subject details and review answer details. |
-| `showAllReadings` | boolean | false | Show accepted alternate readings instead of only primary readings. |
+| Setting                | Type    | Default | Description                                                                       |
+| ---------------------- | ------- | ------- | --------------------------------------------------------------------------------- |
+| `useKatakanaForOnyomi` | boolean | false   | Display onyomi readings in katakana on subject details and review answer details. |
+| `showAllReadings`      | boolean | false   | Show accepted alternate readings instead of only primary readings.                |
+
+### Notification Settings
+
+| Setting                   | Type    | Default | Description                                                                  |
+| ------------------------- | ------- | ------- | ---------------------------------------------------------------------------- |
+| `notificationsAllReviews` | boolean | false   | Show alert notifications for upcoming review availability.                   |
+| `notificationsBadging`    | boolean | true    | Show badge count for available reviews.                                      |
+| `notificationSounds`      | boolean | false   | Play sound for review notifications (iOS only; Android uses channel sound). |
 
 ### Other Settings (Defined, Not Yet Wired)
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
-| `notificationsAllReviews` | boolean | false | Notify for all reviews (not just upcoming). |
-| `notificationsBadging` | boolean | true | Show badge count for available reviews. |
-| `notificationSounds` | boolean | false | Play sound for review notifications. |
-| `offlineAudio` | boolean | false | Download vocabulary audio for offline playback. |
-| `offlineAudioCellular` | boolean | false | Allow offline audio downloads over cellular. |
+| Setting                | Type    | Default | Description                                     |
+| ---------------------- | ------- | ------- | ----------------------------------------------- |
+| `offlineAudio`         | boolean | false   | Download vocabulary audio for offline playback. |
+| `offlineAudioCellular` | boolean | false   | Allow offline audio downloads over cellular.    |

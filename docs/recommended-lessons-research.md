@@ -15,16 +15,17 @@ WaniKani's web dashboard determines "recommended lessons" using two pieces of da
 Available lessons are separated by type (radical, kanji, vocabulary), sorted by `lesson_position` ascending within each type queue, then distributed proportionally across batches of `lessons_batch_size`.
 
 **Per-batch type allocation:**
+
 - `kanji_slots = ceil(batch_size × kanji_count / total_count)`
 - Remaining slots filled with vocabulary (and radicals if present)
 
 **Verified example (batch_size=5, 4 kanji, 19 vocab, total=23):**
 
-| Batch | Kanji (pos) | Vocab (pos) | Items |
-|-------|-------------|-------------|-------|
-| 1 | 農 (51) | 始める (84), 飲む (118), 投げ付ける (175), 化かす (176) | 1K + 4V |
-| 2 | 親 (62) | 話 (177), 出会う (178), 私大 (183), 千葉 (188) | 1K + 4V |
-| 3 | 最 (66) | 思わず (189), 立ち飲み (190), 部首 (193), 葉 (194) | 1K + 4V |
+| Batch | Kanji (pos) | Vocab (pos)                                             | Items   |
+| ----- | ----------- | ------------------------------------------------------- | ------- |
+| 1     | 農 (51)     | 始める (84), 飲む (118), 投げ付ける (175), 化かす (176) | 1K + 4V |
+| 2     | 親 (62)     | 話 (177), 出会う (178), 私大 (183), 千葉 (188)          | 1K + 4V |
+| 3     | 最 (66)     | 思わず (189), 立ち飲み (190), 部首 (193), 葉 (194)      | 1K + 4V |
 
 All three batches verified against the live WaniKani webapp.
 
@@ -45,6 +46,7 @@ The webapp shows a subset of available lessons as "Today's Lessons" (recommended
 When all three types are present, the proportional distribution should extend naturally:
 
 **Example (5 radicals, 5 kanji, 30 vocab, batch_size=5):**
+
 - `radical_slots = ceil(5 × 5/40) = 1`
 - `kanji_slots = ceil(remaining × 5/remaining_total)` ≈ 1
 - `vocab_slots = 5 - 1 - 1 = 3`
@@ -74,15 +76,48 @@ curl -sS "https://api.wanikani.com/v2/subjects?ids=<IDS_FROM_STEP_2>" \
   node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => { const j = JSON.parse(s); const sorted = j.data.map(s => ({id: s.id, chars: s.data.characters, type: s.object, level: s.data.level, pos: s.data.lesson_position})).sort((a,b) => a.pos - b.pos); console.log(JSON.stringify(sorted, null, 2)); })'
 ```
 
+## Verified Data (May 2026)
+
+### Account B (level ~5? — 13 available, batch_size=5, max_daily=15)
+
+**Available:** 4 kanji + 9 vocabulary = 13 total
+
+**Proportional batching (batch_size=5):**
+
+- `kanji_slots = ceil(5 × 4/13) = ceil(1.54) = 2` per batch
+- `vocab_slots = 5 - 2 = 3` per batch
+- Naive split: [2K+3V] [2K+3V] [0K+3V] = [5, 5, 3]
+- Anti-small-batch: final 3 items redistributed → **[7, 6]** or **[6, 7]**
+
+**Result:** 7 recommended (first batch), 6 advanced-only. Matches webapp output.
+
+**Recommended items (in presented order):** v, k, v, v, k, v, k = 4 vocab + 3 kanji ✅ matches proportional allocation.
+
+**Settings observed:**
+
+- `lessons_batch_size = 5`
+- `max_daily_lessons = 15` (not a limiting factor here since 13 < 15)
+
+**Key insight:** The daily cap does not inflate recommended count. With max_daily=15 and 13 available, the count was 7, not 13. Recommended = **first batch after anti-small-batch redistribution**, not `min(available, max_daily)`.
+
+### Revisiting Account A (level 10, 23 available, batch_size=5)
+
+The earlier verified case showed 15/23 recommended. With daily cap unknown for that account, possible explanations:
+
+- If `max_daily_lessons = 15`, then daily cap is the limiter: `min(first_batch_size, 15)` — but that contradicts Account B where 13 available didn't become 15.
+- Or batch distribution of 23 items with anti-small-batch produces a first batch of 15 items (needs verification).
+
 ## Open Questions
 
-1. **Total recommended cutoff** — Why 15 out of 23? Could be `3 × batch_size`, could be based on current-level items, could be a separate setting. Not confirmed.
+1. **Total recommended cutoff** — Why 15 out of 23 in Account A? Could be `3 × batch_size = 15` if the anti-small-batch rule doesn't kick in for that distribution. Need batch constituency details.
 
-2. **Within-batch ordering** — Items within a batch don't appear in pure `lesson_position` order. Batch 2 was presented as: 話(177), 出会う(178), 親(62), 私大(183), 千葉(188). The kanji 親(62) was in the middle, not sorted by position. The within-batch sort algorithm is unknown.
+2. **Within-batch ordering** — Items within a batch don't appear in pure `lesson_position` order. Batch 2 was presented as: 話(177), 出会う(178), 親(62), 私大(183), 千葉(188). The kanji 親(62) was in the middle, not sorted by position. The within-batch sort algorithm is unknown. Account B's order `v,k,v,v,k,v,k` also suggests interleaved lesson_position sort rather than type-blocked.
 
 3. **3-type radical distribution** — Only the 2-type (kanji + vocab) case has been verified. The radical interleaving pattern is extrapolated.
 
 4. **Recommended count decay** — Does the recommended count change as the user completes batches within a session? Does it track "presented but not completed" items client-side?
+
+5. **Redistribution algorithm** — Account B's 13 items with batch_size=5 redistributed to [7, 6]. How does the algorithm decide between [7,6], [6,7], [5,4,4], [4,5,4]? Minimum batch size threshold is unknown (maybe ≥ batch_size - 2 = 3?).
 
 ## Implementation Plan
 
@@ -106,11 +141,11 @@ curl -sS "https://api.wanikani.com/v2/subjects?ids=<IDS_FROM_STEP_2>" \
 
 ### Files to Modify
 
-| File | Change |
-|------|--------|
-| `src/domain/api/types.ts` | Optionally type `lessons_batch_size` on preferences |
-| `src/domain/db/database.ts` | Extract and store `lessons_batch_size` during user sync |
-| `src/domain/study/studyRepository.ts` | New proportional batching function, sort by `lesson_position` |
-| `src/domain/dashboard/dashboardRepository.ts` | Add recommended lesson count to summary |
-| `src/screens/DashboardScreen.tsx` | Wire recommended count to Lessons card |
-| `src/domain/db/schema.ts` | Optional: add `lesson_position` column to subjects table |
+| File                                          | Change                                                        |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `src/domain/api/types.ts`                     | Optionally type `lessons_batch_size` on preferences           |
+| `src/domain/db/database.ts`                   | Extract and store `lessons_batch_size` during user sync       |
+| `src/domain/study/studyRepository.ts`         | New proportional batching function, sort by `lesson_position` |
+| `src/domain/dashboard/dashboardRepository.ts` | Add recommended lesson count to summary                       |
+| `src/screens/DashboardScreen.tsx`             | Wire recommended count to Lessons card                        |
+| `src/domain/db/schema.ts`                     | Optional: add `lesson_position` column to subjects table      |
