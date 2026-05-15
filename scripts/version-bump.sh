@@ -40,7 +40,7 @@ node -e "
 
 git add "$PACKAGE" "$APPJSON"
 git commit -m "Release v$NEW"
-git tag "v$NEW"
+git tag -a "v$NEW" -m "Release v$NEW"
 
 echo ""
 echo "Done. Version bumped to $NEW."
