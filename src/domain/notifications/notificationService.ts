@@ -5,10 +5,8 @@ import { openAppDatabase } from "../db/database";
 import { loadSettings } from "../settings/settings";
 import * as ExpoNotifications from "./expoNotifications";
 
-import { computeUpcomingReviewSchedule } from "./computeUpcomingReviews";
-import { isInQuietHours } from "./quietHours";
 import type { NotificationConfig } from "./types";
-import { MAX_SCHEDULED_NOTIFICATIONS, NOTIFICATION_ID_PREFIX } from "./types";
+import { NOTIFICATION_ID_REVIEW, NOTIFICATION_ID_DAILY } from "./types";
 
 // ---------------------------------------------------------------------------
 // Android notification channel
@@ -73,14 +71,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 async function readNotificationConfig(): Promise<NotificationConfig> {
 	const settings = await loadSettings();
 	return {
-		allReviews: settings.notificationsAllReviews,
+		enabled: settings.notificationsEnabled,
 		badging: settings.notificationsBadging,
 		sounds: settings.notificationSounds,
-		quietHoursEnabled: settings.notificationQuietHoursEnabled,
-		quietHoursStart: settings.notificationQuietHoursStart,
-		quietHoursEnd: settings.notificationQuietHoursEnd,
-		scheduleWindow: settings.notificationScheduleWindow,
-		minReviewCount: settings.notificationMinReviewCount,
+		threshold: settings.notificationThreshold,
+		dailyTime: settings.notificationDailyTime,
 	};
 }
 
@@ -113,28 +108,19 @@ function osAllowsCapability(
 // ---------------------------------------------------------------------------
 
 /**
- * Schedule local review notifications based on current assignment data.
+ * Schedule review notifications based on threshold and/or daily reminder.
  *
- * Follows the tsurukame pattern:
- * 1. Cancel all previously scheduled review notifications.
- * 2. Set badge to current available review count immediately.
- * 3. For each upcoming hour with new reviews, schedule a notification with
- *    cumulative badge count.
- *
- * Respects:
- * - Vacation mode (clears everything)
- * - Notification settings (allReviews, badging, sounds)
- * - Quiet hours (suppresses notifications during configured hours)
- * - Schedule window (how far ahead to schedule)
- * - Minimum review count threshold
- * - iOS 64-notification cap (we use MAX_SCHEDULED_NOTIFICATIONS = 50)
- * - OS-level permission check
+ * Two independent notifications at most:
+ * 1. **Threshold** — one-shot DATE trigger, fires when the Nth future review
+ *    becomes available. Re-scheduled each time the app foregrounds.
+ * 2. **Daily reminder** — native DAILY trigger, fires every day at the
+ *    configured hour without requiring app opens.
  */
 export async function rescheduleReviewNotifications(): Promise<void> {
 	const config = await readNotificationConfig();
 
 	// If no notification feature is enabled, clear and bail.
-	if (!config.allReviews && !config.badging) {
+	if (!config.enabled && !config.badging) {
 		await clearReviewNotifications();
 		return;
 	}
@@ -151,90 +137,131 @@ export async function rescheduleReviewNotifications(): Promise<void> {
 	}
 
 	const db = await openAppDatabase();
-	const schedule = await computeUpcomingReviewSchedule(
-		db,
-		config.scheduleWindow,
-	);
 
-	// Vacation mode: clear badge and notifications.
-	if (schedule.isVacation) {
+	// Check vacation mode.
+	const user = await db.getFirstAsync<{ vacation_started_at: string | null }>(
+		"SELECT vacation_started_at FROM user WHERE id = 1",
+	);
+	if (user?.vacation_started_at != null) {
 		await clearReviewNotifications();
 		return;
 	}
 
-	// Cancel all previously scheduled review notifications.
+	// Cancel all previously scheduled review notifications (including legacy).
 	await cancelScheduledReviewNotifications();
 
-	// Set badge immediately to current available reviews.
+	// Use a single timestamp for all queries to avoid race between two clock reads.
+	const now = new Date();
+
+	// Current available reviews.
+	const availableRow = await db.getFirstAsync<{ value: number }>(
+		`SELECT COUNT(*) AS value
+     FROM assignments
+     WHERE srs_stage BETWEEN 1 AND 8
+       AND available_at IS NOT NULL
+       AND available_at <= ?`,
+		now.toISOString(),
+	);
+	const availableReviewCount = availableRow?.value ?? 0;
+
+	// Set badge immediately (not on the notification content — avoids stale counts).
 	if (config.badging) {
-		await ExpoNotifications.setBadgeCountAsync(schedule.availableReviewCount);
+		await ExpoNotifications.setBadgeCountAsync(availableReviewCount);
+	}
+
+	if (!config.enabled) {
+		// Badge-only mode, no notifications to schedule.
+		return;
 	}
 
 	// Get system notification settings for capability checks.
 	const systemSettings = await ExpoNotifications.getPermissionsAsync();
 
-	// Schedule future notifications.
-	let cumulative = schedule.availableReviewCount;
-	let scheduled = 0;
-	const now = new Date();
 
-	const triggerType = ExpoNotifications.SchedulableTriggerInputTypes?.DATE;
-	if (!triggerType) {
-		return;
+	// --- Threshold notification (one-shot DATE trigger) ---
+	if (availableReviewCount < config.threshold) {
+		const remaining = config.threshold - availableReviewCount;
+		const offset = remaining - 1; // 0-indexed OFFSET
+		const row = await db.getFirstAsync<{ available_at: string }>(
+			`SELECT available_at
+       FROM assignments
+       WHERE srs_stage BETWEEN 1 AND 8
+         AND available_at IS NOT NULL
+         AND available_at > ?
+       ORDER BY available_at ASC
+       LIMIT 1 OFFSET ?`,
+			now.toISOString(),
+			offset,
+		);
+		if (row?.available_at) {
+			const triggerDate = new Date(row.available_at);
+			if (triggerDate > now) {
+				const triggerType =
+					ExpoNotifications.SchedulableTriggerInputTypes?.DATE;
+				if (triggerType) {
+					const content: Notifications.NotificationContentInput = {
+						title: "Reviews Available",
+						data: { screen: "reviews" },
+					};
+
+					if (osAllowsCapability(systemSettings, "alert")) {
+						content.body = `${config.threshold} reviews are waiting`;
+					}
+
+					if (
+						Platform.OS === "ios" &&
+						config.sounds &&
+						osAllowsCapability(systemSettings, "sound")
+					) {
+						content.sound = "default";
+					}
+
+					await ExpoNotifications.scheduleNotificationAsync({
+						identifier: NOTIFICATION_ID_REVIEW,
+						content,
+						trigger: {
+							type: triggerType,
+							date: triggerDate,
+						},
+					});
+				}
+			}
+		}
 	}
 
-	for (const hourSlot of schedule.upcomingHours) {
-		if (scheduled >= MAX_SCHEDULED_NOTIFICATIONS) break;
+	// --- Daily reminder (native recurring DAILY trigger) ---
+	if (config.dailyTime != null) {
+		const triggerType =
+			ExpoNotifications.SchedulableTriggerInputTypes?.DAILY;
+		if (triggerType) {
+			const content: Notifications.NotificationContentInput = {
+				title: "Daily Reminder",
+				data: { screen: "reviews" },
+			};
 
-		cumulative += hourSlot.newReviews;
+			if (osAllowsCapability(systemSettings, "alert")) {
+				content.body = "Check your reviews";
+			}
 
-		const triggerDate = parseHourKeyToDate(hourSlot.hour);
-		if (triggerDate <= now) continue;
+			if (
+				Platform.OS === "ios" &&
+				config.sounds &&
+				osAllowsCapability(systemSettings, "sound")
+			) {
+				content.sound = "default";
+			}
 
-		if (config.quietHoursEnabled && isInQuietHours(triggerDate, config)) {
-			continue;
+			await ExpoNotifications.scheduleNotificationAsync({
+				identifier: NOTIFICATION_ID_DAILY,
+				content,
+				trigger: {
+					type: triggerType,
+					hour: config.dailyTime,
+					minute: 0,
+				},
+			});
 		}
-
-		if (cumulative < config.minReviewCount) {
-			continue;
-		}
-
-		const content: Notifications.NotificationContentInput = {
-			title: "Reviews Available",
-			data: { screen: "reviews" },
-		};
-
-		// Set alert body only if user wants all-review notifications AND system allows alerts.
-		if (config.allReviews && osAllowsCapability(systemSettings, "alert")) {
-			content.body = `${cumulative} review${cumulative === 1 ? "" : "s"} available (${hourSlot.newReviews} new)`;
-		}
-
-		// Set badge on the notification (iOS updates badge when notification fires).
-		if (config.badging && osAllowsCapability(systemSettings, "badge")) {
-			content.badge = cumulative;
-		}
-
-		// Set sound if enabled (iOS only; Android uses channel sound).
-		if (
-			Platform.OS === "ios" &&
-			config.sounds &&
-			osAllowsCapability(systemSettings, "sound")
-		) {
-			content.sound = "default";
-		}
-
-		await ExpoNotifications.scheduleNotificationAsync({
-			identifier: `${NOTIFICATION_ID_PREFIX}${hourSlot.hour}`,
-			content,
-			trigger: {
-				type: triggerType,
-				date: triggerDate,
-			},
-		});
-
-		scheduled++;
 	}
-
 }
 
 /**
@@ -246,30 +273,24 @@ export async function clearReviewNotifications(): Promise<void> {
 }
 
 /**
- * Cancel only our review-hour-* notifications, leaving any other scheduled
- * notifications intact.
+ * Cancel our review notifications plus any legacy hourly notifications,
+ * leaving other scheduled notifications intact.
  */
 async function cancelScheduledReviewNotifications(): Promise<void> {
-	const scheduled = await ExpoNotifications.getAllScheduledNotificationsAsync();
-	const toCancel = scheduled.filter((notif) =>
-		notif.identifier.startsWith(NOTIFICATION_ID_PREFIX),
-	);
-	if (toCancel.length === 0) return;
+	// Cancel known notification IDs.
+	const ids = [NOTIFICATION_ID_REVIEW, NOTIFICATION_ID_DAILY];
 	await Promise.all(
-		toCancel.map((notif) =>
-			ExpoNotifications.cancelScheduledNotificationAsync(notif.identifier),
+		ids.map((id) => ExpoNotifications.cancelScheduledNotificationAsync(id)),
+	);
+
+	// Cancel legacy hourly notifications from the old scheduling model.
+	const scheduled = await ExpoNotifications.getAllScheduledNotificationsAsync();
+	const legacyIds = scheduled
+		.filter((n) => n.identifier.startsWith("review-hour-"))
+		.map((n) => n.identifier);
+	await Promise.all(
+		legacyIds.map((id) =>
+			ExpoNotifications.cancelScheduledNotificationAsync(id),
 		),
 	);
-}
-
-/**
- * Parse an hour key like "2026-05-13T15:00:00" into a Date.
- * SQLite's strftime with 'localtime' produces local-time strings without timezone offsets,
- * so we interpret these as local time.
- */
-function parseHourKeyToDate(hourKey: string): Date {
-	const [datePart, timePart] = hourKey.split("T");
-	const [year, month, day] = datePart!.split("-").map(Number);
-	const [hour, minute, second] = timePart!.split(":").map(Number);
-	return new Date(year!, month! - 1, day!, hour!, minute!, second!);
 }

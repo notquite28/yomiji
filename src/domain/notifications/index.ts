@@ -1,4 +1,3 @@
-export { computeUpcomingReviewSchedule } from "./computeUpcomingReviews";
 export {
 	clearReviewNotifications,
 	ensureReviewNotificationChannel,
@@ -6,10 +5,5 @@ export {
 	requestNotificationPermissions,
 	rescheduleReviewNotifications,
 } from "./notificationService";
-export { isInQuietHours } from "./quietHours";
-export type {
-	UpcomingReviewHour,
-	UpcomingReviewSchedule,
-	NotificationConfig,
-} from "./types";
-export { MAX_SCHEDULED_NOTIFICATIONS, NOTIFICATION_ID_PREFIX } from "./types";
+export type { NotificationConfig } from "./types";
+export { NOTIFICATION_ID_REVIEW, NOTIFICATION_ID_DAILY } from "./types";

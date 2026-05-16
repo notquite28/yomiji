@@ -107,6 +107,44 @@ The earlier verified case showed 15/23 recommended. With daily cap unknown for t
 - If `max_daily_lessons = 15`, then daily cap is the limiter: `min(first_batch_size, 15)` — but that contradicts Account B where 13 available didn't become 15.
 - Or batch distribution of 23 items with anti-small-batch produces a first batch of 15 items (needs verification).
 
+## Verified Data — Account C (level 10, screenshot + lesson sessions, 2026-05-15)
+
+**Screenshot source:** WaniKani webapp lesson picker (Advanced pool) for Level 10.
+
+**Available items (Advanced pool):** 9 kanji + 30 vocabulary = 39 total shown
+
+**Kanji (9):** 貢, 速, 進, 集, 鉄, 読, 頭, 顔, 病
+
+**Vocabulary (30):** 起きる, 配る, お酒, 日本酒, 習う, 転がる, 自転車, 運転する, 転送, 回転, 落ちる, 運ぶ, 運がいい, 開ける, 公開, 開業, 開発, 工業, 歌, 歌手, 解決, 日本語, フランス語, スペイン語, 主語, 心配, 開始, 言語, 作業, 語る
+
+**Observed lesson session order (batch_size = 5):**
+
+The web app recommended **15 lessons** (3 batches). The user completed all 8 batches by continuing through the full pool. Items below are in the exact order presented during lesson quizzes.
+
+| Batch | Items (in presented order) | Composition |
+| ----- | -------------------------- | ----------- |
+| 1 | 起きる, 頁, 配る, お酒, 速 | 2K + 3V |
+| 2 | 日本酒, 習う, 進, 転がる, 自転車 | 1K + 4V |
+| 3 | 運転する, 転送, 集, 回転, 落ちる | 1K + 4V |
+| 4 | 運ぶ, 運がいい, 開ける, 鉄, 公開 | 1K + 4V |
+| 5 | 開業, 開発, 工業, 読, 歌 | 1K + 4V |
+| 6 | 歌手, 解決, 頭, 日本語, フランス語 | 1K + 4V |
+| 7 | スペイン語, 主語, 顔, 心配, 開始 | 1K + 4V |
+| 8 | 言語, 作業, 貢, 語る, 病 | 2K + 3V |
+
+**Distribution pattern:**
+- Total items in full queue: 40 (10 kanji incl. 頁 + 30 vocabulary). 頁 was not visible in the Level-10 picker screenshot — likely a leftover from a prior level.
+- Kanji distribution across 8 batches: **2, 1, 1, 1, 1, 1, 1, 2** = 10 kanji total.
+- Within each batch, kanji and vocab are **interleaved** (not grouped by type).
+- Proportional `ceil(5 × 10/40) = 2` kanji per batch holds on average, but actual distribution front-loads and back-loads the extra kanji.
+
+**Pending verification:**
+- `lesson_position` values for each subject (need API call)
+- Confirm `lessons_batch_size = 5` for this account
+- Whether the sort key is strictly `lesson_position` or includes dependencies (e.g., vocab that uses a kanji appears after that kanji's lesson)
+
+---
+
 ## Open Questions
 
 1. **Total recommended cutoff** — Why 15 out of 23 in Account A? Could be `3 × batch_size = 15` if the anti-small-batch rule doesn't kick in for that distribution. Need batch constituency details.

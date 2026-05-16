@@ -1,90 +1,369 @@
-import { computeUpcomingReviewSchedule } from "./computeUpcomingReviews";
-import { isInQuietHours } from "./quietHours";
-import { NOTIFICATION_ID_PREFIX, MAX_SCHEDULED_NOTIFICATIONS } from "./types";
+/**
+ * Integration tests for rescheduleReviewNotifications.
+ *
+ * Mocks: expoNotifications, loadSettings, Platform.
+ * Uses real in-memory SQLite via createTestDatabase.
+ */
+import { createTestDatabase } from "../../test/testDb";
+import type { AppDatabase } from "../db/database";
 
-describe("notification types", () => {
-	test("NOTIFICATION_ID_PREFIX is stable", () => {
-		expect(NOTIFICATION_ID_PREFIX).toBe("review-hour-");
-	});
+// ── Mocks ────────────────────────────────────────────────────────────────────
 
-	test("MAX_SCHEDULED_NOTIFICATIONS is under iOS 64-notification cap", () => {
-		expect(MAX_SCHEDULED_NOTIFICATIONS).toBeLessThanOrEqual(63);
-		expect(MAX_SCHEDULED_NOTIFICATIONS).toBe(50);
-	});
+// Track all expo-notifications calls for assertions.
+const scheduled: Array<{
+	identifier: string;
+	content: Record<string, unknown>;
+	trigger: Record<string, unknown>;
+}> = [];
+let badgeCount = 0;
+const cancelledIds: string[] = [];
+let permissionStatus: "granted" | "denied" | "undetermined" = "granted";
+
+// expo-constants is imported by expoNotifications.ts; mock it before anything
+// loads the real module.
+jest.mock("expo-constants", () => ({
+	default: { executionEnvironment: "developmentClient" },
+	__esModule: true,
+}));
+
+// Mock expo-notifications so the lazy wrapper doesn't try to require it.
+jest.mock("expo-notifications", () => ({
+	SchedulableTriggerInputTypes: {
+		DATE: "date",
+		DAILY: "daily",
+	},
+	AndroidImportance: { HIGH: 4 },
+	IosAuthorizationStatus: {
+		PROVISIONAL: "provisional",
+		EPHEMERAL: "ephemeral",
+		NOT_DETERMINED: "notDetermined",
+	},
+	setNotificationHandler: jest.fn(),
+	getPermissionsAsync: jest.fn(() =>
+		Promise.resolve({
+			granted: permissionStatus === "granted",
+			canAskAgain: true,
+			expires: "never",
+			ios: {
+				status: permissionStatus === "granted" ? "authorized" : "denied",
+				allowsAlert: true,
+				allowsBadge: true,
+				allowsSound: true,
+			},
+		}),
+	),
+	requestPermissionsAsync: jest.fn(() =>
+		Promise.resolve({ granted: true, canAskAgain: false, expires: "never" }),
+	),
+	scheduleNotificationAsync: jest.fn((req) => {
+		scheduled.push({
+			identifier: req.identifier ?? "auto",
+			content: req.content ?? {},
+			trigger: req.trigger as Record<string, unknown>,
+		});
+		return Promise.resolve(req.identifier ?? "auto");
+	}),
+	cancelScheduledNotificationAsync: jest.fn((id) => {
+		cancelledIds.push(id);
+		return Promise.resolve();
+	}),
+	cancelAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve()),
+	getAllScheduledNotificationsAsync: jest.fn(() => {
+		// Return legacy notifications for legacy-cancellation tests.
+		return Promise.resolve([
+			{ identifier: "review-hour-8", content: {}, trigger: {} },
+			{ identifier: "review-hour-14", content: {}, trigger: {} },
+			{ identifier: "some-other", content: {}, trigger: {} },
+		]);
+	}),
+	setBadgeCountAsync: jest.fn((c) => {
+		badgeCount = c;
+		return Promise.resolve(true);
+	}),
+	getBadgeCountAsync: jest.fn(() => Promise.resolve(badgeCount)),
+	setNotificationChannelAsync: jest.fn(() => Promise.resolve(null)),
+}));
+
+// Mock @react-native-async-storage/async-storage for loadSettings.
+jest.mock("@react-native-async-storage/async-storage", () => ({
+	getItem: jest.fn(() => Promise.resolve(null)),
+	setItem: jest.fn(() => Promise.resolve()),
+	removeItem: jest.fn(() => Promise.resolve()),
+}));
+
+// Mock Platform.OS for all tests (default to ios for capability checks).
+jest.mock("react-native", () => ({
+	Platform: { OS: "ios" },
+}));
+
+// Mock openAppDatabase so notificationService uses our test DB.
+// Keep all other real exports (applyMigrations, etc.) intact.
+let testDb: AppDatabase;
+jest.mock("../db/database", () => {
+	const actual = jest.requireActual("../db/database");
+	return {
+		...actual,
+		openAppDatabase: jest.fn(() => Promise.resolve(testDb)),
+	};
 });
 
-describe("computeUpcomingReviewSchedule hour-key format", () => {
-	test("hour keys follow the expected format", async () => {
-		const mockDb = {
-			getFirstAsync: jest.fn().mockResolvedValue({ vacation_started_at: null }),
-			getAllAsync: jest.fn().mockResolvedValue([
-				{ bucket: "2026-05-14T11:00:00", value: 5 },
-			]),
-		} as unknown as Parameters<typeof computeUpcomingReviewSchedule>[0];
+// Mock loadSettings with configurable notification settings.
+let mockSettings: Record<string, unknown>;
+jest.mock("../settings/settings", () => ({
+	loadSettings: jest.fn(() => Promise.resolve(mockSettings)),
+}));
 
-		(mockDb.getFirstAsync as jest.Mock).mockImplementation((sql: string) => {
-			if (sql.includes("vacation_started_at")) {
-				return Promise.resolve({ vacation_started_at: null });
-			}
-			return Promise.resolve({ value: 0 });
-		});
+// Import AFTER mocks are set up.
+import { rescheduleReviewNotifications, clearReviewNotifications } from "./notificationService";
 
-		const result = await computeUpcomingReviewSchedule(
-			mockDb,
-			48,
-			new Date("2026-05-14T10:30:00"),
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function defaultNotificationSettings() {
+	return {
+		notificationsEnabled: true,
+		notificationsBadging: true,
+		notificationSounds: false,
+		notificationThreshold: 5,
+		notificationDailyTime: null as number | null,
+	};
+}
+
+function resetMockState() {
+	scheduled.length = 0;
+	cancelledIds.length = 0;
+	badgeCount = 0;
+	permissionStatus = "granted";
+	mockSettings = defaultNotificationSettings();
+}
+
+async function insertAvailableAssignment(
+	db: AppDatabase,
+	subjectId: number,
+	availableAt: string,
+) {
+	// Insert a minimal subject row to satisfy FK.
+	await db.runAsync(
+		`INSERT OR IGNORE INTO subjects (id, japanese, level, subject_type, payload, updated_at)
+     VALUES (?, 'test', 1, 'vocabulary', '{}', '2026-01-01T00:00:00Z')`,
+		subjectId,
+	);
+	await db.runAsync(
+		`INSERT INTO assignments (id, subject_id, level, srs_stage, available_at, subject_type, payload)
+     VALUES (?, ?, 1, 4, ?, 'vocabulary', '{}')`,
+		subjectId,
+		subjectId,
+		availableAt,
+	);
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+describe("rescheduleReviewNotifications", () => {
+	let cleanup: () => Promise<void>;
+
+	beforeEach(async () => {
+		resetMockState();
+		const result = await createTestDatabase();
+		testDb = result.db;
+		cleanup = result.cleanup;
+		// Insert a user row (not on vacation).
+		await insertUser({ vacation_started_at: null });
+	});
+
+	afterEach(async () => {
+		await cleanup();
+	});
+
+	test("vacation mode clears badge and notifications", async () => {
+		await insertUser({ vacation_started_at: "2026-01-01T00:00:00Z" });
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+		};
+
+		await rescheduleReviewNotifications();
+
+		expect(scheduled).toHaveLength(0);
+		expect(badgeCount).toBe(0);
+	});
+
+	test("badge-only mode sets badge without scheduling notifications", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: false,
+			notificationsBadging: true,
+		};
+
+		// Insert 3 available reviews.
+		for (let i = 1; i <= 3; i++) {
+			await insertAvailableAssignment(testDb, i, "2026-01-01T00:00:00Z");
+		}
+
+		await rescheduleReviewNotifications();
+
+		expect(badgeCount).toBe(3);
+		expect(scheduled).toHaveLength(0);
+	});
+
+	test("threshold not yet met — schedules review-available for the Nth future review", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: false,
+			notificationThreshold: 3,
+			notificationDailyTime: null,
+		};
+
+		// 0 currently available, 3rd future at 2026-06-01.
+		await insertAvailableAssignment(testDb, 1, "2026-05-01T00:00:00Z");
+		await insertAvailableAssignment(testDb, 2, "2026-05-15T00:00:00Z");
+		await insertAvailableAssignment(testDb, 3, "2026-06-01T00:00:00Z");
+
+		await rescheduleReviewNotifications();
+
+		// Should have scheduled exactly 1 notification.
+		const thresholdNots = scheduled.filter(
+			(n) => n.identifier === "review-available",
 		);
+		expect(thresholdNots).toHaveLength(1);
+		expect(thresholdNots[0]!.trigger.type).toBe("date"); // DATE trigger
+		// Body should mention the threshold.
+		expect(thresholdNots[0]!.content.body).toBe("3 reviews are waiting");
+	});
 
-		for (const hour of result.upcomingHours) {
-			expect(hour.hour).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00$/);
+	test("threshold already met — no review-available scheduled", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: false,
+			notificationThreshold: 3,
+			notificationDailyTime: null,
+		};
+
+		// Insert 5 already-available reviews (>= threshold of 3).
+		for (let i = 1; i <= 5; i++) {
+			await insertAvailableAssignment(testDb, i, "2026-01-01T00:00:00Z");
+		}
+
+		await rescheduleReviewNotifications();
+
+		const thresholdNots = scheduled.filter(
+			(n) => n.identifier === "review-available",
+		);
+		expect(thresholdNots).toHaveLength(0);
+	});
+
+	test("daily time configured — uses DAILY trigger type", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: false,
+			notificationThreshold: 50,
+			notificationDailyTime: 20,
+		};
+
+		await rescheduleReviewNotifications();
+
+		const dailyNots = scheduled.filter(
+			(n) => n.identifier === "review-daily",
+		);
+		expect(dailyNots).toHaveLength(1);
+		expect(dailyNots[0]!.trigger.type).toBe("daily"); // DAILY trigger
+		expect(dailyNots[0]!.trigger.hour).toBe(20);
+		expect(dailyNots[0]!.trigger.minute).toBe(0);
+	});
+
+	test("both triggers — both scheduled independently", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: false,
+			notificationThreshold: 2,
+			notificationDailyTime: 8,
+		};
+
+		// 1 available now, threshold=2, so need 1 more future.
+		await insertAvailableAssignment(testDb, 1, "2026-01-01T00:00:00Z");
+		await insertAvailableAssignment(testDb, 2, "2026-12-01T00:00:00Z");
+
+		await rescheduleReviewNotifications();
+
+		const ids = scheduled.map((n) => n.identifier);
+		expect(ids).toContain("review-available");
+		expect(ids).toContain("review-daily");
+	});
+
+	test("legacy review-hour-* notifications are cancelled on reschedule", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: false,
+			notificationThreshold: 50,
+			notificationDailyTime: null,
+		};
+
+		await rescheduleReviewNotifications();
+
+		expect(cancelledIds).toContain("review-hour-8");
+		expect(cancelledIds).toContain("review-hour-14");
+		expect(cancelledIds).not.toContain("some-other");
+	});
+
+	test("no notification content includes badge property", async () => {
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: true,
+			notificationThreshold: 2,
+			notificationDailyTime: 20,
+		};
+
+		// 1 available now, threshold=2.
+		await insertAvailableAssignment(testDb, 1, "2026-01-01T00:00:00Z");
+		await insertAvailableAssignment(testDb, 2, "2026-12-01T00:00:00Z");
+
+		await rescheduleReviewNotifications();
+
+		for (const n of scheduled) {
+			expect(n.content).not.toHaveProperty("badge");
 		}
 	});
-});
 
-describe("isInQuietHours", () => {
-	function dateAtHour(hour: number): Date {
-		return new Date(2026, 4, 14, hour, 30, 0);
-	}
+	test("denied permission clears notifications", async () => {
+		permissionStatus = "denied";
+		mockSettings = {
+			...defaultNotificationSettings(),
+			notificationsEnabled: true,
+			notificationsBadging: true,
+		};
 
-	test("returns false when start equals end", () => {
-		const date = dateAtHour(12);
-		expect(isInQuietHours(date, { quietHoursStart: 10, quietHoursEnd: 10 })).toBe(false);
-	});
+		await rescheduleReviewNotifications();
 
-	test("same-day range: hour inside quiet hours", () => {
-		expect(isInQuietHours(dateAtHour(9), { quietHoursStart: 8, quietHoursEnd: 12 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(11), { quietHoursStart: 8, quietHoursEnd: 12 })).toBe(true);
-	});
-
-	test("same-day range: hour outside quiet hours", () => {
-		expect(isInQuietHours(dateAtHour(7), { quietHoursStart: 8, quietHoursEnd: 12 })).toBe(false);
-		expect(isInQuietHours(dateAtHour(12), { quietHoursStart: 8, quietHoursEnd: 12 })).toBe(false);
-		expect(isInQuietHours(dateAtHour(15), { quietHoursStart: 8, quietHoursEnd: 12 })).toBe(false);
-	});
-
-	test("wrap-midnight range: hour inside quiet hours", () => {
-		expect(isInQuietHours(dateAtHour(22), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(23), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(0), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(3), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(6), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(true);
-	});
-
-	test("wrap-midnight range: hour outside quiet hours", () => {
-		expect(isInQuietHours(dateAtHour(7), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(false);
-		expect(isInQuietHours(dateAtHour(12), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(false);
-		expect(isInQuietHours(dateAtHour(21), { quietHoursStart: 22, quietHoursEnd: 7 })).toBe(false);
-	});
-
-	test("boundary: start hour is included, end hour is excluded", () => {
-		expect(isInQuietHours(dateAtHour(22), { quietHoursStart: 22, quietHoursEnd: 6 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(6), { quietHoursStart: 22, quietHoursEnd: 6 })).toBe(false);
-	});
-
-	test("full-day range (0 to 23)", () => {
-		expect(isInQuietHours(dateAtHour(0), { quietHoursStart: 0, quietHoursEnd: 23 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(12), { quietHoursStart: 0, quietHoursEnd: 23 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(22), { quietHoursStart: 0, quietHoursEnd: 23 })).toBe(true);
-		expect(isInQuietHours(dateAtHour(23), { quietHoursStart: 0, quietHoursEnd: 23 })).toBe(false);
+		expect(scheduled).toHaveLength(0);
+		expect(badgeCount).toBe(0);
 	});
 });
+
+describe("clearReviewNotifications", () => {
+	test("cancels review notifications and resets badge", async () => {
+		const result = await createTestDatabase();
+		testDb = result.db;
+		await insertUser({ vacation_started_at: null });
+
+		await clearReviewNotifications();
+
+		expect(cancelledIds).toContain("review-available");
+		expect(cancelledIds).toContain("review-daily");
+		expect(badgeCount).toBe(0);
+
+		await result.cleanup();
+	});
+});
+
+async function insertUser(overrides: { vacation_started_at: string | null }) {
+	await testDb.runAsync(
+		`INSERT OR REPLACE INTO user (id, username, level, vacation_started_at, payload, updated_at)
+     VALUES (1, 'test', 1, ?, '{}', '2026-01-01T00:00:00Z')`,
+		overrides.vacation_started_at,
+	);
+}

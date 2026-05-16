@@ -151,9 +151,13 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 ## M7: Notifications, Badges, And Links
 
 - [x] Add notification permission flow.
-- [x] Schedule local notifications for upcoming review availability.
+- [x] Schedule threshold-based review notification (one-shot DATE trigger when the Nth future review becomes available).
+- [x] Schedule daily reminder notification (native recurring DAILY trigger at configured hour).
 - [x] Set badge count where supported.
 - [x] Suppress notifications and badges in vacation mode.
+- [x] Cancel legacy hourly notification identifiers on upgrade.
+- [x] Add daily reminder toggle in settings UI with conditional hour stepper.
+- [x] Add integration tests for notification scheduling (vacation mode, badge-only, threshold, daily, legacy cleanup).
 - [ ] Add custom scheme deep links for reviews, lessons, subject IDs, subject text routes, and wrap-up.
 - [ ] Add universal/app link configuration where feasible.
 - [x] Add platform support matrix for iOS and Android notification limitations.
@@ -174,7 +178,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Add root settings sections for Appearance, Lessons, Reviews, Diagnostics, and Log Out.
 - [x] Add Notifications settings section.
 - [x] Add Radicals/Kanji/Vocabulary (subject detail) settings section.
-- [ ] Add typed settings migrations.
+- [x] Add typed settings migrations.
 - [x] Add lesson settings UI (new items per quiz, max lessons per session, prioritize current level, interleave, kana-only vocab).
 - [x] Add review settings UI (order, Anki mode, exact match, grouping, cheats, batch size, review limit).
 - [x] Add subject detail settings UI.
@@ -214,7 +218,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
-- Local notifications and badge counts are implemented for upcoming reviews with vacation suppression, quiet hours, configurable schedule window, and minimum review count threshold. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
+- Local notifications use a threshold + daily reminder model: a one-shot notification when the Nth future review becomes available, and an optional recurring daily reminder at a configured hour. Badge counts and vacation-mode suppression are implemented. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
 - Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Notifications, Diagnostics, and Log Out. Font settings UI is not yet exposed.
@@ -272,16 +276,13 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ### Notification Settings
 
-| Setting                          | Type     | Default | Description                                                                  |
-| -------------------------------- | -------- | ------- | ---------------------------------------------------------------------------- |
-| `notificationsAllReviews`        | boolean  | false   | Show alert notifications for upcoming review availability.                   |
-| `notificationsBadging`           | boolean  | true    | Show badge count for available reviews.                                      |
-| `notificationSounds`             | boolean  | false   | Play sound for review notifications (iOS only; Android uses channel sound). |
-| `notificationQuietHoursEnabled`  | boolean  | false   | Suppress notifications during configured quiet hours.                       |
-| `notificationQuietHoursStart`    | number   | 22      | Quiet hours start hour (0–23, local time).                                  |
-| `notificationQuietHoursEnd`      | number   | 7       | Quiet hours end hour (0–23, local time). Wraps past midnight.               |
-| `notificationScheduleWindow`     | 12\|24\|48\|72 | 48 | How many hours ahead to schedule notifications.                             |
-| `notificationMinReviewCount`     | number   | 1       | Minimum cumulative reviews to trigger a notification.                       |
+| Setting                  | Type          | Default | Description                                                                              |
+| ------------------------ | ------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `notificationsEnabled`   | boolean       | true    | Master toggle: schedule review notifications (threshold + daily).                        |
+| `notificationsBadging`   | boolean       | true    | Show badge count for available reviews.                                                  |
+| `notificationSounds`     | boolean       | false   | Play sound for review notifications (iOS only; Android uses channel sound).              |
+| `notificationThreshold`  | number        | 50      | Review count threshold for one-shot notification. Notifies when Nth future review arrives. |
+| `notificationDailyTime`  | number \| null | 20     | Hour (0–23) for recurring daily reminder. Null disables daily reminder.                 |
 
 ### Other Settings (Defined, Not Yet Wired)
 

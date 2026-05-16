@@ -118,7 +118,7 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Audio** — Streamed vocabulary pronunciation playback in reviews, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
 
-**Notifications** — Local notifications for upcoming review availability, badge count management, vacation-mode suppression, and notification-tap navigation to the review session. Notification scheduling uses hourly bucket aggregation with a configurable schedule window (12/24/48/72 hours) and a 50-notification cap. Quiet hours suppress notifications during configured hours (with midnight wraparound). Minimum review count threshold filters low-value notifications. Settings for all-review alerts, badging, sounds (iOS only), schedule window, quiet hours, and minimum review count.
+**Notifications** — Local notifications using a threshold + daily reminder model. A one-shot notification fires when the Nth future review becomes available (configurable threshold, default 50). An optional recurring daily reminder fires at a configured hour using a native DAILY trigger. Badge count reflects current available reviews. Vacation mode suppresses all notifications and badges. Settings for notifications toggle, badging, sounds (iOS only), review threshold (1–200), and daily reminder time (on/off with hour picker). Notification taps navigate to the review session.
 
 **Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, sanitized export via Share sheet, and full refresh (clear cache and resync).
 
@@ -170,9 +170,9 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 - Unit tests for migration schema validation (version ordering, table/index completeness, constraints).
 - Unit tests for lesson selection filtering and ordering (kana-only, hidden, level, subject type, interleave).
 - Unit tests for leech score calculation and dashboard repository logic.
-- Unit tests for search result ranking (exact, prefix, contains match ordering).
-- Unit tests for notification schedule computation (hourly buckets, vacation mode, SQL parameterization).
-- Unit tests for quiet hours boundary logic (same-day, wrap-midnight, inclusive start, exclusive end).
+- Integration tests for subject search ranking (exact/prefix/contains matching, level tie-breaking, subject-type sort, limit, case insensitivity).
+- Integration tests for notification scheduling (threshold triggers, daily DAILY triggers, badge-only mode, vacation suppression, legacy notification cleanup, badge count not set on notification content).
+- Integration tests for clearReviewNotifications (cancels known IDs and resets badge).
 - Integration tests for WaniKani API pagination and `updated_after` cursors.
 - Integration tests for sync service incremental cursors and pending-write flush (reviews, lessons, study materials).
 
@@ -215,7 +215,7 @@ src/
     audio/          # Vocabulary pronunciation audio selection and streaming playback
     db/             # SQLite open/migrations/put functions (database.ts, schema.ts, errorLog.ts, subjectRepository.ts, assignmentRepository.ts, studyMaterialRepository.ts)
     dashboard/      # Dashboard query aggregation
-    notifications/  # Local notification scheduling, badge management, Expo Go shim
+    notifications/  # Threshold + daily reminder scheduling, badge management, Expo Go shim
     settings/       # AppSettings, load/save via AsyncStorage
     storage/        # Secure token storage (expo-secure-store)
     study/          # Review/lesson queue queries, result queueing, ordering, filtering

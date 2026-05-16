@@ -30,7 +30,6 @@ import {
 	saveSettings,
 	type ReviewOrder,
 	type SubjectType,
-	type NotificationScheduleWindow,
 } from "../domain/settings/settings";
 import { deleteApiToken } from "../domain/storage/secureToken";
 import type { RootStackParamList } from "../navigation/types";
@@ -67,13 +66,6 @@ const LESSON_ORDER_LABELS: Record<SubjectType, string> = {
   kanji: "Kanji",
   vocabulary: "Vocabulary",
 };
-
-const SCHEDULE_WINDOW_OPTIONS: { value: NotificationScheduleWindow; label: string }[] = [
-  { value: 12, label: "12h" },
-  { value: 24, label: "24h" },
-  { value: 48, label: "48h" },
-  { value: 72, label: "72h" },
-];
 
 function formatHour(hour: number): string {
   if (hour === 0) return "12 AM";
@@ -119,7 +111,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 			// Read settings directly from storage to avoid stale default state.
 			const currentSettings = await loadSettings();
 			const hasNotificationEnabled =
-				currentSettings.notificationsAllReviews ||
+				currentSettings.notificationsEnabled ||
 				currentSettings.notificationsBadging ||
 				currentSettings.notificationSounds;
 			if (!hasNotificationEnabled) return;
@@ -154,21 +146,18 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 	const updateNotificationSetting = useCallback(
 		async <
 			K extends
-				| "notificationsAllReviews"
+				| "notificationsEnabled"
 				| "notificationsBadging"
 				| "notificationSounds"
-				| "notificationQuietHoursEnabled"
-				| "notificationQuietHoursStart"
-				| "notificationQuietHoursEnd"
-				| "notificationScheduleWindow"
-				| "notificationMinReviewCount",
+				| "notificationThreshold"
+				| "notificationDailyTime",
 		>(
 			key: K,
 			value: AppSettings[K],
 		) => {
 			if (
 				value === true &&
-				(key === "notificationsAllReviews" ||
+				(key === "notificationsEnabled" ||
 					key === "notificationsBadging" ||
 					key === "notificationSounds")
 			) {
@@ -465,11 +454,11 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 					<Text style={styles.panelTitle}>Notifications</Text>
 
 					<SettingToggle
-						label="Notify for All Reviews"
-						detail="Get notified each hour when new reviews become available."
-						value={settings.notificationsAllReviews}
+						label="Review Notifications"
+						detail="Get notified when reviews are ready."
+						value={settings.notificationsEnabled}
 						onValueChange={(v) =>
-							updateNotificationSetting("notificationsAllReviews", v)
+							updateNotificationSetting("notificationsEnabled", v)
 						}
 						theme={theme}
 					/>
@@ -485,8 +474,8 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 					/>
 
 					<SettingToggle
-						label="Notification Sounds"
-						detail="Play a sound when review notifications arrive."
+						label="Notification Sound"
+						detail="Play a sound when the notification fires."
 						value={settings.notificationSounds}
 						onValueChange={(v) =>
 							updateNotificationSetting("notificationSounds", v)
@@ -494,88 +483,55 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						theme={theme}
 					/>
 
-					<Text style={styles.sectionLabel}>Schedule</Text>
+				<Text style={styles.sectionLabel}>Triggers</Text>
 
-					<Text style={styles.bodyText}>
-						How far ahead to schedule review notifications.
-					</Text>
-					<View style={styles.pillGroup}>
-						{SCHEDULE_WINDOW_OPTIONS.map((opt) => (
-							<Pressable
-								key={opt.value}
-								onPress={() =>
-									updateNotificationSetting("notificationScheduleWindow", opt.value)
-								}
-								style={[
-									styles.pill,
-									settings.notificationScheduleWindow === opt.value &&
-										styles.pillActive,
-								]}
-							>
-								<Text
-									style={[
-										styles.pillText,
-										settings.notificationScheduleWindow === opt.value &&
-											styles.pillTextActive,
-									]}
-								>
-									{opt.label}
-								</Text>
-							</Pressable>
-						))}
-					</View>
+				<Text style={styles.bodyText}>
+					Notify when the threshold is reached, or via a daily reminder.
+				</Text>
 
+				<SettingStepper
+					label="Review Threshold"
+					detail={`Notify when ${settings.notificationThreshold} reviews are pending.`}
+					value={settings.notificationThreshold}
+					min={1}
+					max={200}
+					onChange={(v) =>
+						updateNotificationSetting("notificationThreshold", v)
+					}
+					theme={theme}
+				/>
+
+				<SettingToggle
+					label="Daily Reminder"
+					detail={
+						settings.notificationDailyTime != null
+							? `Remind at ${formatHour(settings.notificationDailyTime)} each day.`
+							: "Get a daily reminder to review."
+					}
+					value={settings.notificationDailyTime != null}
+					onValueChange={(v) =>
+						updateNotificationSetting(
+							"notificationDailyTime",
+							v ? 20 : null,
+						)
+					}
+					theme={theme}
+				/>
+
+				{settings.notificationDailyTime != null ? (
 					<SettingStepper
-						label="Minimum Review Count"
-						detail="Only notify when this many reviews are available."
-						value={settings.notificationMinReviewCount}
-						min={1}
-						max={50}
+						label="Reminder Time"
+						detail={`Daily reminder at ${formatHour(settings.notificationDailyTime)}.`}
+						value={settings.notificationDailyTime}
+						min={0}
+						max={23}
 						onChange={(v) =>
-							updateNotificationSetting("notificationMinReviewCount", v)
+							updateNotificationSetting("notificationDailyTime", v)
 						}
 						theme={theme}
+						displayValue={formatHour(settings.notificationDailyTime)}
 					/>
-
-					<Text style={styles.sectionLabel}>Quiet Hours</Text>
-
-					<SettingToggle
-						label="Enable Quiet Hours"
-						detail={`Suppress notifications from ${formatHour(settings.notificationQuietHoursStart)} to ${formatHour(settings.notificationQuietHoursEnd)}.`}
-						value={settings.notificationQuietHoursEnabled}
-						onValueChange={(v) =>
-							updateNotificationSetting("notificationQuietHoursEnabled", v)
-						}
-						theme={theme}
-					/>
-
-					{settings.notificationQuietHoursEnabled ? (
-						<>
-							<SettingStepper
-								label="Start"
-								detail={`Quiet hours begin at ${formatHour(settings.notificationQuietHoursStart)}.`}
-								value={settings.notificationQuietHoursStart}
-								min={0}
-								max={23}
-								onChange={(v) =>
-									updateNotificationSetting("notificationQuietHoursStart", v)
-								}
-								theme={theme}
-							/>
-
-							<SettingStepper
-								label="End"
-								detail={`Quiet hours end at ${formatHour(settings.notificationQuietHoursEnd)}.`}
-								value={settings.notificationQuietHoursEnd}
-								min={0}
-								max={23}
-								onChange={(v) =>
-									updateNotificationSetting("notificationQuietHoursEnd", v)
-								}
-								theme={theme}
-							/>
-						</>
-					) : null}
+				) : null}
 				</View>
 
 				<View style={styles.panel}>
@@ -735,6 +691,7 @@ function SettingStepper({
 	step = 1,
 	onChange,
 	theme,
+	displayValue,
 }: {
 	label: string;
 	detail?: string;
@@ -744,6 +701,7 @@ function SettingStepper({
 	step?: number;
 	onChange: (value: number) => void;
 	theme: AppTheme;
+	displayValue?: string;
 }) {
 	const styles = makeStyles(theme);
 	return (
@@ -758,23 +716,23 @@ function SettingStepper({
 					onPress={() => onChange(Math.max(min, value - step))}
 					style={[styles.stepperButton, value <= min && styles.stepperDisabled]}
 					accessibilityLabel={`Decrease ${label}`}
-					accessibilityHint={`Current value: ${value}`}
+				accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
 					accessibilityRole="button"
 				>
 					<Text style={styles.stepperButtonText}>-</Text>
 				</Pressable>
 				<Text
 					style={styles.stepperValue}
-					accessibilityLabel={`${label}: ${value}`}
+					accessibilityLabel={`${label}: ${displayValue ?? value}`}
 				>
-					{value}
+					{displayValue ?? value}
 				</Text>
 				<Pressable
 					disabled={value >= max}
 					onPress={() => onChange(Math.min(max, value + step))}
 					style={[styles.stepperButton, value >= max && styles.stepperDisabled]}
 					accessibilityLabel={`Increase ${label}`}
-					accessibilityHint={`Current value: ${value}`}
+				accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
 					accessibilityRole="button"
 				>
 					<Text style={styles.stepperButtonText}>+</Text>

@@ -1,81 +1,185 @@
-# AGENTS.md — 読路 (Yomiji)
+# Repository Guidelines
 
-## Commands
+## Project Overview
+
+読路 (Yomiji) is a cross-platform WaniKani study client built with Expo React Native and TypeScript. It ports the learning semantics of the iOS app Tsurukame to Android/iOS, with an offline-first architecture using local SQLite as the primary data source.
+
+## Architecture & Data Flow
+
+**Layered architecture with strict boundaries:**
+
+- **Domain layer** (`src/domain/`) — pure business logic, data access, API integration. No React/UI imports.
+- **Presentation layer** (`src/screens/`, `src/components/`) — React components, theme-aware styling.
+- **Infrastructure layer** (`src/navigation/`, `src/theme/`, `App.tsx`) — routing, auth gate, lifecycle hooks, theming.
+
+**Data flow:**
+
+1. Initial sync pulls WaniKani API data into SQLite via incremental `updated_after` cursors stored in `sync_cursors`.
+2. All reads (dashboard, reviews, lessons, search, subject details) query the local database.
+3. Writes (review results, lesson starts, study material edits) are queued in `pending_progress` and `pending_study_materials` tables before network submission.
+4. Sync flushes pending writes before fetching remote updates. A singleton `activeSync` prevents concurrent syncs.
+5. Lifecycle sync: foreground full sync when stale (>15 min), background flush only if pending writes exist. Pull-to-refresh is the explicit full-sync escape hatch.
+
+**State management:** React hooks and local component state only — no global state library (no Zustand, Redux, Recoil). Settings persist via AsyncStorage. API token in expo-secure-store.
+
+## Key Directories
+
+| Directory | Purpose |
+|---|---|
+| `src/domain/api/` | WaniKani v2 REST client with rate limiting, pagination, typed errors |
+| `src/domain/db/` | SQLite connection, schema/migrations, repository modules for subjects, assignments, study materials, review stats, error log |
+| `src/domain/sync/` | Sync orchestration — incremental sync, pending-write flush, full refresh |
+| `src/domain/study/` | Review/lesson queue queries, `ReviewSession` state machine, ordering strategies |
+| `src/domain/answers/` | Answer checker, romaji-to-kana converter, feedback messages |
+| `src/domain/dashboard/` | Dashboard aggregation queries (forecast, progress, leeches, mistakes) |
+| `src/domain/settings/` | `AppSettings` type, defaults, AsyncStorage load/save |
+| `src/domain/notifications/` | Notification scheduling (threshold + daily reminder), permissions |
+| `src/domain/audio/` | Streaming vocabulary audio via expo-audio |
+| `src/domain/subjects/` | Radical image repository, SVG CSS-variable processing |
+| `src/domain/storage/` | Secure API token storage |
+| `src/screens/` | All app screens (Dashboard, Login, Review/Lesson sessions, Subject browse/search/detail, Settings, Diagnostics) |
+| `src/components/` | Shared UI components (`ScreenLayout`, `SubjectHeroCard`, `SrsBar`, charts, `ReviewQuickSettings`) |
+| `src/navigation/` | React Navigation stack, auth gate, lifecycle sync hooks, route types |
+| `src/theme/` | Theme provider (light/dark/system), WaniKani palette, `colorForSubjectType()` |
+| `src/test/` | Test infrastructure — SQLite shim, test DB helpers, factories, mock API |
+| `tsurukame/` | **Read-only** iOS Swift reference code. Never import from or modify. |
+| `docs/` | Research docs (notifications, recommended lessons algorithm) |
+| `scripts/` | `version-bump.sh` for release automation |
+
+## Development Commands
 
 ```bash
-pnpm install                       # use pnpm; pnpm-lock.yaml is authoritative
-pnpm start                         # expo start
-pnpm android                       # expo start --android
-pnpm ios                           # expo start --ios
-pnpm typecheck                     # tsc --noEmit
-pnpm test                          # jest --runInBand
-pnpm test -- path/to/file.test.ts   # focused test file
-pnpm exec expo install --check      # verify Expo SDK-compatible dependency versions
+pnpm install                         # Install dependencies (pnpm only; pnpm-lock.yaml is authoritative)
+pnpm start                           # expo start --dev-client
+pnpm android                         # expo run:android
+pnpm ios                             # expo run:ios
+pnpm typecheck                       # tsc --noEmit
+pnpm test                            # jest --runInBand
+pnpm test -- path/to/file.test.ts    # focused test
+pnpm version:bump [patch|minor|major] # bump version, commit, tag
 ```
 
-- There is no lint/formatter script in `package.json`; do not invent one.
-- After code changes run `pnpm typecheck`; run `pnpm test -- <changed-area>.test.ts` when a matching test exists, otherwise run `pnpm test` for domain changes.
-- Keep Jest at `~29.7.0`; Expo SDK 55 depends on that range.
+- There is no lint or formatter script. Do not invent one.
+- After code changes, run `pnpm typecheck`. Run `pnpm test -- <changed-area>.test.ts` when a matching test exists; otherwise `pnpm test` for domain changes.
 
-## Source Of Truth
+## Code Conventions & Common Patterns
 
-- `ROADMAP.md` tracks implementation status and known gaps.
-- `REACT_NATIVE_PORT_PRD.md` is the product requirements document; older subdirectory PRD references are stale.
-- `tsurukame/` is read-only Swift/UIKit reference code. Never import from it or modify it.
-
-## Architecture
-
-- Expo app entry is `App.tsx`; navigation, auth gate, and lifecycle sync live in `src/navigation/AppNavigator.tsx`.
-- `src/domain/` is the pure logic layer; keep React/UI imports out of domain modules.
-- Local SQLite is the primary data source after initial sync. Use `openAppDatabase()`; it returns the cached singleton connection.
-- Sync is offline-first: pending writes flush before remote fetches, and incremental sync uses `updated_after` cursors in `sync_cursors`.
-- Review and lesson progress must be queued locally before network submission. Pending review/lesson writes use `pending_progress`; study material edits use `pending_study_materials`.
-- Lifecycle sync is intentionally conservative: foreground full sync only when stale (>15 min), background flush only if pending writes exist.
-
-## TypeScript And Tests
+### TypeScript
 
 - `strict` and `noUncheckedIndexedAccess` are enabled. Guard array/tuple indexing before use.
-- Tests run under Node via `ts-jest` with `testMatch: ['**/*.test.ts']`; React Native runtime APIs need mocking or should stay out of unit-tested domain code.
 - React Native has no `DOMException`; detect aborts with `error instanceof Error && error.name === 'AbortError'`.
+
+### Naming
+
+- Repository files: `*Repository.ts` (e.g., `subjectRepository.ts`)
+- Service files: `*Service.ts` (e.g., `syncService.ts`, `notificationService.ts`)
+- Screen files: `*Screen.tsx` (e.g., `DashboardScreen.tsx`)
+- Component files: `PascalCase.tsx` (e.g., `SubjectHeroCard.tsx`)
+- Type files: `types.ts` per module
+- Test files: `*.test.ts` (unit), `*.integration.test.ts` (integration with DB)
+
+### Async & Error Handling
+
+- Domain functions that touch the DB, API, or storage return Promises (`async`/`await`). Pure logic helpers (e.g., `checkAnswer`, `sortReviewQueue`) are synchronous.
+- Custom error types with classification: `SyncError` (category), `WaniKaniApiError`.
+- Sync errors logged to `error_log` table with sanitized messages (tokens redacted).
+- Error classification: offline, timeout, auth (401/403), rate-limit (429), hibernating account, server.
+
+### Database
+
+- SQLite via `expo-sqlite`, no ORM. Raw SQL with `getAllAsync`/`runAsync`.
+- `openAppDatabase()` returns a cached singleton connection.
+- Foreign keys enforced. For cache resets, delete child tables before `subjects`: `assignments`, `study_materials`, `review_stats`, `audio_urls`, `subject_progress`, `pending_study_materials`.
+- Full refresh clears remote data and cursors without dropping pending local writes.
+
+### Styling
+
+- All components use `makeStyles(theme: AppTheme)` pattern from `src/theme/AppThemeProvider.tsx`.
+- Use `colorForSubjectType()` from `src/theme/subjectColors.ts` for subject-type colors — never duplicate the switch.
+
+### Dependency Injection
+
+- Manual prop drilling from `AppNavigator` to screens (apiToken, db, callbacks).
+- Database passed as parameter where needed, not imported as global singleton from call sites.
+
+## Important Files
+
+| File | Role |
+|---|---|
+| `App.tsx` | Entry point — NavigationContainer, theme, notification tap handler |
+| `src/navigation/AppNavigator.tsx` | Auth gate, sync lifecycle (15min full sync, 1min pending flush), screen routing |
+| `src/domain/db/database.ts` | DB singleton, migrations, high-level CRUD (`put*` functions) |
+| `src/domain/db/schema.ts` | Schema definitions and migrations array |
+| `src/domain/study/reviewSession.ts` | In-memory review state machine (two-queue, ordering, wrap-up) |
+| `src/domain/answers/answerChecker.ts` | Answer validation with normalization, kana, fuzzy matching |
+| `src/domain/settings/settings.ts` | `AppSettings` type, defaults, load/save |
+| `src/domain/api/WaniKaniClient.ts` | API client with rate limiting and pagination |
+| `src/test/factories.ts` | Test data factories (`makeRadical`, `makeKanji`, `makeAssignment`, etc.) |
+| `src/test/mockApi.ts` | Mock WaniKani client with call tracking |
+| `src/test/testDb.ts` | `createTestDatabase()` helper for integration tests |
+| `ROADMAP.md` | Milestone tracking — source of truth for implementation status |
+| `REACT_NATIVE_PORT_PRD.md` | Product requirements document |
+
+## Runtime & Tooling
+
+- **Runtime:** Node.js 22 (CI), React Native 0.83.6 with Hermes engine
+- **Package manager:** pnpm 9 — never use npm or yarn
+- **Framework:** Expo SDK 55 (managed workflow with dev client)
+- **TypeScript:** 5.9.3, strict mode, `noUncheckedIndexedAccess`
+- **Jest:** ~29.7.0 with `ts-jest` — Expo SDK 55 depends on this range
+- **No ESLint/Prettier configured** — do not add one
+- **EAS CLI** >=15.0.0 for builds
+
+## Testing & QA
+
+### Test Structure
+
+Tests run in Node via `ts-jest`. React Native APIs need mocking or should stay out of unit-tested domain code.
+
+- **Unit tests:** Pure function logic, no database — `answerChecker.test.ts`, `kanaInput.test.ts`, `radicalSvg.test.ts`, `reviewSession.test.ts`, `studyRepository.test.ts`, `errorLog.test.ts`, `dashboardRepository.test.ts`
+- **Integration tests:** Real database via `createTestDatabase()` — `dataIntegrity.integration.test.ts`, `syncService.integration.test.ts`, `errorHandling.integration.test.ts`, `pendingWrites.integration.test.ts`, `notificationService.test.ts`
+
+### Test Infrastructure
+
+- `src/test/sqliteShim.ts` — wraps `better-sqlite3` to provide the `expo-sqlite` async interface for Node
+- `src/test/testDb.ts` — `createTestDatabase()` creates in-memory DB with migrations applied; returns `{ db, cleanup }`
+- `src/test/factories.ts` — `makeUser`, `makeRadical`, `makeKanji`, `makeVocabulary`, `makeAssignment`, `makeStudyMaterial`, `makeReviewStat`, `makeLevelProgression`, `makeVoiceActor`, `makeCollectionResponse`; uses `nextTestId()` / `resetIdCounter()`
+- `src/test/mockApi.ts` — `createMockApi()` returns `MockApiClient` with Jest-mocked API methods, `getCalls()` for inspection, `reset()` for cleanup
+- `src/test/__mocks__/expo-sqlite.ts` — no-op mock so domain modules can import without error
+
+### Patterns
+
+- Standard `describe/it` blocks. Local helpers per test file (e.g., `makeSubject()`, `setupDb()`).
+- `jest.mock()` at module level for external deps. Real exports kept where possible.
+- Async throughout — all DB/API tests use `await`.
+- Assertions: `countRows(db, table)`, `getAllRows(db, table)`, `mockApi.getCalls('method')`.
 
 ## WaniKani Data Gotchas
 
-- WaniKani radical `characters` can be `null`; store/render `characters ?? ''`. Do not fall back to `slug`, which leaks the answer on meaning prompts.
-- Image-only radicals use `character_images`; prefer PNG where available and preserve SVG CSS fallback handling in `src/domain/subjects/radicalSvg.ts`.
-- API `kana_vocabulary` objects are stored/rendered as local `vocabulary`; account for both names when reading API payloads or comparing subject types.
-- Use `colorForSubjectType()` from `src/theme/subjectColors.ts`; do not duplicate subject-type color switches in screens.
+- Radical `characters` can be `null`; always render as `characters ?? ''`. Never fall back to `slug` (leaks the answer).
+- Image-only radicals use `character_images`; prefer PNG, with SVG CSS fallback via `src/domain/subjects/radicalSvg.ts`.
+- API `kana_vocabulary` objects are stored/rendered as local `vocabulary` — account for both names in API payloads.
 - Study material sync must skip entries whose `subject_id` is absent locally rather than aborting the batch.
-- Pending sync 422 responses mean stale/invalid local writes and are deleted with diagnostics; preserve this behavior.
-
-## Database Constraints
-
-- SQLite foreign keys are enforced. In cache resets, delete child tables before `subjects` (`assignments`, `study_materials`, `review_stats`, `audio_urls`, `subject_progress`, `pending_study_materials`).
-- Full refresh must clear cached remote data and cursors without dropping pending local writes.
+- Pending sync 422 responses indicate stale/invalid local writes — delete with diagnostics.
 
 ## Android Release Signing
 
-- Release APKs are signed with a production keystore (not the debug key).
-- The keystore lives at `~/.local/share/yomiji/release.keystore` with credentials in `~/.local/share/yomiji/credentials`.
+- Release APKs signed with production keystore at `~/.local/share/yomiji/release.keystore`.
+- CI uses GitHub Secrets: `YOMIJI_KEYSTORE_BASE64`, `YOMIJI_KEYSTORE_PASSWORD`. `KEY_ALIAS` is `yomiji`.
+- Gradle reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars. Falls back to debug signing when unset.
 - **Do not lose the keystore** — without it, the app cannot be updated under the same package name.
-- CI uses GitHub Secrets:
-  - `YOMIJI_KEYSTORE_BASE64` — base64-encoded keystore file
-  - `YOMIJI_KEYSTORE_PASSWORD` — keystore password (same for key password)
-  - `KEY_ALIAS` is hardcoded as `yomiji` in the workflow
-- Gradle reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars. Falls back to debug signing when these are unset (local dev).
-- When preparing for Google Play Store, upload this keystore to Google Play App Signing.
 
-## Versioning And Releases
+## Versioning & Releases
 
-- Versioning uses semver. While pre-1.0, bump **patch** for bug fixes, **minor** for new features, and **major** for milestone releases.
-- Do not bump the version on every commit. Bump only when the user asks for a release or when the accumulated changes warrant one.
-- When the user says "release", "ship", "bump version", or similar, ask which bump level (patch/minor/major) before proceeding.
-- Run `pnpm version:bump [patch|minor|major]` to update `package.json`, `app.json` (version + versionCode), commit, and tag in one step.
-- After the script succeeds, remind the user to push: `git push --follow-tags origin main`.
-- The CI workflow (`.github/workflows/android-release.yml`) triggers on `v*` tags only — regular pushes do not create releases.
+- Semver. Pre-1.0: patch for bug fixes, minor for features, major for milestones.
+- Do not bump on every commit. Bump only when the user asks or changes warrant it.
+- `pnpm version:bump [patch|minor|major]` updates `package.json`, `app.json` (version + versionCode), commits, and tags.
+- CI (`.github/workflows/android-release.yml`) triggers on `v*` tags — regular pushes do not create releases.
+- After bump: `git push --follow-tags origin main`.
 
 ## Current Product Gaps
 
-- Offline audio download/caching, notifications/badges/deep links, custom fonts, and font-size settings are not implemented.
-- Dashboard recommended lessons vs. advanced lesson-pool separation is pending (algorithm research is in `docs/recommended-lessons-research.md`).
-- Typed settings migrations and beta-hardening device QA are pending. Mocked API integration tests were added in M10.
-- Several features were explicitly removed or deferred: remaining-item browsing, recent lesson practice, apprentice lesson limit, skip-kanji-reading, and hardware keyboard shortcuts.
+- Offline audio download/caching, custom fonts, font-size settings
+- Deep links and universal/app links
+- WaniKani recommended lessons vs. advanced lesson pool separation (research in `docs/recommended-lessons-research.md`, blocked on webapp data)
+- Device QA checklists, large-cache performance tests, mocked API integration tests

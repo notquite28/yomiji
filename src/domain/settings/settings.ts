@@ -16,18 +16,13 @@ export type ReviewOrder =
 export type AppearanceMode = 'system' | 'light' | 'dark';
 export type SubjectType = 'radical' | 'kanji' | 'vocabulary';
 
-export type NotificationScheduleWindow = 12 | 24 | 48 | 72;
-
 export type AppSettings = {
   appearance: AppearanceMode;
-  notificationsAllReviews: boolean;
+  notificationsEnabled: boolean;
   notificationsBadging: boolean;
   notificationSounds: boolean;
-  notificationQuietHoursEnabled: boolean;
-  notificationQuietHoursStart: number;
-  notificationQuietHoursEnd: number;
-  notificationScheduleWindow: NotificationScheduleWindow;
-  notificationMinReviewCount: number;
+  notificationThreshold: number;
+  notificationDailyTime: number | null;
   prioritizeCurrentLevel: boolean;
   interleaveLessons: boolean;
   lessonOrder: SubjectType[];
@@ -57,14 +52,11 @@ export type AppSettings = {
 
 export const defaultSettings: AppSettings = {
   appearance: 'system',
-  notificationsAllReviews: false,
+  notificationsEnabled: true,
   notificationsBadging: true,
   notificationSounds: false,
-  notificationQuietHoursEnabled: false,
-  notificationQuietHoursStart: 22,
-  notificationQuietHoursEnd: 7,
-  notificationScheduleWindow: 48,
-  notificationMinReviewCount: 1,
+  notificationThreshold: 50,
+  notificationDailyTime: 20,
   prioritizeCurrentLevel: false,
   interleaveLessons: false,
   lessonOrder: ['radical', 'kanji', 'vocabulary'],
@@ -92,23 +84,78 @@ export const defaultSettings: AppSettings = {
   showAllReadings: false,
 };
 
+export type SettingsMigration = {
+  version: number;
+  migrate(stored: Record<string, unknown>): Record<string, unknown>;
+};
+
+const STALE_NOTIFICATION_KEYS = [
+  'notificationsAllReviews',
+  'notificationQuietHoursEnabled',
+  'notificationQuietHoursStart',
+  'notificationQuietHoursEnd',
+  'notificationScheduleWindow',
+  'notificationMinReviewCount',
+];
+
+export const settingsMigrations: SettingsMigration[] = [
+  {
+    version: 1,
+    migrate(stored: Record<string, unknown>): Record<string, unknown> {
+      const result = { ...stored };
+      if ('notificationsAllReviews' in result && !('notificationsEnabled' in result)) {
+        result.notificationsEnabled =
+          result['notificationsAllReviews'] === true;
+        const migratedThreshold = result['notificationMinReviewCount'] as number | undefined;
+        result.notificationThreshold =
+          migratedThreshold != null ? Math.min(migratedThreshold, 50) : 50;
+        result.notificationDailyTime = null;
+      }
+      for (const k of STALE_NOTIFICATION_KEYS) {
+        delete result[k];
+      }
+      return result;
+    },
+  },
+];
+
+export const CURRENT_SETTINGS_VERSION = settingsMigrations.length > 0
+  ? settingsMigrations[settingsMigrations.length - 1]!.version
+  : 0;
+
 export async function loadSettings(): Promise<AppSettings> {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
   if (!raw) {
     return defaultSettings;
   }
 
-  return {
-    ...defaultSettings,
-    ...(JSON.parse(raw) as Partial<AppSettings>),
-  };
+  let stored = JSON.parse(raw) as Record<string, unknown>;
+  const storedVersion = typeof stored['_version'] === 'number' ? stored['_version'] : 0;
+
+  let migrated = false;
+  for (const migration of settingsMigrations) {
+    if (migration.version > storedVersion) {
+      stored = migration.migrate(stored);
+      migrated = true;
+    }
+  }
+
+  // Strip _version before merging with defaults (it's not part of AppSettings)
+  delete stored['_version'];
+  const merged = { ...defaultSettings, ...stored } as AppSettings;
+
+  if (migrated) {
+    const toStore = { ...merged, _version: CURRENT_SETTINGS_VERSION } as Record<string, unknown>;
+    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(toStore));
+  }
+
+  return merged;
 }
 
 export async function saveSettings(patch: Partial<AppSettings>) {
-  const next = {
-    ...(await loadSettings()),
-    ...patch,
-  };
+  const current = await loadSettings();
+  const next = { ...current, ...patch } as Record<string, unknown>;
+  next['_version'] = CURRENT_SETTINGS_VERSION;
   await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-  return next;
+  return { ...current, ...patch } as AppSettings;
 }
