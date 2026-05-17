@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,10 +17,24 @@ export function SubjectSearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestQueryRef = useRef('');
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   const handleSearch = useCallback(async (text: string) => {
     setQuery(text);
+    latestQueryRef.current = text;
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
@@ -28,21 +42,44 @@ export function SubjectSearchScreen({ navigation }: Props) {
     if (!text.trim()) {
       setResults([]);
       setSearched(false);
+      setIsSearching(false);
+      setError(null);
       return;
     }
 
     debounceRef.current = setTimeout(async () => {
-      const db = await openAppDatabase();
-      const rows = await searchSubjects(db, text);
-      setResults(rows);
-      setSearched(true);
+      if (!isMountedRef.current || latestQueryRef.current !== text) {
+        return;
+      }
+      setIsSearching(true);
+      setError(null);
+      try {
+        const db = await openAppDatabase();
+        const rows = await searchSubjects(db, text);
+        if (!isMountedRef.current || latestQueryRef.current !== text) {
+          return;
+        }
+        setResults(rows);
+        setSearched(true);
+      } catch (caught) {
+        if (!isMountedRef.current || latestQueryRef.current !== text) {
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : String(caught));
+        setResults([]);
+        setSearched(true);
+      } finally {
+        if (isMountedRef.current && latestQueryRef.current === text) {
+          setIsSearching(false);
+        }
+      }
     }, 250);
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.searchBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <TextInput
@@ -53,12 +90,20 @@ export function SubjectSearchScreen({ navigation }: Props) {
           placeholderTextColor={theme.colors.mutedText}
           autoFocus
           returnKeyType="search"
+          accessibilityLabel="Search subjects"
+          accessibilityHint="Search by Japanese, meaning, or reading."
         />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {searched && results.length === 0 ? (
-          <Text style={styles.emptyText}>No results found for "{query}".</Text>
+        {error ? (
+          <Text style={styles.emptyText} accessibilityRole="alert">Could not search subjects: {error}</Text>
+        ) : isSearching ? (
+          <Text style={styles.emptyText}>Searching...</Text>
+        ) : !query.trim() ? (
+          <Text style={styles.emptyText}>Search synced subjects by Japanese, meaning, or reading. If this is your first launch, sync from the dashboard first.</Text>
+        ) : searched && results.length === 0 ? (
+          <Text style={styles.emptyText}>No results found for "{query}". Try another spelling, or sync from the dashboard if local data is empty.</Text>
         ) : (
           results.map((item) => {
             const color = colorForSubjectType(theme.colors, item.subjectType);
@@ -67,6 +112,8 @@ export function SubjectSearchScreen({ navigation }: Props) {
                 key={item.id}
                 onPress={() => navigation.navigate('SubjectDetail', { subjectId: item.id })}
                 style={({ pressed }) => [styles.resultRow, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.japanese || 'subject'}, level ${item.level}, ${item.subjectType}${item.percentageCorrect != null ? `, ${item.percentageCorrect}% correct` : ''}`}
               >
                 <View style={[styles.typeDot, { backgroundColor: color }]} />
                 <View style={styles.resultBody}>

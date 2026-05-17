@@ -111,13 +111,27 @@ export function LoginScreen({ onAuthenticated }: Props) {
               style={styles.input}
               returnKeyType="done"
               onSubmitEditing={submit}
+              accessibilityLabel="WaniKani API token"
+              accessibilityHint="Paste a personal access token with review and study material scopes."
             />
             <Text style={styles.helpText}>Needs review and study-material scopes.</Text>
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <Pressable disabled={isSubmitting} onPress={submit} style={({ pressed }) => [styles.primaryButton, (pressed || isSubmitting) && styles.pressed]}>
+            {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
+            <Pressable
+              disabled={isSubmitting}
+              onPress={submit}
+              accessibilityRole="button"
+              accessibilityLabel={isSubmitting ? 'Validating token' : 'Enter Yomiji'}
+              accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+              style={({ pressed }) => [styles.primaryButton, (pressed || isSubmitting) && styles.pressed]}
+            >
               <Text style={styles.primaryButtonText}>{isSubmitting ? 'Validating...' : 'Enter 読路'}</Text>
             </Pressable>
-            <Pressable onPress={() => Linking.openURL(TOKEN_HELP_URL)} style={styles.linkButton}>
+            <Pressable
+              onPress={() => Linking.openURL(TOKEN_HELP_URL)}
+              style={styles.linkButton}
+              accessibilityRole="link"
+              accessibilityLabel="Create WaniKani API token"
+            >
               <Text style={styles.linkText}>Create token</Text>
             </Pressable>
           </Animated.View>

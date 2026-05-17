@@ -56,10 +56,11 @@ export function CenteredMessage({
         <ActivityIndicator
           color={theme.colors.kanji}
           style={actionLabel ? styles.hidden : undefined}
+          accessibilityLabel={actionLabel ? undefined : label}
         />
-        <Text style={styles.centeredText}>{label}</Text>
+        <Text style={styles.centeredText} accessibilityRole="text">{label}</Text>
         {actionLabel ? (
-          <Pressable onPress={onAction} style={styles.actionButton}>
+          <Pressable onPress={onAction} style={styles.actionButton} accessibilityRole="button" accessibilityLabel={actionLabel}>
             <Text style={styles.actionButtonText}>{actionLabel}</Text>
           </Pressable>
         ) : null}
@@ -82,7 +83,7 @@ export function SessionHeader({
 
   return (
     <View style={styles.headerRow}>
-      <Pressable onPress={onBack} style={styles.backButton}>
+      <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <Text style={styles.progressText}>{progress}</Text>
@@ -91,6 +92,7 @@ export function SessionHeader({
           tooltip="Quick settings"
           accessibilityHint="Wrap up, end session, or change answer mode"
           onPress={onSettings}
+          accessibilityLabel="Quick settings"
           style={styles.settingsButton}
         >
           <Text style={styles.settingsButtonText}>⚙</Text>

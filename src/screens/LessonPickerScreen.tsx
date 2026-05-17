@@ -25,18 +25,24 @@ export function LessonPickerScreen({ navigation }: Props) {
   const [allItems, setAllItems] = useState<StudyQueueItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
 
   useEffect(() => {
     let isMounted = true;
     Promise.all([openAppDatabase(), loadSettings()])
-      .then(([db, loadedSettings]) => {
-        setSettings(loadedSettings);
-        return getLessonQueue(db, loadedSettings, 100);
-      })
-      .then((items) => {
+      .then(([db, loadedSettings]) =>
+        getLessonQueue(db, loadedSettings, 100).then((items) => ({ items, loadedSettings })),
+      )
+      .then(({ items, loadedSettings }) => {
         if (isMounted) {
+          setSettings(loadedSettings);
           setAllItems(items);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (isMounted) {
+          setError(caught instanceof Error ? caught.message : String(caught));
         }
       })
       .finally(() => {
@@ -79,6 +85,30 @@ export function LessonPickerScreen({ navigation }: Props) {
     );
   }
 
+  if (error) {
+    return (
+      <ScreenLayout>
+        <SessionHeader onBack={() => navigation.goBack()} progress="Lesson Picker" />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>Could not load lessons</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+        </View>
+      </ScreenLayout>
+    );
+  }
+
+  if (allItems.length === 0) {
+    return (
+      <ScreenLayout>
+        <SessionHeader onBack={() => navigation.goBack()} progress="Lesson Picker" />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No lessons ready</Text>
+          <Text style={styles.emptyText}>If you just signed in, sync WaniKani data from the dashboard first. Otherwise, you are caught up for now.</Text>
+        </View>
+      </ScreenLayout>
+    );
+  }
+
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
       <SessionHeader onBack={() => navigation.goBack()} progress="Lesson Picker" />
@@ -103,6 +133,9 @@ export function LessonPickerScreen({ navigation }: Props) {
         <Pressable
           disabled={selectedIds.size === 0}
           onPress={beginLessons}
+          accessibilityRole="button"
+          accessibilityLabel={selectedIds.size > 0 ? `Begin ${selectedIds.size} selected lessons` : 'Select lesson items before beginning'}
+          accessibilityState={{ disabled: selectedIds.size === 0 }}
           style={({ pressed }) => [
             styles.beginButton,
             selectedIds.size === 0 && styles.beginButtonDisabled,
@@ -139,6 +172,9 @@ function renderTypeSection(
               key={item.subjectId}
               onPress={() => toggleItem(item.subjectId)}
               style={[styles.itemChip, { borderColor: isSelected ? color : theme.colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.subject.japanese || 'subject'}, ${item.subjectType}, level ${item.level ?? 'unknown'}`}
+              accessibilityState={{ selected: isSelected }}
             >
               <Text style={[styles.itemText, { color: isSelected ? color : theme.colors.text }]}>
                 {item.subject.japanese || '?'}
@@ -186,6 +222,26 @@ function makeStyles(theme: AppTheme) {
       color: theme.colors.mutedText,
       fontSize: 16,
       fontWeight: '800',
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      gap: 10,
+    },
+    emptyTitle: {
+      color: theme.colors.text,
+      fontSize: 22,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    emptyText: {
+      color: theme.colors.mutedText,
+      fontSize: 15,
+      lineHeight: 21,
+      fontWeight: '700',
+      textAlign: 'center',
     },
     headerRow: {
       flexDirection: 'row',

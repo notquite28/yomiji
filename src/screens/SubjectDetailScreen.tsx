@@ -34,16 +34,25 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
   });
   const [editingField, setEditingField] = useState<'meaningNote' | 'readingNote' | 'synonym' | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [subjectSettings, setSubjectSettings] = useState<{ useKatakanaForOnyomi: boolean; showAllReadings: boolean }>({
     useKatakanaForOnyomi: false,
     showAllReadings: false,
   });
 
   const loadSubject = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
     const db = await openAppDatabase();
     const s = await getSubjectById(db, subjectId);
-    if (!s) return;
+    if (!s) {
+      setSubject(null);
+      return;
+    }
     setSubject(s);
 
     const settings = await loadSettings();
@@ -83,6 +92,12 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
         readingNote: parsed.data.reading_note ?? '',
       });
     }
+    } catch (caught) {
+      setSubject(null);
+      setLoadError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setIsLoading(false);
+    }
   }, [subjectId]);
 
   useEffect(() => {
@@ -91,6 +106,7 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
 
   const handleSave = async (field: 'meaningNote' | 'readingNote' | 'synonym', value: string) => {
     setIsSaving(true);
+    setSaveMessage(null);
     try {
       const db = await openAppDatabase();
       const payload: Record<string, unknown> = { subjectId };
@@ -113,16 +129,27 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
         setStudyMaterial((prev) => ({ ...prev, readingNote: value }));
       }
       setEditingField(null);
+      setSaveMessage('Study material saved. It will sync with WaniKani on the next write flush.');
+    } catch (caught) {
+      setSaveMessage(`Could not save study material: ${caught instanceof Error ? caught.message : String(caught)}`);
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!subject) {
+  if (isLoading || !subject) {
+    const message = isLoading ? 'Loading subject…' : loadError ? 'Could not load subject' : 'Subject not found';
+    const detail = loadError ?? (!isLoading ? 'This subject may not be in your local cache yet. Try syncing from the dashboard.' : null);
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.loadingContainer} accessibilityLiveRegion="polite">
+          <Text style={styles.loadingText}>{message}</Text>
+          {detail ? <Text style={styles.emptyDetail}>{detail}</Text> : null}
+          {!isLoading ? (
+            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" style={styles.backButton}>
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -178,6 +205,8 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           onEditReadingNote={(value) => handleSave('readingNote', value)}
         />
 
+        {saveMessage ? <Text style={saveMessage.startsWith('Could not') ? styles.errorText : styles.successText} accessibilityLiveRegion="polite">{saveMessage}</Text> : null}
+
         {editingField === 'synonym' ? (
           <View style={{ gap: 6 }}>
             <Text style={{ color: theme.colors.mutedText, fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 }}>Edit Synonyms</Text>
@@ -194,7 +223,7 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
                 <Pressable style={styles.editButton} onPress={() => setEditingField(null)}>
                   <Text style={styles.editButtonText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[styles.editButton, styles.editButtonPrimary]} onPress={() => handleSave('synonym', editValue)} disabled={isSaving}>
+                <Pressable style={[styles.editButton, styles.editButtonPrimary]} onPress={() => handleSave('synonym', editValue)} disabled={isSaving} accessibilityRole="button" accessibilityState={{ disabled: isSaving, busy: isSaving }}>
                   <Text style={styles.editButtonPrimaryText}>{isSaving ? 'Saving...' : 'Save'}</Text>
                 </Pressable>
               </View>
@@ -244,10 +273,30 @@ function makeStyles(theme: AppTheme) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 24,
+      gap: 12,
     },
     loadingText: {
       color: theme.colors.mutedText,
       fontSize: 16,
+      fontWeight: '800',
+      textAlign: 'center',
+    },
+    emptyDetail: {
+      color: theme.colors.mutedText,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    successText: {
+      color: theme.colors.success,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    errorText: {
+      color: theme.colors.danger,
+      fontSize: 14,
       fontWeight: '800',
     },
     statsRow: {

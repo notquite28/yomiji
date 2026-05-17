@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -103,11 +103,11 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
     Promise.all([openAppDatabase(), loadSettings()])
       .then(async ([db, loadedSettings]) => {
-        setSettings(loadedSettings);
         const items = selectedSet && selectedSet.size > 0
           ? await getLessonItemsByIds(db, loadedSettings, selectedSet)
           : await getLessonQueue(db, loadedSettings, loadedSettings.lessonSessionSize);
         if (isMounted) {
+          setSettings(loadedSettings);
           setQueueItems(items);
         }
         const relatedSubjectIds = [
@@ -162,6 +162,53 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   const overallSuccessRate = currentCompletedTasks > 0
     ? `${Math.round((currentCompletedTasksCorrectly / currentCompletedTasks) * 100)}%`
     : '100%';
+  const allowLeavingRef = useRef(false);
+  const shouldConfirmLeave = phase === 'intro' || (phase === 'quiz' && !isQuizComplete);
+
+  const handleBack = () => {
+    Alert.alert(
+      'End lesson session?',
+      'Progress from this active lesson session may be lost if you leave now.',
+      [
+        { text: 'Keep learning', style: 'cancel' },
+        {
+          text: 'End session',
+          style: 'destructive',
+          onPress: () => {
+            allowLeavingRef.current = true;
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (!shouldConfirmLeave || allowLeavingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      Alert.alert(
+        'End lesson session?',
+        'Progress from this active lesson session may be lost if you leave now.',
+        [
+          { text: 'Keep learning', style: 'cancel' },
+          {
+            text: 'End session',
+            style: 'destructive',
+            onPress: () => {
+              allowLeavingRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+          },
+        ],
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, shouldConfirmLeave]);
 
   const submitQuizAnswer = () => {
     if (!session || !currentItem || feedback) {
@@ -267,7 +314,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         batchCount={lessonBatches.length}
         onIndexChange={setIntroIndex}
         onStartQuiz={startQuiz}
-        onBack={() => navigation.goBack()}
+        onBack={handleBack}
         subjectLookup={subjectLookup}
         styles={styles}
         theme={theme}
@@ -308,7 +355,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
-      <SessionHeader onBack={() => navigation.goBack()} progress={`Quiz ${quizProgress}`} />
+      <SessionHeader onBack={handleBack} progress={`Quiz ${quizProgress}`} />
 
       <SubjectHeroCard
         kicker={displayTaskType === 'meaning' ? 'Meaning' : 'Reading'}
@@ -334,6 +381,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         placeholderTextColor={theme.colors.mutedText}
         style={styles.input}
         returnKeyType="done"
+        accessibilityLabel={displayTaskType === 'meaning' ? 'Lesson meaning answer' : 'Lesson reading answer'}
+        accessibilityHint="Enter your answer for the current lesson quiz prompt."
         onSubmitEditing={submitQuizAnswer}
       />
 

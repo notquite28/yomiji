@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
@@ -64,41 +64,67 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedSummary, setHasLoadedSummary] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
     loadSettings().then(setSettings);
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (isMounted) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => {
+      isMounted = false;
+      subscription?.remove?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      entrance.setValue(1);
+      return;
+    }
     Animated.timing(entrance, {
       toValue: 1,
       duration: 520,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [entrance]);
+  }, [entrance, reduceMotion]);
 
   const refreshSummary = useCallback(async () => {
-    const db = await openAppDatabase();
-    const [s, f, lp, rm, al, allL, bc, ec] = await Promise.all([
-      getDashboardSummary(db),
-      getReviewForecast(db, 24),
-      getCurrentLevelProgress(db),
-      getRecentMistakes(db, 5),
-      getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
-      getLeechedItems(db, { limit: 5 }),
-      getBurnedItemCount(db),
-      getExcludedItemCount(db),
-    ]);
-    setSummary(s);
-    setForecast(f);
-    setLevelProgress(lp);
-    setRecentMistakes(rm);
-    setApprenticeLeeches(al);
-    setAllLeeches(allL);
-    setBurnedCount(bc);
-    setExcludedCount(ec);
+    try {
+      const db = await openAppDatabase();
+      const [s, f, lp, rm, al, allL, bc, ec] = await Promise.all([
+        getDashboardSummary(db),
+        getReviewForecast(db, 24),
+        getCurrentLevelProgress(db),
+        getRecentMistakes(db, 5),
+        getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
+        getLeechedItems(db, { limit: 5 }),
+        getBurnedItemCount(db),
+        getExcludedItemCount(db),
+      ]);
+      setSummary(s);
+      setForecast(f);
+      setLevelProgress(lp);
+      setRecentMistakes(rm);
+      setApprenticeLeeches(al);
+      setAllLeeches(allL);
+      setBurnedCount(bc);
+      setExcludedCount(ec);
+    } finally {
+      setHasLoadedSummary(true);
+    }
   }, []);
 
   useFocusEffect(
@@ -145,6 +171,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
       }
       setError(describeSyncError(caught).message);
     } finally {
+      setSyncProgress(null);
       setIsRefreshing(false);
     }
   };
@@ -152,7 +179,12 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const isVacation = Boolean(summary?.vacationStartedAt);
   const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
-  const syncStatus = syncProgress?.label ?? lifecycleSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh');
+  const activeSyncProgress = syncProgress ?? lifecycleSyncProgress ?? null;
+  const activeSyncError = error ?? lifecycleSyncError ?? null;
+  const hasLocalCache = Boolean(summary?.lastSyncedAt) || (summary?.cachedSubjects ?? 0) > 0;
+  const shouldShowFirstSync = hasLoadedSummary && !hasLocalCache;
+  const isSyncing = isRefreshing || Boolean(activeSyncProgress);
+  const syncStatus = activeSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh or use the sync button below');
   const srsEntries = [
     { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice, srsMin: 1, srsMax: 4 },
     { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru, srsMin: 5, srsMax: 6 },
@@ -168,17 +200,19 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
     mutedColor: theme.colors.mutedText,
     rippleColor: theme.isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(32, 26, 36, 0.05)',
   };
-  const entranceStyle = {
-    opacity: entrance,
-    transform: [
-      {
-        translateY: entrance.interpolate({
-          inputRange: [0, 1],
-          outputRange: [16, 0],
-        }),
-      },
-    ],
-  };
+  const entranceStyle = reduceMotion
+    ? undefined
+    : {
+        opacity: entrance,
+        transform: [
+          {
+            translateY: entrance.interpolate({
+              inputRange: [0, 1],
+              outputRange: [16, 0],
+            }),
+          },
+        ],
+      };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -233,6 +267,27 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
         </Animated.View>
 
         {isVacation ? <Text style={styles.vacationBanner}>Vacation mode active</Text> : null}
+
+        {shouldShowFirstSync ? (
+          <View style={styles.firstSyncPanel} accessibilityLiveRegion="polite">
+            <Text style={styles.panelTitle}>Sync your WaniKani data</Text>
+            <Text style={styles.bodyText}>
+              Download your local cache before lessons, reviews, search, and subject details unlock. If your account has no available work yet, syncing still confirms your latest status.
+            </Text>
+            {activeSyncProgress ? <Text style={styles.bodyText}>{activeSyncProgress.label}</Text> : null}
+            {activeSyncError ? <Text style={styles.errorText} accessibilityRole="alert">{activeSyncError}</Text> : null}
+            <Pressable
+              disabled={isSyncing}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSyncing, busy: isSyncing }}
+              accessibilityHint="Downloads subjects, assignments, reviews, and study data from WaniKani."
+              onPress={sync}
+              style={({ pressed }) => [styles.primaryButton, (pressed || isSyncing) && styles.pressed]}
+            >
+              <Text style={styles.primaryButtonText}>{isSyncing ? 'Syncing…' : 'Sync WaniKani data'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Animated.View key={theme.isDark ? 'dark-actions' : 'light-actions'} style={[styles.actionStack, entranceStyle]}>
           <StudyAction
@@ -437,6 +492,7 @@ function StudyAction({
       accessibilityLabel={`${label}: ${value} available`}
       accessibilityHint={hint}
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       style={({ pressed }) => [
         actionStyles.card,
         featured ? actionStyles.featuredCard : actionStyles.secondaryCard,
@@ -761,6 +817,19 @@ function makeStyles(theme: AppTheme, isCompact: boolean) {
       backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
       borderWidth: 1,
       borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
+      gap: 14,
+      shadowColor: '#000000',
+      shadowOpacity: theme.isDark ? 0.16 : 0.05,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
+    },
+    firstSyncPanel: {
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
+      borderWidth: 2,
+      borderColor: theme.colors.kanji,
       gap: 14,
       shadowColor: '#000000',
       shadowOpacity: theme.isDark ? 0.16 : 0.05,

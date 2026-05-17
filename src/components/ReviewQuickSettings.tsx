@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -56,6 +58,16 @@ export function ReviewQuickSettings({
   );
 
   const canWrapUpNow = canWrapUp && !wrappingUp && !hasFeedback;
+  const confirmEndSession = () => {
+    Alert.alert(
+      'End review session?',
+      'Unsaved answers in this active session will be discarded and you will return to the dashboard.',
+      [
+        { text: 'Keep studying', style: 'cancel' },
+        { text: 'End session', style: 'destructive', onPress: onEndSession },
+      ],
+    );
+  };
 
   return (
     <Modal
@@ -67,12 +79,12 @@ export function ReviewQuickSettings({
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quick Settings</Text>
-          <Pressable onPress={onClose} style={styles.closeButton}>
+          <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close quick settings">
             <Text style={styles.closeButtonText}>Done</Text>
           </Pressable>
         </View>
 
-        <View style={styles.sections}>
+        <ScrollView contentContainerStyle={styles.sections} showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Answers &amp; Marking</Text>
             <ToggleRow
@@ -131,6 +143,9 @@ export function ReviewQuickSettings({
             ) : canWrapUp ? (
               <Pressable
                 onPress={canWrapUpNow ? onWrapUp : undefined}
+                accessibilityRole="button"
+                accessibilityLabel={`Wrap up session, ${remainingInBatch} remaining in this batch`}
+                accessibilityState={{ disabled: !canWrapUpNow }}
                 style={({ pressed }) => [
                   styles.actionRow,
                   !canWrapUpNow && styles.actionRowDisabled,
@@ -143,7 +158,9 @@ export function ReviewQuickSettings({
               </Pressable>
             ) : null}
             <Pressable
-              onPress={onEndSession}
+              onPress={confirmEndSession}
+              accessibilityRole="button"
+              accessibilityLabel="End review session"
               style={({ pressed }) => [
                 styles.actionRow,
                 styles.actionRowDanger,
@@ -153,7 +170,7 @@ export function ReviewQuickSettings({
               <Text style={styles.actionRowTextDanger}>End Session</Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -179,6 +196,9 @@ function ToggleRow({
       <Text style={styles.toggleLabel}>{label}</Text>
       <Switch
         value={value}
+        accessibilityLabel={label}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value }}
         onValueChange={onToggle}
         trackColor={{ false: theme.colors.border, true: theme.colors.kanji }}
         thumbColor="#ffffff"

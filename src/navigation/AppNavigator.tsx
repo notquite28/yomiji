@@ -57,6 +57,7 @@ export function AppNavigator() {
 	const appState = useRef<AppStateStatus>(AppState.currentState);
 	const lastForegroundCheckAt = useRef(0);
 	const lastPendingFlushAt = useRef(0);
+	const activeLifecycleSyncCount = useRef(0);
 
 	const handleSyncError = useCallback(async (caught: unknown) => {
 		if (isSyncAuthError(caught)) {
@@ -65,6 +66,19 @@ export function AppNavigator() {
 			return;
 		}
 		setLifecycleSyncError(describeSyncError(caught).message);
+	}, []);
+
+	const beginLifecycleSync = useCallback(() => {
+		activeLifecycleSyncCount.current += 1;
+		return () => {
+			activeLifecycleSyncCount.current = Math.max(
+				0,
+				activeLifecycleSyncCount.current - 1,
+			);
+			if (activeLifecycleSyncCount.current === 0) {
+				setLifecycleSyncProgress(null);
+			}
+		};
 	}, []);
 
 	useEffect(() => {
@@ -98,6 +112,7 @@ export function AppNavigator() {
 		}
 		lastForegroundCheckAt.current = now;
 
+		const finishLifecycleSync = beginLifecycleSync();
 		setLifecycleSyncError(null);
 		try {
 			const db = await openAppDatabase();
@@ -127,6 +142,8 @@ export function AppNavigator() {
 			}
 		} catch (caught) {
 			await handleSyncError(caught);
+		} finally {
+			finishLifecycleSync();
 		}
 
 		// Always reschedule notifications based on local data, regardless of
@@ -138,7 +155,7 @@ export function AppNavigator() {
 			// Notification scheduling is best-effort; failures are non-critical
 			// and should not disrupt the user experience.
 		}
-	}, [apiToken, handleSyncError]);
+	}, [apiToken, beginLifecycleSync, handleSyncError]);
 
 	const syncOnBackground = useCallback(async () => {
 		if (!apiToken) {
@@ -154,6 +171,7 @@ export function AppNavigator() {
 		}
 		lastPendingFlushAt.current = now;
 
+		const finishLifecycleSync = beginLifecycleSync();
 		try {
 			const db = await openAppDatabase();
 			if (!(await hasPendingWrites(db))) {
@@ -168,8 +186,10 @@ export function AppNavigator() {
 			setSyncRevision((value) => value + 1);
 		} catch (caught) {
 			await handleSyncError(caught);
+		} finally {
+			finishLifecycleSync();
 		}
-	}, [apiToken, handleSyncError]);
+	}, [apiToken, beginLifecycleSync, handleSyncError]);
 
 	// Set up Android notification channel on mount.
 	useEffect(() => {

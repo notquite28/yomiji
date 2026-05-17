@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import appConfig from '../../app.json';
@@ -38,6 +38,7 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
   const [data, setData] = useState<DiagnosticsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadDiagnostics = useCallback(async () => {
     try {
@@ -140,6 +141,39 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
     }
   };
 
+  const confirmClearErrors = () => {
+    Alert.alert('Clear error log?', 'This removes all locally stored diagnostic errors.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: handleClearErrors },
+    ]);
+  };
+
+  const handleFullRefresh = async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      const db = await openAppDatabase();
+      const token = await getApiToken();
+      await runFullRefresh({ db, client: new WaniKaniClient(token ?? '') });
+      await loadDiagnostics();
+    } catch (caught) {
+      if (isSyncAuthError(caught)) {
+        onForceLogout?.();
+        return;
+      }
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const confirmFullRefresh = () => {
+    Alert.alert('Clear cache and resync?', 'This deletes cached WaniKani data on this device and downloads a fresh copy. Pending writes are preserved.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear and Resync', style: 'destructive', onPress: handleFullRefresh },
+    ]);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -210,7 +244,10 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
           {data?.errorLogCount ? (
             <Pressable
               disabled={isClearing}
-              onPress={handleClearErrors}
+              onPress={confirmClearErrors}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isClearing, busy: isClearing }}
+              accessibilityHint="Asks for confirmation before clearing stored diagnostics errors."
               style={({ pressed }) => [styles.secondaryButton, (pressed || isClearing) && styles.pressed]}
             >
               <Text style={styles.secondaryButtonText}>{isClearing ? 'Clearing...' : 'Clear Error Log'}</Text>
@@ -225,24 +262,16 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
         <View style={styles.dangerPanel}>
           <Text style={styles.panelTitle}>Full Refresh</Text>
           <Text style={styles.bodyText}>Clear all cached data and re-download from WaniKani. Pending writes are preserved.</Text>
+          {isRefreshing ? <Text style={styles.bodyText} accessibilityLiveRegion="polite">Clearing cache and downloading a fresh copy…</Text> : null}
           <Pressable
-            onPress={async () => {
-              try {
-                const db = await openAppDatabase();
-                const token = await getApiToken();
-                await runFullRefresh({ db, client: new WaniKaniClient(token ?? '') });
-                await loadDiagnostics();
-              } catch (caught) {
-                if (isSyncAuthError(caught)) {
-                  onForceLogout?.();
-                  return;
-                }
-                setError(caught instanceof Error ? caught.message : String(caught));
-              }
-            }}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+            disabled={isRefreshing}
+            onPress={confirmFullRefresh}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isRefreshing, busy: isRefreshing }}
+            accessibilityHint="Asks for confirmation before clearing cached data and syncing again."
+            style={({ pressed }) => [styles.secondaryButton, (pressed || isRefreshing) && styles.pressed]}
           >
-            <Text style={styles.secondaryButtonText}>Clear Cache and Resync</Text>
+            <Text style={styles.secondaryButtonText}>{isRefreshing ? 'Refreshing...' : 'Clear Cache and Resync'}</Text>
           </Pressable>
         </View>
       </ScrollView>

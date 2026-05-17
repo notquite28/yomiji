@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -228,6 +228,57 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
     : '0/0';
   const completedItems = session?.completedItems ?? [];
+  const allowLeavingRef = useRef(false);
+
+  const handleBack = () => {
+    if (!session || isComplete) {
+      navigation.goBack();
+      return;
+    }
+
+    Alert.alert(
+      'End review session?',
+      'Progress from this active session may be lost if you leave now.',
+      [
+        { text: 'Keep reviewing', style: 'cancel' },
+        {
+          text: 'End session',
+          style: 'destructive',
+          onPress: () => {
+            allowLeavingRef.current = true;
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (!session || isComplete || allowLeavingRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      Alert.alert(
+        'End review session?',
+        'Progress from this active session may be lost if you leave now.',
+        [
+          { text: 'Keep reviewing', style: 'cancel' },
+          {
+            text: 'End session',
+            style: 'destructive',
+            onPress: () => {
+              allowLeavingRef.current = true;
+              navigation.dispatch(event.data.action);
+            },
+          },
+        ],
+      );
+    });
+
+    return unsubscribe;
+  }, [isComplete, navigation, session]);
 
   const subjectLookup = useMemo(
     () => new Map(queueItems.map((item) => [item.subjectId, item.subject])),
@@ -523,7 +574,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
       <SessionHeader
-        onBack={() => navigation.goBack()}
+        onBack={handleBack}
         progress={progress}
         onSettings={() => setQuickSettingsOpen(true)}
       />
@@ -579,6 +630,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           placeholderTextColor={theme.colors.mutedText}
           style={styles.input}
           returnKeyType="done"
+          accessibilityLabel={displayTaskType === 'meaning' ? 'Review meaning answer' : 'Review reading answer'}
+          accessibilityHint="Enter your answer for the current review prompt."
           onSubmitEditing={submit}
         />
       )}

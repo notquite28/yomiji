@@ -185,7 +185,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		[],
 	);
 
-	const logout = async () => {
+	const performLogout = async () => {
 		setError(null);
 		setIsLoggingOut(true);
 		try {
@@ -205,6 +205,17 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		} finally {
 			setIsLoggingOut(false);
 		}
+	};
+
+	const confirmLogout = () => {
+		Alert.alert(
+			"Log out and clear cache?",
+			"This removes your API token, local cache, pending queues, and scheduled review notifications from this device.",
+			[
+				{ text: "Cancel", style: "cancel" },
+				{ text: "Log Out", style: "destructive", onPress: performLogout },
+			],
+		);
 	};
 
 	return (
@@ -248,6 +259,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 							</Pressable>
 						))}
 					</View>
+
 				</View>
 
 				<View style={styles.panel}>
@@ -636,7 +648,10 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 					{error ? <Text style={styles.errorText}>{error}</Text> : null}
 					<Pressable
 						disabled={isLoggingOut}
-						onPress={logout}
+						onPress={confirmLogout}
+						accessibilityRole="button"
+						accessibilityState={{ disabled: isLoggingOut, busy: isLoggingOut }}
+						accessibilityHint="Asks for confirmation before removing your token and local cache."
 						style={({ pressed }) => [
 							styles.logoutButton,
 							(pressed || isLoggingOut) && styles.pressed,
