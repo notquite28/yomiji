@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -19,6 +19,7 @@ import { findBySubjectId } from '../domain/db/studyMaterialRepository';
 import { getSubjectsByIds } from '../domain/db/subjectRepository';
 import { getBurnedItemPracticeQueue, getLeechPracticeQueue, getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
@@ -229,28 +230,30 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     : '0/0';
   const completedItems = session?.completedItems ?? [];
   const allowLeavingRef = useRef(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const pendingBackAction = useRef<Readonly<{ type: string; payload?: object; source?: string; target?: string }> | null>(null);
 
   const handleBack = () => {
     if (!session || isComplete) {
       navigation.goBack();
       return;
     }
+    setConfirmLeave(true);
+  };
 
-    Alert.alert(
-      'End review session?',
-      'Progress from this active session may be lost if you leave now.',
-      [
-        { text: 'Keep reviewing', style: 'cancel' },
-        {
-          text: 'End session',
-          style: 'destructive',
-          onPress: () => {
-            allowLeavingRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ],
-    );
+  const handleCancelLeave = () => {
+    setConfirmLeave(false);
+    pendingBackAction.current = null;
+  };
+
+  const handleConfirmLeave = () => {
+    allowLeavingRef.current = true;
+    setConfirmLeave(false);
+    if (pendingBackAction.current !== null) {
+      navigation.dispatch(pendingBackAction.current);
+    } else {
+      navigation.goBack();
+    }
   };
 
   useEffect(() => {
@@ -260,21 +263,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       }
 
       event.preventDefault();
-      Alert.alert(
-        'End review session?',
-        'Progress from this active session may be lost if you leave now.',
-        [
-          { text: 'Keep reviewing', style: 'cancel' },
-          {
-            text: 'End session',
-            style: 'destructive',
-            onPress: () => {
-              allowLeavingRef.current = true;
-              navigation.dispatch(event.data.action);
-            },
-          },
-        ],
-      );
+      pendingBackAction.current = event.data.action;
+      setConfirmLeave(true);
     });
 
     return unsubscribe;
@@ -832,6 +822,15 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         wrappingUp={session?.wrappingUp ?? false}
         hasFeedback={feedback !== null}
         remainingInBatch={session?.activeQueueLength ?? 0}
+      />
+      <ConfirmLeaveBanner
+        visible={confirmLeave}
+        title="End review session?"
+        message="Progress from this active session may be lost if you leave now."
+        cancelLabel="Keep reviewing"
+        confirmLabel="End session"
+        onCancel={handleCancelLeave}
+        onConfirm={handleConfirmLeave}
       />
     </ScreenLayout>
   );

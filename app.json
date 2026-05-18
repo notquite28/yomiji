@@ -28,7 +28,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-sqlite",
-      "expo-notifications"
+      "expo-notifications",
+      "./config-plugins/withPredictiveBackGesture"
     ],
     "extra": {
       "eas": {

@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -22,6 +22,7 @@ import {
   ReviewSessionSettings,
 } from '../domain/study/reviewSession';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
@@ -164,23 +165,30 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     : '100%';
   const allowLeavingRef = useRef(false);
   const shouldConfirmLeave = phase === 'intro' || (phase === 'quiz' && !isQuizComplete);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const pendingBackAction = useRef<Readonly<{ type: string; payload?: object; source?: string; target?: string }> | null>(null);
 
   const handleBack = () => {
-    Alert.alert(
-      'End lesson session?',
-      'Progress from this active lesson session may be lost if you leave now.',
-      [
-        { text: 'Keep learning', style: 'cancel' },
-        {
-          text: 'End session',
-          style: 'destructive',
-          onPress: () => {
-            allowLeavingRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ],
-    );
+    if (!shouldConfirmLeave) {
+      navigation.goBack();
+      return;
+    }
+    setConfirmLeave(true);
+  };
+
+  const handleCancelLeave = () => {
+    setConfirmLeave(false);
+    pendingBackAction.current = null;
+  };
+
+  const handleConfirmLeave = () => {
+    allowLeavingRef.current = true;
+    setConfirmLeave(false);
+    if (pendingBackAction.current !== null) {
+      navigation.dispatch(pendingBackAction.current);
+    } else {
+      navigation.goBack();
+    }
   };
 
   useEffect(() => {
@@ -190,21 +198,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
       }
 
       event.preventDefault();
-      Alert.alert(
-        'End lesson session?',
-        'Progress from this active lesson session may be lost if you leave now.',
-        [
-          { text: 'Keep learning', style: 'cancel' },
-          {
-            text: 'End session',
-            style: 'destructive',
-            onPress: () => {
-              allowLeavingRef.current = true;
-              navigation.dispatch(event.data.action);
-            },
-          },
-        ],
-      );
+      pendingBackAction.current = event.data.action;
+      setConfirmLeave(true);
     });
 
     return unsubscribe;
@@ -424,6 +419,15 @@ export function LessonSessionScreen({ navigation, route }: Props) {
             : 'Submit Answer'}
         </Text>
       </Pressable>
+      <ConfirmLeaveBanner
+        visible={confirmLeave}
+        title="End lesson session?"
+        message="Progress from this active lesson session may be lost if you leave now."
+        cancelLabel="Keep learning"
+        confirmLabel="End session"
+        onCancel={handleCancelLeave}
+        onConfirm={handleConfirmLeave}
+      />
     </ScreenLayout>
   );
 }
