@@ -183,4 +183,4 @@ Tests run in Node via `ts-jest`. React Native APIs need mocking or should stay o
 - Offline audio download/caching, custom fonts, font-size settings
 - Deep links and universal/app links
 - WaniKani recommended lessons vs. advanced lesson pool separation (research in `docs/recommended-lessons-research.md`, blocked on webapp data)
-- Device QA checklists, large-cache performance tests, mocked API integration tests
+- Device QA checklists and large-cache performance tests

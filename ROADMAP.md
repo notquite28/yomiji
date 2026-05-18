@@ -2,6 +2,8 @@
 
 This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the original product requirements context.
 
+_Last audited against the current codebase: 2026-05-18._
+
 ## Guiding Principles
 
 - [x] Preserve established iOS learning semantics while building Android-native interaction patterns.
@@ -158,6 +160,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Cancel legacy hourly notification identifiers on upgrade.
 - [x] Add daily reminder toggle in settings UI with conditional hour stepper.
 - [x] Add integration tests for notification scheduling (vacation mode, badge-only, threshold, daily, legacy cleanup).
+- [x] Add notification tap handling so scheduled review/daily notifications open the review session.
 - [ ] Add route handling for the existing custom scheme (`yomiji://`) for reviews, lessons, subject IDs, subject text routes, and wrap-up.
 - [ ] Add universal/app link configuration where feasible.
 - [x] Add platform support matrix for iOS and Android notification limitations.
@@ -219,7 +222,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
-- Local notifications use a threshold + daily reminder model: a one-shot notification when the Nth future review becomes available, and an optional recurring daily reminder at a configured hour. Badge counts and vacation-mode suppression are implemented. Notification taps navigate to the review session. The custom scheme is reserved in app config, but deep-link route parsing and universal/app links are not implemented.
+- Local notifications use a threshold + daily reminder model: a one-shot notification when the Nth future review becomes available, and an optional recurring daily reminder at a configured hour. Badge counts, vacation-mode suppression, and notification tap navigation to the review session are implemented. The custom scheme is reserved in app config, but deep-link route parsing and universal/app links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
 - Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Notifications, Diagnostics, and Log Out. Font settings UI is not yet exposed.
