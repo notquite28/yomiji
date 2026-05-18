@@ -38,13 +38,14 @@
 | `src/domain/subjects/` | Radical image repository, SVG CSS-variable processing |
 | `src/domain/storage/` | Secure API token storage |
 | `src/screens/` | All app screens (Dashboard, Login, Review/Lesson sessions, Subject browse/search/detail, Settings, Diagnostics) |
-| `src/components/` | Shared UI components (`ScreenLayout`, `SubjectHeroCard`, `SrsBar`, charts, `ReviewQuickSettings`) |
+| `src/components/` | Shared UI components (`ScreenLayout`, `SessionHeader`, `SubjectHeroCard`, `SrsBar`, charts, `ReviewQuickSettings`, `ConfirmLeaveBanner`) |
 | `src/navigation/` | React Navigation stack, auth gate, lifecycle sync hooks, route types |
 | `src/theme/` | Theme provider (light/dark/system), WaniKani palette, `colorForSubjectType()` |
 | `src/test/` | Test infrastructure — SQLite shim, test DB helpers, factories, mock API |
 | `tsurukame/` | **Read-only** iOS Swift reference code. Never import from or modify. |
 | `docs/` | Research docs (notifications, recommended lessons algorithm) |
 | `scripts/` | `version-bump.sh` for release automation |
+| `config-plugins/` | Custom Expo config plugins for AndroidManifest / build.gradle modifications |
 
 ## Development Commands
 
@@ -97,6 +98,16 @@ pnpm version:bump [patch|minor|major] # bump version, commit, tag
 - All components use `makeStyles(theme: AppTheme)` pattern from `src/theme/AppThemeProvider.tsx`.
 - Use `colorForSubjectType()` from `src/theme/subjectColors.ts` for subject-type colors — never duplicate the switch.
 
+### Back Navigation & Confirmations
+
+- **Do not use `Alert.alert` in session screens (Review, Lesson) for back-navigation confirmations.** It conflicts with predictive back gesture animations on Android. Use `ConfirmLeaveBanner` from `src/components/ConfirmLeaveBanner.tsx` instead — it renders an inline confirmation banner that is gesture-safe.
+- Both `ReviewSessionScreen` and `LessonSessionScreen` already follow this pattern. The `handleBack` callback sets `confirmLeave` state; the `beforeRemove` listener stores `event.data.action` in a ref and sets `confirmLeave`. The banner calls either `navigation.dispatch(storedAction)` (gesture back) or `navigation.goBack()` (button back).
+
+### Expo Config Plugins
+
+- Expo SDK 55 does not yet have a native `predictiveBackGestureEnabled` config option (tracking [expo#38774](https://github.com/expo/expo/pull/38774)). The custom plugin `config-plugins/withPredictiveBackGesture.js` sets `android:enableOnBackInvokedCallback="true"` in AndroidManifest.xml.
+- `npx expo prebuild --clean` regenerates `android/` and `ios/` from scratch. Any manual edits to generated files (like AndroidManifest.xml) **will be lost**. Always route Android manifest modifications through a config plugin.
+
 ### Dependency Injection
 
 - Manual prop drilling from `AppNavigator` to screens (apiToken, db, callbacks).
@@ -119,6 +130,7 @@ pnpm version:bump [patch|minor|major] # bump version, commit, tag
 | `src/test/testDb.ts` | `createTestDatabase()` helper for integration tests |
 | `ROADMAP.md` | Milestone tracking — source of truth for implementation status |
 | `REACT_NATIVE_PORT_PRD.md` | Product requirements document |
+| `config-plugins/withPredictiveBackGesture.js` | Expo config plugin: enables Android predictive back gesture (Android 13+) |
 
 ## Runtime & Tooling
 
