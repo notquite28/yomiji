@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView as RNScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TooltipPressable } from './TooltipPressable';
@@ -9,24 +9,40 @@ export function ScreenLayout({
   children,
   scrollable = false,
   keyboardShouldPersistTaps = false,
+  keyboardAvoiding = false,
 }: {
   children: ReactNode;
   scrollable?: boolean;
   keyboardShouldPersistTaps?: boolean;
+  keyboardAvoiding?: boolean;
 }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
 
   if (scrollable) {
-    const ScrollView = require('react-native').ScrollView;
+    const scrollView = (
+      <RNScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps={keyboardShouldPersistTaps ? 'handled' : undefined}
+      >
+        {children}
+      </RNScrollView>
+    );
+
+    const body = keyboardAvoiding ? (
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {scrollView}
+      </KeyboardAvoidingView>
+    ) : (
+      scrollView
+    );
+
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps={keyboardShouldPersistTaps ? 'handled' : undefined}
-        >
-          {children}
-        </ScrollView>
+        {body}
       </SafeAreaView>
     );
   }
@@ -117,6 +133,9 @@ function makeStyles(theme: AppTheme) {
       flexGrow: 1,
       padding: 20,
       gap: 18,
+    },
+    keyboardAvoiding: {
+      flex: 1,
     },
     centered: {
       flex: 1,

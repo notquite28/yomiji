@@ -572,7 +572,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const showsReadingInAnki = Boolean(acceptedReadings);
 
   return (
-    <ScreenLayout scrollable keyboardShouldPersistTaps>
+    <ScreenLayout scrollable keyboardShouldPersistTaps keyboardAvoiding>
       <SessionHeader
         onBack={handleBack}
         progress={progress}

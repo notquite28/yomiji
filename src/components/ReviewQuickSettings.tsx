@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppSettings, saveSettings } from '../domain/settings/settings';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
@@ -76,12 +77,15 @@ export function ReviewQuickSettings({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.header}>
+          <View style={styles.headerSide} />
           <Text style={styles.title}>Quick Settings</Text>
-          <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close quick settings">
-            <Text style={styles.closeButtonText}>Done</Text>
-          </Pressable>
+          <View style={styles.headerSide}>
+            <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close quick settings">
+              <Text style={styles.closeButtonText}>Done</Text>
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.sections} showsVerticalScrollIndicator={false}>
@@ -171,7 +175,7 @@ export function ReviewQuickSettings({
             </Pressable>
           </View>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -212,24 +216,31 @@ function makeStyles(theme: AppTheme) {
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
-      paddingTop: 20,
     },
     header: {
+      minHeight: 56,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       paddingHorizontal: 20,
-      paddingBottom: 16,
+      paddingBottom: 12,
+    },
+    headerSide: {
+      width: 88,
+      alignItems: 'flex-end',
     },
     title: {
+      flex: 1,
       color: theme.colors.text,
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: '900',
+      textAlign: 'center',
     },
     closeButton: {
+      minHeight: 38,
       borderRadius: 999,
       paddingHorizontal: 16,
-      paddingVertical: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
