@@ -1,6 +1,6 @@
 # WaniKani Recommended Lessons Algorithm
 
-Research conducted May 2026. Data verified against a level 10 account with 23 available lessons (4 kanji, 19 vocabulary).
+Research conducted May 2026. Data verified against multiple WaniKani lesson-pool snapshots, primarily level 10 accounts.
 
 ## Confirmed Algorithm
 
@@ -143,11 +143,46 @@ The web app recommended **15 lessons** (3 batches). The user completed all 8 bat
 - Confirm `lessons_batch_size = 5` for this account
 - Whether the sort key is strictly `lesson_position` or includes dependencies (e.g., vocab that uses a kanji appears after that kanji's lesson)
 
+## Verified Data — Account D (level 10, screenshot + recommended lessons, 2026-05-18)
+
+**Screenshot source:** WaniKani webapp lesson picker (Advanced pool) for Level 10.
+
+**Available items (Advanced pool):** 2 kanji + 24 vocabulary = 26 total shown
+
+**Kanji (2):** 漢, 病
+
+**Vocabulary (24):** 最終, 軽い, 道路, 線路, 路地, 算数, フランス語, スペイン語, 主語, 鳴く, 線, 横, 最も, 最高, 最後, 最近, 心配, 開始, 曲線, 言語, 作業, 語る, 足し算, 引き算
+
+**Observed recommended lessons (batch_size = 5):**
+
+The web app recommended **15 lessons** (3 batches) out of the 26-item advanced pool.
+
+| Batch | Items (in presented order) | Composition |
+| ----- | -------------------------- | ----------- |
+| 1 | 最終, 軽い, 漢, 道路, 線路 | 1K + 4V |
+| 2 | 路地, 算数, 病, フランス語, スペイン語 | 1K + 4V |
+| 3 | 主語, 鳴く, 線, 横, 最も | 0K + 5V |
+
+**Advanced-only remainder (not in today's recommended set):** 最高, 最後, 最近, 心配, 開始, 曲線, 言語, 作業, 語る, 足し算, 引き算
+
+**Distribution observations:**
+
+- Recommended count again matches **3 × batch_size = 15**, even though 26 lessons are available.
+- Both available kanji appear in the first two recommended batches, with vocabulary filling the remaining slots.
+- The third recommended batch is vocabulary-only because the kanji queue is exhausted.
+- This snapshot supports treating the full lesson picker as the advanced pool while the dashboard "recommended" set is a capped, ordered subset.
+
+**Pending verification:**
+
+- `lesson_position` values for all 26 subjects.
+- Confirm `lessons_batch_size = 5` and `max_daily_lessons` for this account at the time of the screenshot.
+- Whether the 15-item cutoff is consistently `3 × lessons_batch_size`, `max_daily_lessons`, or another WaniKani preference/heuristic.
+
 ---
 
 ## Open Questions
 
-1. **Total recommended cutoff** — Why 15 out of 23 in Account A? Could be `3 × batch_size = 15` if the anti-small-batch rule doesn't kick in for that distribution. Need batch constituency details.
+1. **Total recommended cutoff** — Multiple level 10 snapshots show 15 recommended lessons (`3 × batch_size`) even when more lessons are available (23, 26, or 39+). Need to confirm whether the cutoff is always `3 × lessons_batch_size`, `max_daily_lessons`, or another WaniKani preference/heuristic.
 
 2. **Within-batch ordering** — Items within a batch don't appear in pure `lesson_position` order. Batch 2 was presented as: 話(177), 出会う(178), 親(62), 私大(183), 千葉(188). The kanji 親(62) was in the middle, not sorted by position. The within-batch sort algorithm is unknown. Account B's order `v,k,v,v,k,v,k` also suggests interleaved lesson_position sort rather than type-blocked.
 

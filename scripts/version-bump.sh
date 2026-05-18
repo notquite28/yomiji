@@ -38,7 +38,19 @@ node -e "
   fs.writeFileSync(path, JSON.stringify(app, null, 2) + '\n');
 " "$APPJSON" "$NEW"
 
-git add "$PACKAGE" "$APPJSON"
+BUILDGRADLE="$ROOT/android/app/build.gradle"
+node -e "
+  const fs = require('fs');
+  const path = process.argv[1];
+  const ver = process.argv[2];
+  const code = process.argv[3];
+  let content = fs.readFileSync(path, 'utf8');
+  content = content.replace(/versionCode \d+/, 'versionCode ' + code);
+  content = content.replace(/versionName \"[^\"]+\"/, 'versionName \"' + ver + '\"');
+  fs.writeFileSync(path, content);
+" "$BUILDGRADLE" "$NEW" "$(node -e "console.log(require(process.argv[1]).expo.android.versionCode)" "$APPJSON")"
+
+git add "$PACKAGE" "$APPJSON" "$BUILDGRADLE"
 git commit -m "Release v$NEW"
 git tag -a "v$NEW" -m "Release v$NEW"
 
