@@ -4,7 +4,9 @@ A WaniKani study app for Android, built with React Native and Expo. Named for �
 
 読路 is based on [Tsurukame](https://github.com/davidsansome/tsurukame), an unofficial WaniKani iOS app by David Sansome and contributors. Core domain logic — including the review state machine, answer checker, lesson flow, sync architecture, and settings — was derived from the Tsurukame Swift/UIKit source code in `tsurukame/`, with original flows and UI where the cross-platform app diverges. Tsurukame is licensed under the [Apache License 2.0](tsurukame/LICENSE).
 
-See `ROADMAP.md` for the parity checklist and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
+The app name is 読路 (Yomiji); the onboarding hero also uses the kana/kanji wordmark 読み道 as a visual “reading road/path” motif.
+
+See `ROADMAP.md` for the parity checklist, `USER_MANUAL.md` for feature-by-feature usage instructions, and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
 
 ## Screenshots
 
@@ -20,25 +22,27 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 
 ### Authentication
 
-- WaniKani API token login validated against `/user`.
+- WaniKani API token login validated against `/user`; the token must include review and study-material scopes.
 - Secure token storage via platform Keychain/Keystore.
-- Logout clears token, local cache, and pending queues.
+- After login, the dashboard prompts the user to sync WaniKani data before lessons, reviews, search, and subject details are available from the local cache.
+- Logout clears token, local cache, pending queues, and scheduled review notifications.
 
 ### Data Sync
 
 - Incremental sync using `updated_after` cursors for users, subjects, assignments, study materials, level progressions, voice actors, and review statistics.
 - Pending-write queues for review progress, lesson starts, and study material edits, flushed to WaniKani when online.
-- Battery-conscious lifecycle sync: full sync on foreground when stale (>15 min), pending-write flush on background only when writes exist.
-- Manual pull-to-refresh for explicit full sync.
+- Battery-conscious lifecycle sync: incremental sync on foreground when stale (>15 min), pending-write flush on background only when writes exist, and pending-write flush before remote fetches.
+- Manual pull-to-refresh for explicit incremental sync.
 - Network-state awareness with actionable error messages for offline, timeout, auth, rate-limit, hibernating-account, and server errors.
 - Auth error handling: 401/403 responses clear the stored token and prompt re-authentication.
 - Rate-limit handling: 429 responses show retry timing from `Retry-After` header.
 - Hibernating-account detection with actionable copy and link to wanikani.com.
 - Sanitized error logging to local `error_log` table with token redaction.
-- Manual full refresh: clears all cached remote data while preserving pending local writes, available from diagnostics screen.
+- Manual full refresh from the diagnostics screen: clears all cached remote data and resyncs while preserving pending local writes.
 
 ### Dashboard
 
+- First-sync panel for an empty local cache, with a **Sync WaniKani data** action before lessons, reviews, search, and subject details unlock.
 - Username, level, and cache stats header.
 - Available lessons count from the unlocked pool.
 - Available reviews count based on current time.
@@ -64,6 +68,7 @@ The app is an offline-first WaniKani client with a local SQLite cache, increment
 - Inline subject details after answer feedback with task-aware section hiding (meaning/reading sections hidden until attempted). Respects `showFullAnswer` setting.
 - Mnemonic markup rendering for all WaniKani tag types (radical, kanji, vocabulary, reading, meaning, ja, jp, kan, bold/italic) with subject-type–colored highlights.
 - Review summary with success rate and incorrect items grouped by level.
+- For vocabulary, a **Play Audio** button appears after answer feedback and is disabled while offline.
 - Wrap-up mode that stops adding new items and finishes only active items.
 
 **Review Ordering** — Random, ascending SRS, descending SRS, alternating SRS, current level first, lowest level first, newest available, oldest available, longest relative wait.
@@ -97,11 +102,11 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Introduction Pages** — Each subject shows a detail page with meanings, readings, components/radicals, mnemonics (with inline Japanese rendering), context sentences (vocabulary), parts of speech (vocabulary), and "Used In" amalgamation chips. Navigate between subjects via chip bar or Back/Next buttons.
 
-**Lesson Quiz** — After all introduction pages, a quiz phase uses the same answer-checking UI as reviews. Answer checking supports meaning and reading prompts with romaji-to-kana conversion. Lesson starts are queued for WaniKani API sync only after each subject is correctly answered in the quiz.
+**Lesson Quiz** — After all introduction pages, a quiz phase uses the shared answer checker with meaning and reading prompts plus romaji-to-kana conversion. Cheats, Anki mode, and the Exact Match review setting are not applied during lesson quizzes. Lesson starts are queued for WaniKani API sync only after each subject is correctly answered in the quiz.
 
 ### Lesson Picker
 
-- Browses all available lesson items grouped by level and subject type (radicals, kanji, vocabulary).
+- Browses up to 100 available lesson items grouped by level and subject type (radicals, kanji, vocabulary).
 - Multi-select with checkmark toggles on each item.
 - "Begin (N)" button passes selected items directly to the lesson session, bypassing the dashboard session cap and automatic ordering while still using quiz-sized batches.
 - Respects the same kana-only and hidden/excluded filters as the lesson queue.
@@ -112,17 +117,17 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 **Lessons** — New items per quiz (1–10), max lessons per session (1–50), prioritize current level, interleave lessons, show kana-only vocabulary.
 
-**Reviews** — Review order (9 options), Anki mode (combined card), exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, batch size (1–15), review count limit with configurable cap, leech threshold.
+**Reviews** — Review order (9 options), Anki mode (combined card), exact match, group meaning & reading, meaning first, minimize review penalty, enable cheats, batch size (1–15), review count limit setting (5–500, step 5; currently bounded by a 100-item loaded queue) with enable/disable toggle, leech threshold.
 
 **Subject Details** — Display onyomi readings in katakana, show all accepted alternate readings.
 
-**Audio** — Streamed vocabulary pronunciation playback in reviews, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
+**Audio** — Streamed vocabulary pronunciation playback in reviews, manual playback after vocabulary answer feedback, optional autoplay after correct reading answers, background-audio interruption control, and preferred voice actor selection from synced WaniKani voice actors. Offline audio downloads are not implemented yet.
 
-**Notifications** — Local notifications using a threshold + daily reminder model. A one-shot notification fires when the Nth future review becomes available (configurable threshold, default 50). An optional recurring daily reminder fires at a configured hour using a native DAILY trigger. Badge count reflects current available reviews. Vacation mode suppresses all notifications and badges. Settings for notifications toggle, badging, sounds (iOS only), review threshold (1–200), and daily reminder time (on/off with hour picker). Notification taps navigate to the review session.
+**Notifications** — Local notifications using a threshold + daily reminder model. A one-shot notification fires when the Nth future review becomes available (configurable threshold, default 50). An optional recurring daily reminder fires at a configured hour using a native DAILY trigger. Badge count reflects current available reviews; if review notifications are off but the badge icon is on, 読路 updates only the badge. Vacation mode suppresses all notifications and badges. Settings for notifications toggle, badging, sounds, review threshold (1–200), and daily reminder time (on/off with hour picker). Notification taps navigate to the review session.
 
 **Diagnostics** — Cache stats, sync state/cursors, pending write counts, error log viewer, sanitized export via Share sheet, and full refresh (clear cache and resync).
 
-**Log Out** — Clears token, cache, and pending queues.
+**Log Out** — Clears token, cache, pending queues, and scheduled review notifications.
 
 ### Shared Components
 
@@ -157,7 +162,7 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 - **Level Catalog** — Browse subjects grouped by type (radical, kanji, vocabulary) at the current level, with navigation to detail screens.
 - **Local Search** — Search by Japanese text, meaning, and kana reading prefixes. Exact matches sorted first, then prefix matches, then contains; ties broken by level ascending. Results limited to 50.
 - **Rich Subject Detail** — Meanings, readings, component radicals/kanji with navigation, meaning and reading mnemonics with inline Japanese rendering, hints, context sentences, parts of speech, "Used In" amalgamation chips, SRS stage, and review accuracy percentage.
-- **Synonym Editing** — Add/remove meaning synonyms, queued for WaniKani API sync via pending writes.
+- **Meaning Synonyms** — Existing meaning synonyms are shown and accepted during reviews. New synonyms can currently be added from the review cheat **Add as synonym** after an incorrect meaning answer.
 - **Note Editing** — Add/edit meaning and reading notes, queued for WaniKani API sync.
 
 ### Testing
@@ -180,30 +185,44 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Offline audio downloads are not implemented.
-- Deep links and universal/app links are not implemented.
+- The `yomiji://` custom scheme is reserved in app config, but deep-link route parsing and universal/app links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Katakana practice is not planned.
 
 ## Getting Started
 
+Requirements: Node 22, pnpm 9, Java 17, Android SDK/Emulator, and Expo/EAS-compatible credentials for release work. `pnpm start` uses `expo start --dev-client`, so install/run a development build first with `pnpm android`.
+
 ```sh
 pnpm install
-pnpm start       # expo start --dev-client (requires dev build)
-pnpm android     # expo run:android
+pnpm android     # expo run:android (creates/runs a development build)
+pnpm start       # expo start --dev-client
 ```
 
 ## Commands
 
 ```sh
-pnpm typecheck             # tsc --noEmit
-pnpm test                  # jest --runInBand
-pnpm start                 # expo start --dev-client
-pnpm android               # expo run:android
-pnpm ios                   # expo run:ios
+pnpm typecheck                     # tsc --noEmit
+pnpm test                          # jest --runInBand
+pnpm start                         # expo start --dev-client
+pnpm android                       # expo run:android
+pnpm ios                           # expo run:ios
+pnpm web                           # expo start --web (experimental/unsupported)
+pnpm version:bump [patch|minor|major]  # update package/app versions, commit, and tag
 pnpm exec expo install --check
 ```
 
 Use `pnpm` for dependency changes. Keep `pnpm-lock.yaml` current.
+
+## Release
+
+- Run `pnpm typecheck` and `pnpm test` locally before release.
+- Version source of truth is `package.json` + `app.json`; EAS is configured with remote app version source and production auto-increment, so use `pnpm version:bump [patch|minor|major]` rather than editing native Gradle version fields directly.
+- `pnpm version:bump` updates `package.json` and `app.json`, increments Android `versionCode` and iOS `buildNumber`, commits `Release vX.Y.Z`, and creates an annotated `vX.Y.Z` tag.
+- Push with `git push --follow-tags origin main`. The Android Release workflow runs on `v*` tags or manual dispatch.
+- CI installs pnpm 9, Node 22, and Java 17; runs install/typecheck/tests; builds a production APK with `eas build --platform android --profile production --local --output build.apk`; verifies the APK signature; and publishes `build.apk` to a GitHub Release.
+- Required GitHub secrets: `EXPO_TOKEN`, `YOMIJI_KEYSTORE_BASE64`, and `YOMIJI_KEYSTORE_PASSWORD`. The release key alias is `yomiji`.
+- Release builds fail closed if signing material is missing; debug signing is only for local debug builds.
 
 ## Project Structure
 

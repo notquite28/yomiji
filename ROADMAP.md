@@ -28,7 +28,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Initial answer checker port with normalization, kana handling, meanings, synonyms, blacklists, fuzzy matching, other readings, invalid characters, and okurigana detection.
 - [x] Android-first reading input with romaji-to-kana conversion.
 - [x] CSS-aware image-only radical rendering in reviews, lessons, and diagnostics.
-- [x] Long-press help toasts and accessibility labels for ambiguous dashboard/session controls.
+- [x] Polished onboarding/login, shared screen layout, and accessibility/help affordances across dashboard, settings, search, lessons, and reviews.
 - [x] Unit tests for answer checking, review session behavior, radical SVG fallback handling, study queue image selection, error sanitization/classification, and migration validation.
 
 ## M0: Architecture Hardening
@@ -124,13 +124,13 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 - [x] Add subject catalog by level.
 - [x] Add SRS category browsing.
-- [~] Add remaining subjects browsing. _(not planned — individual SRS bucket rows cover the use case without a single heavy query)_
+- [~] Add remaining subjects browsing. _(not exposed in UI; repository/route support exists, but product direction is to use individual SRS bucket rows instead)_
 - [x] Add excluded vocabulary browsing.
 - [x] Add local search by Japanese text, meaning, and kana reading prefixes.
 - [x] Sort exact search matches first, then by level.
 - [x] Limit search results to 50.
 - [x] Add rich subject detail screen with meanings, readings, mnemonics, hints, components, amalgamations, context sentences, and stats.
-- [x] Add synonym editing.
+- [x] Show meaning synonyms on subject details and support review-cheat synonym editing.
 - [x] Add meaning note editing.
 - [x] Add reading note editing.
 - [x] Queue study material edits offline.
@@ -158,7 +158,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Cancel legacy hourly notification identifiers on upgrade.
 - [x] Add daily reminder toggle in settings UI with conditional hour stepper.
 - [x] Add integration tests for notification scheduling (vacation mode, badge-only, threshold, daily, legacy cleanup).
-- [ ] Add custom scheme deep links for reviews, lessons, subject IDs, subject text routes, and wrap-up.
+- [ ] Add route handling for the existing custom scheme (`yomiji://`) for reviews, lessons, subject IDs, subject text routes, and wrap-up.
 - [ ] Add universal/app link configuration where feasible.
 - [x] Add platform support matrix for iOS and Android notification limitations.
 
@@ -188,7 +188,8 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 
 ## M10: Beta Hardening
 
-- [ ] Add mocked API integration test suite.
+- [x] Add mocked API integration test suite for sync, pending writes, and data integrity.
+- [x] Harden Android release signing: CI verifies keystore alias and APK signature; Gradle release tasks fail closed without signing material.
 - [ ] Add large-cache performance tests for dashboard, search, and review session startup.
 - [ ] Add device QA checklist for Android low-end and mid/high devices.
 - [ ] Add device QA checklist for iOS phones and iPads.
@@ -205,7 +206,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - [x] Avoid full sync while entering background.
 - [x] Flush pending writes on background only when local pending writes exist.
 - [x] Throttle foreground lifecycle sync checks.
-- [x] Keep manual pull-to-refresh as the explicit full-sync escape hatch.
+- [x] Keep manual pull-to-refresh as an explicit incremental-sync action, with Diagnostics full refresh as the cache-reset escape hatch.
 - [x] Add settings/diagnostics copy explaining sync behavior.
 - [x] Keep reading keyboard behavior in-app rather than relying on heavyweight background/native services.
 - [ ] Add optional background refresh only after explicit user-facing design and platform review.
@@ -218,7 +219,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 - Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
 - Subject catalog by level, search, detail screens, SRS bucket browsing, and excluded items browsing are implemented.
 - Streaming audio playback and voice actor selection are implemented. Offline audio is not implemented.
-- Local notifications use a threshold + daily reminder model: a one-shot notification when the Nth future review becomes available, and an optional recurring daily reminder at a configured hour. Badge counts and vacation-mode suppression are implemented. Notification taps navigate to the review session. Deep links and universal/app links are not yet implemented.
+- Local notifications use a threshold + daily reminder model: a one-shot notification when the Nth future review becomes available, and an optional recurring daily reminder at a configured hour. Badge counts and vacation-mode suppression are implemented. Notification taps navigate to the review session. The custom scheme is reserved in app config, but deep-link route parsing and universal/app links are not implemented.
 - Custom font and font-size settings are not implemented.
 - Practice modes for recent mistakes, apprentice leeches, all leeches, and burned items are implemented with dashboard entry points. Katakana practice is not planned.
 - Settings exposes Appearance, Reviews, Lessons, Subject Details, Audio, Notifications, Diagnostics, and Log Out. Font settings UI is not yet exposed.
@@ -242,7 +243,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | ------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reviewOrder`             | ReviewOrder | `'random'` | Sort order for review items. Options: random, ascending/descending/alternating SRS, current/lowest level first, newest/oldest available, longest wait. |
 | `reviewBatchSize`         | number      | 5          | Items in the active review queue (1–15).                                                                                                               |
-| `reviewItemsLimit`        | number      | 15         | Maximum reviews per session (5–500, step 5).                                                                                                           |
+| `reviewItemsLimit`        | number      | 15         | User-configured review cap (5–500, step 5); current review sessions load up to 100 due reviews before this cap is applied.                             |
 | `reviewItemsLimitEnabled` | boolean     | false      | Whether to cap the review session size.                                                                                                                |
 | `groupMeaningReading`     | boolean     | false      | Ask meaning and reading back-to-back for each item.                                                                                                    |
 | `meaningFirst`            | boolean     | true       | Ask meaning before reading when grouped.                                                                                                               |
@@ -280,7 +281,7 @@ This roadmap tracks 読路 development. `REACT_NATIVE_PORT_PRD.md` contains the 
 | ------------------------ | ------------- | ------- | ---------------------------------------------------------------------------------------- |
 | `notificationsEnabled`   | boolean       | true    | Master toggle: schedule review notifications (threshold + daily).                        |
 | `notificationsBadging`   | boolean       | true    | Show badge count for available reviews.                                                  |
-| `notificationSounds`     | boolean       | false   | Play sound for review notifications (iOS only; Android uses channel sound).              |
+| `notificationSounds`     | boolean       | false   | Play sound for review notifications where supported by platform notification settings.    |
 | `notificationThreshold`  | number        | 50      | Review count threshold for one-shot notification. Notifies when Nth future review arrives. |
 | `notificationDailyTime`  | number \| null | 20     | Hour (0–23) for recurring daily reminder. Null disables daily reminder.                 |
 

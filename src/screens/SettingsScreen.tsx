@@ -595,7 +595,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 
 					<Text style={styles.sectionLabel}>Subject Type Order</Text>
 					<Text style={styles.bodyText}>
-						Drag to reorder priority during lessons.
+						Use the up and down controls to set lesson priority.
 					</Text>
 					<LessonOrderEditor
 						order={settings.lessonOrder}
