@@ -23,6 +23,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm typecheck
@@ -33,17 +38,36 @@ jobs:
         run: npm install -g eas-cli
 
       - name: Decode release keystore
+        shell: bash
         run: |
-          echo "${{ secrets.YOMIJI_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          set -euo pipefail
+          test -n "$YOMIJI_KEYSTORE_BASE64"
+          test -n "$YOMIJI_KEYSTORE_PASSWORD"
+          printf '%s' "$YOMIJI_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          test -s android/app/release.keystore
+          chmod 600 android/app/release.keystore
+          keytool -list -keystore android/app/release.keystore -storepass "$YOMIJI_KEYSTORE_PASSWORD" -alias yomiji
+        env:
+          YOMIJI_KEYSTORE_BASE64: ${{ secrets.YOMIJI_KEYSTORE_BASE64 }}
+          YOMIJI_KEYSTORE_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
 
       - name: Build APK
         run: eas build --platform android --profile production --local --output build.apk
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          KEYSTORE_FILE: release.keystore
+          CI_RELEASE_BUILD: "true"
+          KEYSTORE_FILE: ${{ github.workspace }}/android/app/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
           KEY_ALIAS: yomiji
           KEY_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build.apk
 
       - name: Clean up keystore
         if: always()

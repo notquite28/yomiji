@@ -164,10 +164,11 @@ Tests run in Node via `ts-jest`. React Native APIs need mocking or should stay o
 
 ## Android Release Signing
 
-- Release APKs signed with production keystore at `~/.local/share/yomiji/release.keystore`.
-- CI uses GitHub Secrets: `YOMIJI_KEYSTORE_BASE64`, `YOMIJI_KEYSTORE_PASSWORD`. `KEY_ALIAS` is `yomiji`.
-- Gradle reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars. Falls back to debug signing when unset.
-- **Do not lose the keystore** — without it, the app cannot be updated under the same package name.
+- GitHub release APKs are signed from CI secrets: `YOMIJI_KEYSTORE_BASE64`, `YOMIJI_KEYSTORE_PASSWORD`. `KEY_ALIAS` is `yomiji`.
+- The release workflow decodes the keystore, passes an absolute `KEYSTORE_FILE`, verifies the `yomiji` alias before building, and verifies the final APK signature with `apksigner`.
+- Gradle reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars. Release builds fail closed if signing material is missing or invalid; they must not fall back to debug signing.
+- Debug builds still use `android/app/debug.keystore` for local development.
+- **Do not lose the release keystore** — without it, the app cannot be updated under the same package name.
 
 ## Versioning & Releases
 
