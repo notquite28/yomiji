@@ -66,6 +66,9 @@ importers:
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
+      babel-preset-expo:
+        specifier: ^55.0.21
+        version: 55.0.21(@babel/core@7.29.0)(@babel/runtime@7.29.2)(expo@55.0.23)(react-refresh@0.14.2)
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
