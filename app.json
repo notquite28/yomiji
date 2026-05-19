@@ -11,9 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.yomiji",
       "buildNumber": "12",
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+      "runtimeVersion": "0.3.9"
     },
     "android": {
       "package": "app.yomiji",
@@ -27,9 +25,7 @@
         "RECEIVE_BOOT_COMPLETED",
         "expo-notifications"
       ],
-      "runtimeVersion": {
-        "policy": "appVersion"
-      }
+      "runtimeVersion": "0.3.9"
     },
     "plugins": [
       "expo-secure-store",
