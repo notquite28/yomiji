@@ -38,7 +38,7 @@ export function ConfirmLeaveBanner({
   }
 
   return (
-    <View style={styles.backdrop}>
+    <Pressable style={styles.backdrop} onPress={onCancel}>
       <View style={styles.banner}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
@@ -69,7 +69,7 @@ export function ConfirmLeaveBanner({
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -77,9 +77,11 @@ function makeStyles(theme: AppTheme) {
   return StyleSheet.create({
     backdrop: {
       position: 'absolute',
+      top: 0,
       bottom: 0,
       left: 0,
       right: 0,
+      justifyContent: 'flex-end',
       padding: 20,
       paddingBottom: 36,
       backgroundColor: 'rgba(0, 0, 0, 0.45)',

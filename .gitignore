@@ -16,4 +16,5 @@ android/app/build/
 ios/Pods/
 ios/build/
 *.xcuserstate
+*.apk
 .pi-lens/

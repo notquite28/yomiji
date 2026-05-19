@@ -19,6 +19,7 @@ import { findBySubjectId } from '../domain/db/studyMaterialRepository';
 import { getSubjectsByIds } from '../domain/db/subjectRepository';
 import { getBurnedItemPracticeQueue, getLeechPracticeQueue, getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { useConfirmLeave } from '../hooks/useConfirmLeave';
 import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
@@ -229,46 +230,9 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
     : '0/0';
   const completedItems = session?.completedItems ?? [];
-  const allowLeavingRef = useRef(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
-  const pendingBackAction = useRef<Readonly<{ type: string; payload?: object; source?: string; target?: string }> | null>(null);
-
-  const handleBack = () => {
-    if (!session || isComplete) {
-      navigation.goBack();
-      return;
-    }
-    setConfirmLeave(true);
-  };
-
-  const handleCancelLeave = () => {
-    setConfirmLeave(false);
-    pendingBackAction.current = null;
-  };
-
-  const handleConfirmLeave = () => {
-    allowLeavingRef.current = true;
-    setConfirmLeave(false);
-    if (pendingBackAction.current !== null) {
-      navigation.dispatch(pendingBackAction.current);
-    } else {
-      navigation.goBack();
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (!session || isComplete || allowLeavingRef.current) {
-        return;
-      }
-
-      event.preventDefault();
-      pendingBackAction.current = event.data.action;
-      setConfirmLeave(true);
-    });
-
-    return unsubscribe;
-  }, [isComplete, navigation, session]);
+  const shouldConfirmLeave = session !== null && !isComplete;
+  const { confirmLeave, allowLeavingRef, handleBack, handleCancelLeave, handleConfirmLeave } =
+    useConfirmLeave(navigation, shouldConfirmLeave);
 
   const subjectLookup = useMemo(
     () => new Map(queueItems.map((item) => [item.subjectId, item.subject])),
@@ -510,6 +474,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
   const handleEndSession = () => {
     setQuickSettingsOpen(false);
+    allowLeavingRef.current = true;
     navigation.goBack();
   };
 
@@ -562,10 +527,26 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const showsReadingInAnki = Boolean(acceptedReadings);
 
   return (
-    <ScreenLayout scrollable keyboardShouldPersistTaps keyboardAvoiding>
+    <ScreenLayout
+      scrollable
+      keyboardShouldPersistTaps
+      keyboardAvoiding
+      overlay={
+        <ConfirmLeaveBanner
+          visible={confirmLeave}
+          title="End review session?"
+          message="Progress from this active session may be lost if you leave now."
+          cancelLabel="Keep reviewing"
+          confirmLabel="End session"
+          onCancel={handleCancelLeave}
+          onConfirm={handleConfirmLeave}
+        />
+      }
+    >
       <SessionHeader
         onBack={handleBack}
         progress={progress}
+        dimmed={confirmLeave}
         onSettings={() => setQuickSettingsOpen(true)}
       />
 
@@ -822,15 +803,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         wrappingUp={session?.wrappingUp ?? false}
         hasFeedback={feedback !== null}
         remainingInBatch={session?.activeQueueLength ?? 0}
-      />
-      <ConfirmLeaveBanner
-        visible={confirmLeave}
-        title="End review session?"
-        message="Progress from this active session may be lost if you leave now."
-        cancelLabel="Keep reviewing"
-        confirmLabel="End session"
-        onCancel={handleCancelLeave}
-        onConfirm={handleConfirmLeave}
       />
     </ScreenLayout>
   );

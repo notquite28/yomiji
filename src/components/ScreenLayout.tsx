@@ -10,11 +10,13 @@ export function ScreenLayout({
   scrollable = false,
   keyboardShouldPersistTaps = false,
   keyboardAvoiding = false,
+  overlay,
 }: {
   children: ReactNode;
   scrollable?: boolean;
   keyboardShouldPersistTaps?: boolean;
   keyboardAvoiding?: boolean;
+  overlay?: ReactNode;
 }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
@@ -43,6 +45,7 @@ export function ScreenLayout({
     return (
       <SafeAreaView style={styles.safeArea}>
         {body}
+        {overlay}
       </SafeAreaView>
     );
   }
@@ -50,6 +53,7 @@ export function ScreenLayout({
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.content}>{children}</View>
+      {overlay}
     </SafeAreaView>
   );
 }
@@ -89,17 +93,28 @@ export function SessionHeader({
   onBack,
   progress,
   onSettings,
+  dimmed = false,
 }: {
   onBack: () => void;
   progress: string;
   onSettings?: () => void;
+  dimmed?: boolean;
 }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
 
   return (
     <View style={styles.headerRow}>
-      <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
+      <Pressable
+        onPress={onBack}
+        style={({ pressed }) => [
+          styles.backButton,
+          dimmed && styles.backButtonDimmed,
+          pressed && styles.backButtonPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>Back</Text>
       </Pressable>
       <Text style={styles.progressText}>{progress}</Text>
@@ -201,6 +216,12 @@ function makeStyles(theme: AppTheme) {
     settingsButtonText: {
       color: theme.colors.text,
       fontSize: 18,
+    },
+    backButtonPressed: {
+      opacity: 0.58,
+    },
+    backButtonDimmed: {
+      opacity: 0.35,
     },
     headerSpacer: {
       width: 38,
