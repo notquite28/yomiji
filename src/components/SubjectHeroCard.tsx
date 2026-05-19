@@ -29,7 +29,7 @@ export function SubjectHeroCard({
 
   const renderContent = () => {
     if (!characterImageUrl) {
-      return <Text style={styles.characters}>{japanese || subjectType}</Text>;
+      return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{japanese || subjectType}</Text>;
     }
     if (characterImageIsSvg) {
       return <RadicalSvgImage uri={characterImageUrl} fallback={japanese || subjectType} />;
@@ -59,7 +59,7 @@ function RadicalPngImage({ uri, fallback }: { uri: string; fallback: string }) {
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters}>{fallback}</Text>;
+    return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{fallback}</Text>;
   }
 
   return (
@@ -115,7 +115,7 @@ function RadicalSvgImage({ uri, fallback }: { uri: string; fallback: string }) {
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters}>{fallback}</Text>;
+    return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{fallback}</Text>;
   }
 
   return (
@@ -148,9 +148,6 @@ function makeStyles(_theme: AppTheme) {
       fontSize: 72,
       fontWeight: '900',
       textAlign: 'center',
-      numberOfLines: 3,
-      adjustsFontSizeToFit: true,
-      minimumFontScale: 0.5,
     },
     imageFrame: {
       marginTop: 16,

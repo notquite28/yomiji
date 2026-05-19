@@ -367,7 +367,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         autoCorrect={false}
         spellCheck={false}
         importantForAutofill="no"
-        keyboardType={displayTaskType === 'meaning' ? 'visible-password' : 'default'}
+        keyboardType="default"
         placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
         placeholderTextColor={theme.colors.mutedText}
         style={styles.input}

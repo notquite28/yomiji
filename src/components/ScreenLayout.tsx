@@ -17,7 +17,7 @@ export function ScreenLayout({
   scrollable?: boolean;
   keyboardShouldPersistTaps?: boolean;
   keyboardAvoiding?: boolean;
-  scrollViewRef?: React.RefObject<RNScrollView>;
+  scrollViewRef?: React.RefObject<RNScrollView | null>;
   overlay?: ReactNode;
 }) {
   const theme = useAppTheme();
