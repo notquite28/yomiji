@@ -10,7 +10,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.yomiji",
-      "buildNumber": "12"
+      "buildNumber": "12",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "package": "app.yomiji",
@@ -22,8 +25,11 @@
       },
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
+        "expo-notifications",
+        "RECEIVE_BOOT_COMPLETED",
         "expo-notifications"
-      ]
+      ],
+      "runtimeVersion": "1.0.0"
     },
     "plugins": [
       "expo-secure-store",
@@ -36,6 +42,9 @@
         "projectId": "1027f19d-260b-4b0e-8d14-88a52844763a"
       }
     },
-    "owner": "notquite"
+    "owner": "notquite",
+    "updates": {
+      "url": "https://u.expo.dev/1027f19d-260b-4b0e-8d14-88a52844763a"
+    }
   }
 }
