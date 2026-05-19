@@ -14,6 +14,7 @@ export function SubjectHeroCard({
   level,
   color,
   minHeight = 240,
+  compact = false,
 }: {
   kicker: string;
   japanese: string;
@@ -23,18 +24,22 @@ export function SubjectHeroCard({
   level?: number;
   color: string;
   minHeight?: number;
+  compact?: boolean;
 }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
 
   const renderContent = () => {
     if (!characterImageUrl) {
-      return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{japanese || subjectType}</Text>;
+      const textProps = compact
+        ? ({ numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const)
+        : ({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.3 } as const);
+      return <Text style={styles.characters} {...textProps}>{japanese || subjectType}</Text>;
     }
     if (characterImageIsSvg) {
-      return <RadicalSvgImage uri={characterImageUrl} fallback={japanese || subjectType} />;
+      return <RadicalSvgImage uri={characterImageUrl} fallback={japanese || subjectType} compact={compact} />;
     }
-    return <RadicalPngImage uri={characterImageUrl} fallback={japanese || subjectType} />;
+    return <RadicalPngImage uri={characterImageUrl} fallback={japanese || subjectType} compact={compact} />;
   };
 
   return (
@@ -48,7 +53,7 @@ export function SubjectHeroCard({
   );
 }
 
-function RadicalPngImage({ uri, fallback }: { uri: string; fallback: string }) {
+function RadicalPngImage({ uri, fallback, compact = false }: { uri: string; fallback: string; compact?: boolean }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [failed, setFailed] = useState(false);
@@ -59,7 +64,7 @@ function RadicalPngImage({ uri, fallback }: { uri: string; fallback: string }) {
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{fallback}</Text>;
+    return <Text style={styles.characters} {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
   }
 
   return (
@@ -74,7 +79,7 @@ function RadicalPngImage({ uri, fallback }: { uri: string; fallback: string }) {
   );
 }
 
-function RadicalSvgImage({ uri, fallback }: { uri: string; fallback: string }) {
+function RadicalSvgImage({ uri, fallback, compact = false }: { uri: string; fallback: string; compact?: boolean }) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [xml, setXml] = useState(() => svgCache.get(uri) ?? null);
@@ -115,7 +120,7 @@ function RadicalSvgImage({ uri, fallback }: { uri: string; fallback: string }) {
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.5}>{fallback}</Text>;
+    return <Text style={styles.characters} {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
   }
 
   return (

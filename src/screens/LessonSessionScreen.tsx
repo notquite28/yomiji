@@ -356,6 +356,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         subjectType={displayItem.subjectType}
         level={displayItem.level}
         color={subjectColor}
+        compact
       />
 
       <TextInput

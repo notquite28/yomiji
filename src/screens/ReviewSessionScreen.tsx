@@ -560,6 +560,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         subjectType={displayItem.subjectType}
         level={displayItem.level}
         color={subjectColor}
+        compact
       />
 
       {ankiMode ? (
