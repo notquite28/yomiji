@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -60,6 +60,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   const [isContinuing, setIsContinuing] = useState(false);
 
   const sessionRef = useRef<ReviewSession | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const reviewSettings = useMemo<ReviewSessionSettings>(
     () => ({
@@ -327,6 +328,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     <ScreenLayout
       scrollable
       keyboardShouldPersistTaps
+      keyboardAvoiding
+      scrollViewRef={scrollViewRef}
       overlay={
         <ConfirmLeaveBanner
           visible={confirmLeave}
@@ -368,6 +371,9 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
         placeholderTextColor={theme.colors.mutedText}
         style={styles.input}
+        onFocus={() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }}
         returnKeyType="done"
         accessibilityLabel={displayTaskType === 'meaning' ? 'Lesson meaning answer' : 'Lesson reading answer'}
         accessibilityHint="Enter your answer for the current lesson quiz prompt."
