@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -97,6 +97,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   } | null>(null);
 
   const sessionRef = useRef<ReviewSession | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const practiceSource = route.params?.practiceSource;
 
   const settings = useMemo<ReviewSessionSettings>(
@@ -531,6 +532,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       scrollable
       keyboardShouldPersistTaps
       keyboardAvoiding
+      scrollViewRef={scrollViewRef}
       overlay={
         <ConfirmLeaveBanner
           visible={confirmLeave}
@@ -600,6 +602,9 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
           placeholderTextColor={theme.colors.mutedText}
           style={styles.input}
+          onFocus={() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }}
           returnKeyType="done"
           accessibilityLabel={displayTaskType === 'meaning' ? 'Review meaning answer' : 'Review reading answer'}
           accessibilityHint="Enter your answer for the current review prompt."
