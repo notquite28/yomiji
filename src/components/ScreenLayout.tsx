@@ -10,12 +10,14 @@ export function ScreenLayout({
   scrollable = false,
   keyboardShouldPersistTaps = false,
   keyboardAvoiding = false,
+  scrollViewRef,
   overlay,
 }: {
   children: ReactNode;
   scrollable?: boolean;
   keyboardShouldPersistTaps?: boolean;
   keyboardAvoiding?: boolean;
+  scrollViewRef?: React.RefObject<RNScrollView>;
   overlay?: ReactNode;
 }) {
   const theme = useAppTheme();
@@ -24,6 +26,7 @@ export function ScreenLayout({
   if (scrollable) {
     const scrollView = (
       <RNScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps ? 'handled' : undefined}
       >

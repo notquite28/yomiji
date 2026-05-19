@@ -148,6 +148,9 @@ function makeStyles(_theme: AppTheme) {
       fontSize: 72,
       fontWeight: '900',
       textAlign: 'center',
+      numberOfLines: 3,
+      adjustsFontSizeToFit: true,
+      minimumFontScale: 0.5,
     },
     imageFrame: {
       marginTop: 16,
