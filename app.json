@@ -25,11 +25,11 @@
       },
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
-        "expo-notifications",
-        "RECEIVE_BOOT_COMPLETED",
         "expo-notifications"
       ],
-      "runtimeVersion": "1.0.0"
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "plugins": [
       "expo-secure-store",
