@@ -13,11 +13,9 @@ export type ReviewOrder =
   | 'oldestAvailableFirst'
   | 'longestRelativeWait';
 
-export type AppearanceMode = 'system' | 'light' | 'dark';
 export type SubjectType = 'radical' | 'kanji' | 'vocabulary';
 
 export type AppSettings = {
-  appearance: AppearanceMode;
   notificationsEnabled: boolean;
   notificationsBadging: boolean;
   notificationSounds: boolean;
@@ -51,7 +49,6 @@ export type AppSettings = {
 };
 
 export const defaultSettings: AppSettings = {
-  appearance: 'system',
   notificationsEnabled: true,
   notificationsBadging: true,
   notificationSounds: false,
@@ -117,6 +114,14 @@ export const settingsMigrations: SettingsMigration[] = [
       return result;
     },
   },
+  {
+    version: 2,
+    migrate(stored: Record<string, unknown>): Record<string, unknown> {
+      const result = { ...stored };
+      delete result['appearance'];
+      return result;
+    },
+  },
 ];
 
 export const CURRENT_SETTINGS_VERSION = settingsMigrations.length > 0
@@ -140,8 +145,9 @@ export async function loadSettings(): Promise<AppSettings> {
     }
   }
 
-  // Strip _version before merging with defaults (it's not part of AppSettings)
+  // Strip non-settings metadata/legacy keys before merging with defaults.
   delete stored['_version'];
+  delete stored['appearance'];
   const merged = { ...defaultSettings, ...stored } as AppSettings;
 
   if (migrated) {

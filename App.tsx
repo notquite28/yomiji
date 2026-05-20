@@ -1,3 +1,5 @@
+import "./global.css";
+
 import {
 	createNavigationContainerRef,
 	DarkTheme,
@@ -6,7 +8,7 @@ import {
 	type Theme,
 } from "@react-navigation/native";
 import { useEffect, useRef } from "react";
-import { StatusBar } from "react-native";
+import { StatusBar, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ToastHost } from "./src/components/TooltipPressable";
@@ -126,11 +128,21 @@ function NotificationTapHandler() {
 	return null;
 }
 
+function AppContent() {
+	const theme = useAppTheme();
+
+	return (
+		<View className={theme.isDark ? "dark" : ""} style={{ flex: 1 }}>
+			<Root />
+		</View>
+	);
+}
+
 export default function App() {
 	return (
 		<SafeAreaProvider>
 			<AppThemeProvider>
-				<Root />
+				<AppContent />
 			</AppThemeProvider>
 		</SafeAreaProvider>
 	);

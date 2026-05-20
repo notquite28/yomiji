@@ -1,6 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { Pressable, Text, View } from 'react-native';
 
 type Props = {
   /** Shown when the banner is visible and the user needs to confirm. */
@@ -30,112 +28,52 @@ export function ConfirmLeaveBanner({
   onCancel,
   onConfirm,
 }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
-
   if (!visible) {
     return null;
   }
 
   return (
-    <Pressable style={styles.backdrop} onPress={onCancel}>
-      <View style={styles.banner}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.message}>{message}</Text>
-        <View style={styles.actions}>
+    <Pressable
+      className="absolute inset-0 justify-end p-5 pb-9 bg-[rgba(0,0,0,0.45)]"
+      onPress={onCancel}
+      accessibilityElementsHidden
+    >
+      <View className="bg-surface-elevated dark:bg-surface-elevated-dark rounded-lg border border-border dark:border-border-dark p-5 gap-3">
+        <Text className="text-[17px] font-black text-text dark:text-text-dark">
+          {title}
+        </Text>
+        <Text className="text-[14px] leading-5 text-text-muted dark:text-text-muted-dark">
+          {message}
+        </Text>
+        <View className="flex-row gap-3 mt-1">
           <Pressable
             onPress={onCancel}
-            style={({ pressed }) => [
-              styles.button,
-              styles.cancelButton,
-              pressed && styles.pressed,
-            ]}
+            className="flex-1 rounded py-3.5 items-center justify-center bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
+            style={({ pressed }) =>
+              pressed ? { opacity: 0.58 } : undefined
+            }
             accessibilityRole="button"
             accessibilityLabel={cancelLabel}
           >
-            <Text style={styles.cancelText}>{cancelLabel}</Text>
+            <Text className="text-base font-black text-text dark:text-text-dark">
+              {cancelLabel}
+            </Text>
           </Pressable>
           <Pressable
             onPress={onConfirm}
-            style={({ pressed }) => [
-              styles.button,
-              styles.confirmButton,
-              pressed && styles.pressed,
-            ]}
+            className="flex-1 rounded py-3.5 items-center justify-center bg-danger dark:bg-danger-dark"
+            style={({ pressed }) =>
+              pressed ? { opacity: 0.58 } : undefined
+            }
             accessibilityRole="button"
             accessibilityLabel={confirmLabel}
           >
-            <Text style={styles.confirmText}>{confirmLabel}</Text>
+            <Text className="text-base font-black text-white">
+              {confirmLabel}
+            </Text>
           </Pressable>
         </View>
       </View>
     </Pressable>
   );
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    backdrop: {
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-      justifyContent: 'flex-end',
-      padding: 20,
-      paddingBottom: 36,
-      backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    },
-    banner: {
-      backgroundColor: theme.colors.surfaceElevated,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      padding: 20,
-      gap: 12,
-    },
-    title: {
-      color: theme.colors.text,
-      fontSize: 17,
-      fontWeight: '900',
-    },
-    message: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    actions: {
-      flexDirection: 'row',
-      gap: 12,
-      marginTop: 4,
-    },
-    button: {
-      flex: 1,
-      borderRadius: 14,
-      paddingVertical: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cancelButton: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    confirmButton: {
-      backgroundColor: theme.colors.danger,
-    },
-    cancelText: {
-      color: theme.colors.text,
-      fontSize: 15,
-      fontWeight: '900',
-    },
-    confirmText: {
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '900',
-    },
-    pressed: {
-      opacity: 0.58,
-    },
-  });
 }

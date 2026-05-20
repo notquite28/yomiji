@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Share, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import appConfig from '../../app.json';
@@ -10,7 +10,7 @@ import { clearErrorLog, ErrorLogEntry, getErrorLogEntries, getErrorLogCount } fr
 import { deleteApiToken, getApiToken } from '../domain/storage/secureToken';
 import { isSyncAuthError, runFullRefresh } from '../domain/sync/syncService';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 const APP_VERSION = appConfig.expo.version;
 
@@ -33,8 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Diagnostics'> & {
 };
 
 export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { isDark } = useAppTheme();
   const [data, setData] = useState<DiagnosticsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
@@ -175,103 +174,202 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>Back</Text>
+    <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 14 }}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          className="self-start rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text className="text-text dark:text-text-dark font-black">Back</Text>
         </Pressable>
-        <View style={styles.headerBlock}>
-          <Text style={styles.kicker}>読路</Text>
-          <Text style={styles.title}>Diagnostics</Text>
-          <Text style={styles.subtitle}>Cache state, sync status, and error log.</Text>
+
+        <View className="px-0.5 pt-[14px] pb-1.5">
+          <Text className="text-xs font-heavy tracking-ultra3 uppercase text-text-muted dark:text-text-muted-dark">読路</Text>
+          <Text className="mt-1.5 text-5xl font-black tracking-tightest text-text dark:text-text-dark">Diagnostics</Text>
+          <Text className="mt-[10px] text-[16px] leading-[22px] font-bold text-text-muted dark:text-text-muted-dark">
+            Cache state, sync status, and error log.
+          </Text>
         </View>
 
-        {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
+        {error ? (
+          <Text className="rounded-md px-4 py-3 bg-danger text-white text-[14px] font-heavy">{error}</Text>
+        ) : null}
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>App Info</Text>
-          <InfoRow label="Version" value={`v${APP_VERSION}`} theme={theme} />
-          <InfoRow label="Platform" value="React Native (Expo)" theme={theme} />
+        <View
+          className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-1.5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.16 : 0.05,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">App Info</Text>
+          <InfoRow label="Version" value={`v${APP_VERSION}`} />
+          <InfoRow label="Platform" value="React Native (Expo)" />
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Cache</Text>
-          <InfoRow label="Subjects" value={formatCount(data?.subjects)} theme={theme} />
-          <InfoRow label="Assignments" value={formatCount(data?.assignments)} theme={theme} />
-          <InfoRow label="Study Materials" value={formatCount(data?.studyMaterials)} theme={theme} />
-          <InfoRow label="Review Statistics" value={formatCount(data?.reviewStats)} theme={theme} />
-          <InfoRow label="Level Progressions" value={formatCount(data?.levelProgressions)} theme={theme} />
+        <View
+          className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-1.5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.16 : 0.05,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Cache</Text>
+          <InfoRow label="Subjects" value={formatCount(data?.subjects)} />
+          <InfoRow label="Assignments" value={formatCount(data?.assignments)} />
+          <InfoRow label="Study Materials" value={formatCount(data?.studyMaterials)} />
+          <InfoRow label="Review Statistics" value={formatCount(data?.reviewStats)} />
+          <InfoRow label="Level Progressions" value={formatCount(data?.levelProgressions)} />
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Sync</Text>
-          <InfoRow label="Last Sync" value={data?.lastSyncTime ? formatDate(data.lastSyncTime) : 'Never'} theme={theme} />
+        <View
+          className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-1.5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.16 : 0.05,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Sync</Text>
+          <InfoRow label="Last Sync" value={data?.lastSyncTime ? formatDate(data.lastSyncTime) : 'Never'} />
           {Object.entries(data?.syncCursors ?? {}).map(([collection, cursor]) => (
-            <InfoRow key={collection} label={collection} value={cursor || '(full)'} theme={theme} />
+            <InfoRow key={collection} label={collection} value={cursor || '(full)'} />
           ))}
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Pending Writes</Text>
-          <InfoRow label="Review/Lesson Progress" value={formatCount(data?.pendingProgress)} theme={theme} />
-          <InfoRow label="Study Material Edits" value={formatCount(data?.pendingStudyMaterials)} theme={theme} />
+        <View
+          className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-1.5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.16 : 0.05,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Pending Writes</Text>
+          <InfoRow label="Review/Lesson Progress" value={formatCount(data?.pendingProgress)} />
+          <InfoRow label="Study Material Edits" value={formatCount(data?.pendingStudyMaterials)} />
           {(data?.pendingProgress ?? 0) > 0 || (data?.pendingStudyMaterials ?? 0) > 0 ? (
-            <Text style={styles.hintText}>Pending writes will flush on next background or manual sync.</Text>
+            <Text className="text-xs font-bold italic text-text-muted dark:text-text-muted-dark pt-1">
+              Pending writes will flush on next background or manual sync.
+            </Text>
           ) : null}
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Error Log</Text>
-            <Text style={styles.panelMeta}>{formatCount(data?.errorLogCount)} entries</Text>
+        <View
+          className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-1.5"
+          style={{
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.16 : 0.05,
+            shadowRadius: 18,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 4,
+          }}
+        >
+          <View className="flex-row items-center justify-between gap-[10px]">
+            <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Error Log</Text>
+            <Text className="text-[13px] font-heavy text-text-muted dark:text-text-muted-dark">
+              {formatCount(data?.errorLogCount)} entries
+            </Text>
           </View>
           {data?.recentErrors.length ? (
-            <View style={styles.errorList}>
+            <View className="gap-2">
               {data.recentErrors.map((entry) => (
-                <View key={entry.id} style={styles.errorRow}>
-                  <Text style={styles.errorTimestamp}>{formatDate(entry.created_at)}</Text>
-                  <Text style={[styles.errorLevelBadge, entry.level === 'error' && styles.errorLevelBadgeError]}>
+                <View key={entry.id} className="pt-2 border-t border-[rgba(128,128,128,0.1)] gap-0.5">
+                  <Text className="text-[11px] font-heavy text-text-muted dark:text-text-muted-dark">
+                    {formatDate(entry.created_at)}
+                  </Text>
+                  <Text className={`text-[11px] font-black uppercase tracking-[0.5] ${entry.level === 'error' ? 'text-danger dark:text-danger-dark' : 'text-warning dark:text-warning-dark'}`}>
                     {entry.level}
                   </Text>
-                  <Text style={styles.errorMessage} numberOfLines={2}>{entry.message}</Text>
-                  {entry.context ? <Text style={styles.errorContext} numberOfLines={1}>{entry.context}</Text> : null}
+                  <Text className="text-[13px] font-bold leading-[18px] text-text dark:text-text-dark" numberOfLines={2}>
+                    {entry.message}
+                  </Text>
+                  {entry.context ? (
+                    <Text className="text-xs font-bold leading-[16px] text-text-muted dark:text-text-muted-dark" numberOfLines={1}>
+                      {entry.context}
+                    </Text>
+                  ) : null}
                 </View>
               ))}
             </View>
           ) : (
-            <Text style={styles.emptyText}>No errors logged.</Text>
+            <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark pt-1">
+              No errors logged.
+            </Text>
           )}
           {data?.errorLogCount ? (
             <Pressable
               disabled={isClearing}
               onPress={confirmClearErrors}
+              className="min-h-[44px] items-center justify-center rounded-md bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)] mt-2"
+              style={({ pressed }) =>
+                pressed || isClearing ? { opacity: 0.72, transform: [{ scale: 0.99 }] } : undefined
+              }
               accessibilityRole="button"
               accessibilityState={{ disabled: isClearing, busy: isClearing }}
               accessibilityHint="Asks for confirmation before clearing stored diagnostics errors."
-              style={({ pressed }) => [styles.secondaryButton, (pressed || isClearing) && styles.pressed]}
             >
-              <Text style={styles.secondaryButtonText}>{isClearing ? 'Clearing...' : 'Clear Error Log'}</Text>
+              <Text className="text-[14px] font-black text-text dark:text-text-dark">
+                {isClearing ? 'Clearing...' : 'Clear Error Log'}
+              </Text>
             </Pressable>
           ) : null}
         </View>
 
-        <Pressable onPress={handleExport} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-          <Text style={styles.primaryButtonText}>Export Diagnostics</Text>
+        <Pressable
+          onPress={handleExport}
+          className="min-h-[54px] items-center justify-center rounded-[20px] bg-kanji"
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.72 : 1,
+            transform: [{ scale: pressed ? 0.99 : 1 }],
+            shadowColor: '#000',
+            shadowOpacity: isDark ? 0.2 : 0.12,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 6 },
+            elevation: 4,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel="Export diagnostics"
+        >
+          <Text className="text-[16px] font-black tracking-wide text-white">Export Diagnostics</Text>
         </Pressable>
 
-        <View style={styles.dangerPanel}>
-          <Text style={styles.panelTitle}>Full Refresh</Text>
-          <Text style={styles.bodyText}>Clear all cached data and re-download from WaniKani. Pending writes are preserved.</Text>
-          {isRefreshing ? <Text style={styles.bodyText} accessibilityLiveRegion="polite">Clearing cache and downloading a fresh copy…</Text> : null}
+        <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-danger dark:border-danger-dark gap-1.5">
+          <Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Full Refresh</Text>
+          <Text className="text-[14px] font-bold leading-5 text-text-muted dark:text-text-muted-dark">
+            Clear all cached data and re-download from WaniKani. Pending writes are preserved.
+          </Text>
+          {isRefreshing ? (
+            <Text className="text-[14px] font-bold leading-5 text-text-muted dark:text-text-muted-dark" accessibilityLiveRegion="polite">
+              Clearing cache and downloading a fresh copy…
+            </Text>
+          ) : null}
           <Pressable
             disabled={isRefreshing}
             onPress={confirmFullRefresh}
+            className="min-h-[44px] items-center justify-center rounded-md bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)] mt-2"
+            style={({ pressed }) =>
+              pressed || isRefreshing ? { opacity: 0.72, transform: [{ scale: 0.99 }] } : undefined
+            }
             accessibilityRole="button"
             accessibilityState={{ disabled: isRefreshing, busy: isRefreshing }}
             accessibilityHint="Asks for confirmation before clearing cached data and syncing again."
-            style={({ pressed }) => [styles.secondaryButton, (pressed || isRefreshing) && styles.pressed]}
           >
-            <Text style={styles.secondaryButtonText}>{isRefreshing ? 'Refreshing...' : 'Clear Cache and Resync'}</Text>
+            <Text className="text-[14px] font-black text-text dark:text-text-dark">
+              {isRefreshing ? 'Refreshing...' : 'Clear Cache and Resync'}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -279,11 +377,11 @@ export function DiagnosticsScreen({ navigation, onForceLogout }: Props) {
   );
 }
 
-function InfoRow({ label, value, theme }: { label: string; value: string; theme: AppTheme }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={infoStyles.row}>
-      <Text style={[infoStyles.label, { color: theme.colors.mutedText }]}>{label}</Text>
-      <Text style={[infoStyles.value, { color: theme.colors.text }]} numberOfLines={1}>{value}</Text>
+    <View className="flex-row justify-between items-center pt-2 border-t border-[rgba(128,128,128,0.1)] gap-3">
+      <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">{label}</Text>
+      <Text className="text-[14px] font-heavy text-text dark:text-text-dark flex-shrink" numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -298,219 +396,4 @@ function formatDate(value: string) {
 
 function formatCount(value: number | undefined): string {
   return value !== undefined ? String(value) : '...';
-}
-
-const infoStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.1)',
-    gap: 12,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: '800',
-    flexShrink: 1,
-  },
-});
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
-    },
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 28,
-      gap: 14,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      borderRadius: 999,
-      paddingHorizontal: 13,
-      paddingVertical: 9,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    backText: {
-      color: theme.colors.text,
-      fontWeight: '900',
-    },
-    headerBlock: {
-      paddingHorizontal: 2,
-      paddingTop: 14,
-      paddingBottom: 6,
-    },
-    kicker: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-    },
-    title: {
-      marginTop: 6,
-      color: theme.colors.text,
-      fontSize: 40,
-      lineHeight: 46,
-      fontWeight: '900',
-      letterSpacing: -1.4,
-    },
-    subtitle: {
-      marginTop: 10,
-      color: theme.colors.mutedText,
-      fontSize: 16,
-      lineHeight: 22,
-      fontWeight: '700',
-    },
-    errorBanner: {
-      borderRadius: 16,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: theme.colors.danger,
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '800',
-    },
-    panel: {
-      borderRadius: 26,
-      padding: 18,
-      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
-      gap: 6,
-      shadowColor: '#000000',
-      shadowOpacity: theme.isDark ? 0.16 : 0.05,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 4,
-    },
-    panelHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
-    panelTitle: {
-      color: theme.colors.text,
-      fontSize: 21,
-      fontWeight: '900',
-      letterSpacing: -0.3,
-    },
-    panelMeta: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-    },
-    hintText: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      fontWeight: '700',
-      fontStyle: 'italic',
-      paddingTop: 4,
-    },
-    emptyText: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      fontWeight: '700',
-      paddingTop: 4,
-    },
-    errorList: {
-      gap: 8,
-    },
-    errorRow: {
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: 'rgba(128, 128, 128, 0.1)',
-      gap: 2,
-    },
-    errorTimestamp: {
-      color: theme.colors.mutedText,
-      fontSize: 11,
-      fontWeight: '800',
-    },
-    errorLevelBadge: {
-      color: theme.colors.warning,
-      fontSize: 11,
-      fontWeight: '900',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    errorLevelBadgeError: {
-      color: theme.colors.danger,
-    },
-    errorMessage: {
-      color: theme.colors.text,
-      fontSize: 13,
-      fontWeight: '700',
-      lineHeight: 18,
-    },
-    errorContext: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      fontWeight: '700',
-      lineHeight: 16,
-    },
-    secondaryButton: {
-      minHeight: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 16,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-      marginTop: 8,
-    },
-    secondaryButtonText: {
-      color: theme.colors.text,
-      fontSize: 14,
-      fontWeight: '900',
-    },
-    primaryButton: {
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 20,
-      backgroundColor: theme.colors.kanji,
-      shadowColor: '#000000',
-      shadowOpacity: theme.isDark ? 0.2 : 0.12,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 4,
-    },
-    primaryButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-      letterSpacing: 0.2,
-    },
-    pressed: {
-      opacity: 0.72,
-      transform: [{ scale: 0.99 }],
-    },
-    dangerPanel: {
-      borderRadius: 26,
-      padding: 18,
-      backgroundColor: theme.isDark ? '#1a1215' : '#fff5f5',
-      borderWidth: 1,
-      borderColor: theme.colors.danger,
-      gap: 6,
-    },
-    bodyText: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      fontWeight: '700',
-      lineHeight: 20,
-    },
-  });
 }

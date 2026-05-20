@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -11,14 +11,13 @@ import {
 } from '../domain/db/subjectRepository';
 import { openAppDatabase } from '../domain/db/database';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubjectBrowse'>;
 
 export function SubjectBrowseScreen({ navigation, route }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { colors } = useAppTheme();
   const { title, srsMin, srsMax, excluded, remaining } = route.params;
   const [items, setItems] = useState<SubjectListRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,39 +50,63 @@ export function SubjectBrowseScreen({ navigation, route }: Props) {
   }, [loadItems]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.backText}>Back</Text>
+    <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
+      <Pressable
+        onPress={() => navigation.goBack()}
+        className="self-start rounded-full px-[13px] py-[9px] mx-5 mt-3 bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <Text className="text-text dark:text-text-dark font-black">Back</Text>
       </Pressable>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{title}</Text>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28, gap: 6 }}>
+        <Text className="text-4xl font-black tracking-tighter text-text dark:text-text-dark">
+          {title}
+        </Text>
         {isLoading ? (
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text className="text-[16px] font-heavy text-text-muted dark:text-text-muted-dark">
+            Loading...
+          </Text>
         ) : error ? (
-          <Text style={styles.errorText}>{error}</Text>
+          <Text className="text-[14px] leading-5 font-bold text-danger dark:text-danger-dark pt-3">
+            {error}
+          </Text>
         ) : (
           <>
-            <Text style={styles.countMeta}>{items.length} items</Text>
+            <Text className="text-[13px] font-heavy text-text-muted dark:text-text-muted-dark pb-[10px]">
+              {items.length} items
+            </Text>
             {items.length === 0 ? (
-              <Text style={styles.emptyText}>No items found.</Text>
+              <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark pt-6 text-center">
+                No items found.
+              </Text>
             ) : (
               items.map((item) => {
-                const color = colorForSubjectType(theme.colors, item.subjectType);
+                const color = colorForSubjectType(colors, item.subjectType);
                 return (
                   <Pressable
                     key={item.id}
                     onPress={() => navigation.navigate('SubjectDetail', { subjectId: item.id })}
-                    style={({ pressed }) => [styles.resultRow, pressed && styles.pressed]}
+                    className="flex-row items-center gap-3 py-3 px-[14px] rounded-md bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.06)]"
+                    style={({ pressed }) =>
+                      pressed ? { opacity: 0.72, transform: [{ scale: 0.99 }] } : undefined
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.japanese || 'subject'}, level ${item.level}, ${item.subjectType}${item.percentageCorrect != null ? `, ${item.percentageCorrect}% correct` : ''}`}
                   >
-                    <View style={[styles.typeDot, { backgroundColor: color }]} />
-                    <View style={styles.resultBody}>
-                      <Text style={styles.resultJapanese}>{item.japanese || '?'}</Text>
-                      <Text style={styles.resultMeta}>
+                    <View className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                    <View className="flex-1 gap-0.5">
+                      <Text className="text-lg font-black text-text dark:text-text-dark">
+                        {item.japanese || '?'}
+                      </Text>
+                      <Text className="text-xs font-bold text-text-muted dark:text-text-muted-dark capitalize">
                         L{item.level} · {item.subjectType}
                       </Text>
                     </View>
                     {item.percentageCorrect != null ? (
-                      <Text style={styles.resultScore}>{item.percentageCorrect}%</Text>
+                      <Text className="text-[13px] font-heavy text-text-muted dark:text-text-muted-dark">
+                        {item.percentageCorrect}%
+                      </Text>
                     ) : null}
                   </Pressable>
                 );
@@ -94,105 +117,4 @@ export function SubjectBrowseScreen({ navigation, route }: Props) {
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      borderRadius: 999,
-      paddingHorizontal: 13,
-      paddingVertical: 9,
-      marginHorizontal: 20,
-      marginTop: 12,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    backText: {
-      color: theme.colors.text,
-      fontWeight: '900',
-    },
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 8,
-      paddingBottom: 28,
-      gap: 6,
-    },
-    title: {
-      color: theme.colors.text,
-      fontSize: 34,
-      fontWeight: '900',
-      letterSpacing: -1.2,
-    },
-    loadingText: {
-      color: theme.colors.mutedText,
-      fontSize: 16,
-      fontWeight: '800',
-    },
-    errorText: {
-      color: theme.colors.danger,
-      fontSize: 14,
-      lineHeight: 20,
-      fontWeight: '700',
-      paddingTop: 12,
-    },
-    countMeta: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-      paddingBottom: 10,
-    },
-    emptyText: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      fontWeight: '700',
-      paddingTop: 24,
-      textAlign: 'center',
-    },
-    resultRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 16,
-      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    typeDot: {
-      width: 12,
-      height: 12,
-      borderRadius: 999,
-    },
-    resultBody: {
-      flex: 1,
-      gap: 2,
-    },
-    resultJapanese: {
-      color: theme.colors.text,
-      fontSize: 18,
-      fontWeight: '900',
-    },
-    resultMeta: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      fontWeight: '700',
-      textTransform: 'capitalize',
-    },
-    resultScore: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-    },
-    pressed: {
-      opacity: 0.72,
-      transform: [{ scale: 0.99 }],
-    },
-  });
 }

@@ -1,12 +1,12 @@
 # 読路 (Yomiji)
 
-A WaniKani study app for Android, built with React Native and Expo. Named for 読 (よ, reading) + 路 (じ, path): the reading path.
+A cross-platform WaniKani study app for Android and iOS, built with React Native, Expo, and TypeScript. Named for 読 (よ, reading) + 路 (じ, path): the reading path.
 
 読路 is based on [Tsurukame](https://github.com/davidsansome/tsurukame), an unofficial WaniKani iOS app by David Sansome and contributors. Core domain logic — including the review state machine, answer checker, lesson flow, sync architecture, and settings — was derived from the Tsurukame Swift/UIKit source code in `tsurukame/`, with original flows and UI where the cross-platform app diverges. Tsurukame is licensed under the [Apache License 2.0](tsurukame/LICENSE).
 
 The app name is 読路 (Yomiji); the onboarding hero also uses the kana/kanji wordmark 読み道 as a visual “reading road/path” motif.
 
-See `ROADMAP.md` for the parity checklist, `USER_MANUAL.md` for feature-by-feature usage instructions, and `REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
+See `docs/ROADMAP.md` for the parity checklist, `USER_MANUAL.md` for feature-by-feature usage instructions, and `docs/REACT_NATIVE_PORT_PRD.md` for historical product requirements context.
 
 ## Screenshots
 
@@ -16,7 +16,7 @@ See `ROADMAP.md` for the parity checklist, `USER_MANUAL.md` for feature-by-featu
 
 ## Current Status
 
-The app is an offline-first WaniKani client with a local SQLite cache, incremental sync, pending-write queues, error logging, working dashboard, lesson, review, and practice flows.
+The app is an offline-first WaniKani client with a local SQLite cache, incremental sync, pending-write queues, error logging, local notifications, streamed vocabulary audio, and working dashboard, lesson, review, practice, search, subject detail, and diagnostics flows. The UI has been migrated to NativeWind/Tailwind for most screens and components while retaining theme-driven inline styles where React Native requires them (Switch colors, dynamic subject colors, shadows, inputs, and charts).
 
 ## Features
 
@@ -139,6 +139,12 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 - `TooltipPressable` and `ToastHost` for long-press help toasts on ambiguous icons and controls.
 - CSS-aware SVG rendering for image-only radicals with inline style fallbacks.
 
+### Styling and Theming
+
+- NativeWind/Tailwind powers most screen and component styling, with app tokens defined in `tailwind.config.js` and `dark:` variants driven by the theme bridge in `App.tsx`.
+- `AppThemeProvider` remains the source for navigation colors and dynamic values that cannot be expressed as static classes, such as subject-type colors, Switch track colors, shadows, placeholder/selection colors, and chart props.
+- `SrsBar`, `LevelProgressChart`, `ReviewForecastChart`, and `DashboardItemList` intentionally keep static `StyleSheet` usage with props-drilled colors. See `docs/nativewind-migration.md` for migration notes and conventions.
+
 ### Accessibility and Help
 
 - Long-press help toasts on dashboard level browse, search, settings, and session quick-settings controls.
@@ -183,7 +189,7 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 ## Known Major Gaps
 
-- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation pending.
+- Dashboard lacks WaniKani recommended lessons vs. advanced lesson pool separation. Algorithm research is complete (see `docs/recommended-lessons-research.md`); implementation is blocked on additional webapp behavior verification.
 - Offline audio downloads are not implemented.
 - The `yomiji://` custom scheme is reserved in app config, but deep-link route parsing and universal/app links are not implemented.
 - Custom font and font-size settings are not implemented.
@@ -191,11 +197,12 @@ Practice sessions use the same review UI but never submit WaniKani SRS progress.
 
 ## Getting Started
 
-Requirements: Node 22, pnpm 9, Java 17, Android SDK/Emulator, and Expo/EAS-compatible credentials for release work. `pnpm start` uses `expo start --dev-client`, so install/run a development build first with `pnpm android`.
+Requirements: Node 22, pnpm 9, Java 17, Android SDK/Emulator for Android work, Xcode for iOS work, and Expo/EAS-compatible credentials for release work. `pnpm start` uses `expo start --dev-client`, so install/run a development build first with `pnpm android` or `pnpm ios`.
 
 ```sh
 pnpm install
-pnpm android     # expo run:android (creates/runs a development build)
+pnpm android     # expo run:android (creates/runs an Android development build)
+# or: pnpm ios   # expo run:ios (creates/runs an iOS development build)
 pnpm start       # expo start --dev-client
 ```
 
@@ -205,6 +212,7 @@ pnpm start       # expo start --dev-client
 pnpm typecheck                     # tsc --noEmit
 pnpm test                          # jest --runInBand
 pnpm start                         # expo start --dev-client
+pnpm start -- --clear              # clear Metro cache when UI output looks stale
 pnpm android                       # expo run:android
 pnpm ios                           # expo run:ios
 pnpm web                           # expo start --web (experimental/unsupported)
@@ -244,7 +252,11 @@ src/
   screens/          # UI screens (Dashboard, Login, Settings, Diagnostics, ReviewSession, LessonSession, LessonPicker, RadicalImagePreview, SubjectCatalog, SubjectSearch, SubjectBrowse, SubjectDetail)
   components/       # Shared UI components (ScreenLayout, SubjectHeroCard, SubjectDetailsContent, SrsBar, ReviewQuickSettings, ReviewForecastChart, LevelProgressChart, DashboardItemList)
   theme/            # WaniKani color palette, subject-type colors, theme provider
+docs/               # Roadmap, PRD, research notes, NativeWind migration notes
 scripts/            # Release tooling (version-bump.sh)
-App.tsx             # App root
+App.tsx             # App root; imports global.css and bridges dark mode to NativeWind
+metro.config.js     # Expo Metro config wrapped with NativeWind
+tailwind.config.js  # NativeWind/Tailwind tokens and dark-mode classes
+global.css          # Tailwind directives for NativeWind
 tsurukame/          # Original iOS Swift/UIKit source — behavior reference only
 ```

@@ -1,28 +1,21 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, useColorScheme, View } from 'react-native';
 
-import { AppearanceMode } from '../domain/settings/settings';
 import { useSettingsStore } from '../domain/settings/settingsStore';
 
 import { AppColors, darkColors, lightColors } from './palette';
 
-export type { AppearanceMode };
-
 export type AppTheme = {
-  mode: AppearanceMode;
   isDark: boolean;
   colors: AppColors;
   spacing: (unit: number) => number;
-  setMode: (mode: AppearanceMode) => void;
 };
 
 const AppThemeContext = createContext<AppTheme | null>(null);
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const appearance = useSettingsStore((s) => s.appearance);
   const storeHydrated = useSettingsStore((s) => s._hydrated);
-  const updateSetting = useSettingsStore((s) => s.updateSetting);
   const [hydrated, setHydrated] = useState(false);
 
   // Trigger hydration once on mount (idempotent — guarded by _hydrated flag)
@@ -35,22 +28,15 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     if (storeHydrated) setHydrated(true);
   }, [storeHydrated]);
 
-  const setMode = useCallback((nextMode: AppearanceMode) => {
-    updateSetting('appearance', nextMode);
-  }, [updateSetting]);
-
-  const mode = appearance;
-  const isDark = mode === 'dark' || (mode === 'system' && systemScheme === 'dark');
+  const isDark = systemScheme === 'dark';
 
   const value = useMemo<AppTheme>(
     () => ({
-      mode,
       isDark,
       colors: isDark ? darkColors : lightColors,
       spacing: (unit: number) => unit * 8,
-      setMode,
     }),
-    [isDark, mode, setMode],
+    [isDark],
   );
 
   if (!hydrated) {

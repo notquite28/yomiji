@@ -5,7 +5,6 @@ import {
 	Linking,
 	Pressable,
 	ScrollView,
-	StyleSheet,
 	Switch,
 	Text,
 	View,
@@ -25,18 +24,13 @@ import {
 } from "../domain/notifications";
 import {
 	type AppSettings,
-	defaultSettings,
 	type ReviewOrder,
 	type SubjectType,
 } from "../domain/settings/settings";
 import { useSettingsStore } from "../domain/settings/settingsStore";
 import { deleteApiToken } from "../domain/storage/secureToken";
 import type { RootStackParamList } from "../navigation/types";
-import {
-	type AppTheme,
-	type AppearanceMode,
-	useAppTheme,
-} from "../theme/AppThemeProvider";
+import { useAppTheme } from "../theme/AppThemeProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings"> & {
 	onLoggedOut: () => void;
@@ -54,12 +48,6 @@ const REVIEW_ORDER_LABELS: Record<ReviewOrder, string> = {
 	longestRelativeWait: "Longest Wait",
 };
 
-const APPEARANCE_OPTIONS: { value: AppearanceMode; label: string }[] = [
-	{ value: "system", label: "System" },
-	{ value: "light", label: "Light" },
-	{ value: "dark", label: "Dark" },
-];
-
 const LESSON_ORDER_LABELS: Record<SubjectType, string> = {
   radical: "Radicals",
   kanji: "Kanji",
@@ -75,7 +63,6 @@ function formatHour(hour: number): string {
 
 export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 	const theme = useAppTheme();
-	const styles = makeStyles(theme);
 	const settings = useSettingsStore();
 	const updateSetting = useSettingsStore((s) => s.updateSetting);
 	const [voiceActors, setVoiceActors] = useState<VoiceActorOption[]>([]);
@@ -97,14 +84,11 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		};
 	}, []);
 
-	// When returning to this screen, check if notification permission was revoked
-	// while toggles are still ON. Show a one-time Alert if so.
 	const hasWarnedRevoked = useRef(false);
 	useEffect(() => {
 		const unsubscribe = navigation.addListener("focus", async () => {
 			if (hasWarnedRevoked.current) return;
 
-			// Read settings from the store (hydrated, in-memory).
 			const currentSettings = useSettingsStore.getState();
 			const hasNotificationEnabled =
 				currentSettings.notificationsEnabled ||
@@ -206,70 +190,58 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 	};
 
 	return (
-		<SafeAreaView style={styles.safeArea}>
-			<ScrollView contentContainerStyle={styles.content}>
+		<SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
+			<ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 14 }}>
 				<Pressable
 					onPress={() => navigation.goBack()}
-					style={styles.backButton}
+					className="self-start rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+					accessibilityRole="button"
+					accessibilityLabel="Go back"
 				>
-					<Text style={styles.backText}>Back</Text>
+					<Text className="text-text dark:text-text-dark font-black">Back</Text>
 				</Pressable>
-				<View style={styles.headerBlock}>
-					<Text style={styles.kicker}>読路</Text>
-					<Text style={styles.title}>Settings</Text>
-					<Text style={styles.subtitle}>
-						Account, appearance, and study preferences.
+
+				<View className="px-0.5 pt-[14px] pb-1.5">
+					<Text className="text-xs font-heavy tracking-ultra3 uppercase text-text-muted dark:text-text-muted-dark">読路</Text>
+					<Text className="mt-1.5 text-5xl font-black tracking-tightest text-text dark:text-text-dark">Settings</Text>
+					<Text className="mt-[10px] text-[16px] leading-[22px] font-bold text-text-muted dark:text-text-muted-dark">
+						Account and study preferences.
 					</Text>
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Appearance</Text>
-					<Text style={styles.sectionLabel}>Theme</Text>
-					<View style={styles.segmentGroup}>
-						{APPEARANCE_OPTIONS.map((opt) => (
-							<Pressable
-								key={opt.value}
-								onPress={() => theme.setMode(opt.value)}
-								style={[
-									styles.segmentButton,
-									theme.mode === opt.value && styles.segmentActive,
-								]}
-							>
-								<Text
-									style={[
-										styles.segmentText,
-										theme.mode === opt.value && styles.segmentTextActive,
-									]}
-								>
-									{opt.label}
-								</Text>
-							</Pressable>
-						))}
-					</View>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Reviews</Text>
 
-				</View>
-
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Reviews</Text>
-
-					<Text style={styles.sectionLabel}>Review Order</Text>
-					<View style={styles.pillGroup}>
+					<Text className="text-xs font-black tracking-ultra uppercase text-text-muted dark:text-text-muted-dark mt-1.5">Review Order</Text>
+					<View className="flex-row flex-wrap gap-2">
 						{(
 							Object.entries(REVIEW_ORDER_LABELS) as [ReviewOrder, string][]
 						).map(([value, label]) => (
 							<Pressable
 								key={value}
 								onPress={() => updateSetting("reviewOrder", value)}
-								style={[
-									styles.pill,
-									settings.reviewOrder === value && styles.pillActive,
-								]}
+								className={`rounded-full px-[14px] py-2 border ${
+									settings.reviewOrder === value
+										? "bg-kanji border-kanji"
+										: "bg-surface dark:bg-surface-dark border-border dark:border-border-dark"
+								}`}
+								accessibilityRole="button"
+								accessibilityLabel={label}
+								accessibilityState={{ selected: settings.reviewOrder === value }}
 							>
 								<Text
-									style={[
-										styles.pillText,
-										settings.reviewOrder === value && styles.pillTextActive,
-									]}
+									className={`text-[13px] font-heavy ${
+										settings.reviewOrder === value ? "text-white" : "text-text dark:text-text-dark"
+									}`}
 								>
 									{label}
 								</Text>
@@ -282,7 +254,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Reveal the answer first, then self-grade. One card per item."
 						value={settings.ankiMode}
 						onValueChange={(v) => updateSetting("ankiMode", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -290,7 +261,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Disable fuzzy matching for meaning answers."
 						value={settings.exactMatch}
 						onValueChange={(v) => updateSetting("exactMatch", v)}
-						theme={theme}
 					/>
 
 					{!settings.ankiMode ? (
@@ -300,7 +270,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 								detail="Ask meaning and reading back-to-back for each item."
 								value={settings.groupMeaningReading}
 								onValueChange={(v) => updateSetting("groupMeaningReading", v)}
-								theme={theme}
 							/>
 
 							{settings.groupMeaningReading ? (
@@ -309,7 +278,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 									detail="Ask meaning before reading when grouped."
 									value={settings.meaningFirst}
 									onValueChange={(v) => updateSetting("meaningFirst", v)}
-									theme={theme}
 								/>
 							) : null}
 						</>
@@ -320,7 +288,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Cap wrong counts to 1 per task type."
 						value={settings.minimizeReviewPenalty}
 						onValueChange={(v) => updateSetting("minimizeReviewPenalty", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -328,7 +295,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Allow override correct, try again later, and add synonym."
 						value={settings.enableCheats}
 						onValueChange={(v) => updateSetting("enableCheats", v)}
-						theme={theme}
 					/>
 
 					<SettingStepper
@@ -338,7 +304,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						min={1}
 						max={15}
 						onChange={(v) => updateSetting("reviewBatchSize", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -346,7 +311,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail={`Cap reviews at ${settings.reviewItemsLimit} items.`}
 						value={settings.reviewItemsLimitEnabled}
 						onValueChange={(v) => updateSetting("reviewItemsLimitEnabled", v)}
-						theme={theme}
 					/>
 
 					{settings.reviewItemsLimitEnabled ? (
@@ -358,7 +322,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 							max={500}
 							step={5}
 							onChange={(v) => updateSetting("reviewItemsLimit", v)}
-							theme={theme}
 						/>
 					) : null}
 
@@ -369,32 +332,40 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						min={1}
 						max={10}
 						onChange={(v) => updateSetting("leechThreshold", v)}
-						theme={theme}
 					/>
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Audio</Text>
-					<Text style={styles.bodyText}>
-						Stream vocabulary pronunciation audio during reviews. Offline
-						downloads are not enabled yet.
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Audio</Text>
+					<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
+						Stream vocabulary pronunciation audio during reviews. Offline downloads are not enabled yet.
 					</Text>
 
-					<Text style={styles.sectionLabel}>Voice Actor</Text>
-					<View style={styles.pillGroup}>
+					<Text className="text-xs font-black tracking-ultra uppercase text-text-muted dark:text-text-muted-dark mt-1.5">Voice Actor</Text>
+					<View className="flex-row flex-wrap gap-2">
 						<Pressable
 							onPress={() => updateSetting("preferredVoiceActorId", null)}
-							style={[
-								styles.pill,
-								settings.preferredVoiceActorId === null && styles.pillActive,
-							]}
+							className={`rounded-full px-[14px] py-2 border ${
+								settings.preferredVoiceActorId === null
+									? "bg-kanji border-kanji"
+									: "bg-surface dark:bg-surface-dark border-border dark:border-border-dark"
+							}`}
+							accessibilityRole="button"
+							accessibilityLabel="Auto"
 						>
 							<Text
-								style={[
-									styles.pillText,
-									settings.preferredVoiceActorId === null &&
-										styles.pillTextActive,
-								]}
+								className={`text-[13px] font-heavy ${
+									settings.preferredVoiceActorId === null ? "text-white" : "text-text dark:text-text-dark"
+								}`}
 							>
 								Auto
 							</Text>
@@ -410,15 +381,20 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 									onPress={() =>
 										updateSetting("preferredVoiceActorId", voiceActor.id)
 									}
-									style={[styles.pill, active && styles.pillActive]}
+									className={`rounded-full px-[14px] py-2 border ${
+										active
+											? "bg-kanji border-kanji"
+											: "bg-surface dark:bg-surface-dark border-border dark:border-border-dark"
+									}`}
 									accessibilityLabel={
 										subtitle
 											? `${voiceActor.name}, ${subtitle}`
 											: voiceActor.name
 									}
+									accessibilityRole="button"
 								>
 									<Text
-										style={[styles.pillText, active && styles.pillTextActive]}
+										className={`text-[13px] font-heavy ${active ? "text-white" : "text-text dark:text-text-dark"}`}
 									>
 										{voiceActor.name}
 									</Text>
@@ -427,7 +403,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						})}
 					</View>
 					{voiceActors.length === 0 ? (
-						<Text style={styles.bodyText}>
+						<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
 							Voice actors will appear after sync downloads them.
 						</Text>
 					) : null}
@@ -437,7 +413,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Play vocabulary audio after correct reading answers."
 						value={settings.playAudioAutomatically}
 						onValueChange={(v) => updateSetting("playAudioAutomatically", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -445,12 +420,20 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Duck other audio while pronunciation audio plays."
 						value={settings.interruptBackgroundAudio}
 						onValueChange={(v) => updateSetting("interruptBackgroundAudio", v)}
-						theme={theme}
 					/>
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Notifications</Text>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Notifications</Text>
 
 					<SettingToggle
 						label="Review Notifications"
@@ -459,7 +442,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						onValueChange={(v) =>
 							updateNotificationSetting("notificationsEnabled", v)
 						}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -469,7 +451,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						onValueChange={(v) =>
 							updateNotificationSetting("notificationsBadging", v)
 						}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -479,12 +460,11 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						onValueChange={(v) =>
 							updateNotificationSetting("notificationSounds", v)
 						}
-						theme={theme}
 					/>
 
-				<Text style={styles.sectionLabel}>Triggers</Text>
+				<Text className="text-xs font-black tracking-ultra uppercase text-text-muted dark:text-text-muted-dark mt-1.5">Triggers</Text>
 
-				<Text style={styles.bodyText}>
+				<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
 					Notify when the threshold is reached, or via a daily reminder.
 				</Text>
 
@@ -497,7 +477,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 					onChange={(v) =>
 						updateNotificationSetting("notificationThreshold", v)
 					}
-					theme={theme}
 				/>
 
 				<SettingToggle
@@ -514,7 +493,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 							v ? 20 : null,
 						)
 					}
-					theme={theme}
 				/>
 
 				{settings.notificationDailyTime != null ? (
@@ -527,14 +505,22 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						onChange={(v) =>
 							updateNotificationSetting("notificationDailyTime", v)
 						}
-						theme={theme}
 						displayValue={formatHour(settings.notificationDailyTime)}
 					/>
 				) : null}
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Lessons</Text>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Lessons</Text>
 
 					<SettingStepper
 						label="New Items Per Quiz"
@@ -543,7 +529,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						min={1}
 						max={10}
 						onChange={(v) => updateSetting("lessonBatchSize", v)}
-						theme={theme}
 					/>
 
 					<SettingStepper
@@ -553,7 +538,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						min={1}
 						max={50}
 						onChange={(v) => updateSetting("lessonSessionSize", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -561,7 +545,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Show current-level items first in lessons."
 						value={settings.prioritizeCurrentLevel}
 						onValueChange={(v) => updateSetting("prioritizeCurrentLevel", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -569,7 +552,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Randomize item order across types within each level."
 						value={settings.interleaveLessons}
 						onValueChange={(v) => updateSetting("interleaveLessons", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -577,29 +559,35 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Include kana-only vocabulary in lessons."
 						value={settings.showKanaOnlyVocab}
 						onValueChange={(v) => updateSetting("showKanaOnlyVocab", v)}
-						theme={theme}
 					/>
 
-					<Text style={styles.sectionLabel}>Subject Type Order</Text>
-					<Text style={styles.bodyText}>
+					<Text className="text-xs font-black tracking-ultra uppercase text-text-muted dark:text-text-muted-dark mt-1.5">Subject Type Order</Text>
+					<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
 						Use the up and down controls to set lesson priority.
 					</Text>
 					<LessonOrderEditor
 						order={settings.lessonOrder}
 						onChange={(order) => updateSetting("lessonOrder", order)}
-						theme={theme}
 					/>
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Subject Details</Text>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Subject Details</Text>
 
 					<SettingToggle
 						label="Katakana for Onyomi"
 						detail="Display onyomi (Chinese-origin) kanji readings in katakana."
 						value={settings.useKatakanaForOnyomi}
 						onValueChange={(v) => updateSetting("useKatakanaForOnyomi", v)}
-						theme={theme}
 					/>
 
 					<SettingToggle
@@ -607,44 +595,69 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 						detail="Show all accepted readings, not just primary."
 						value={settings.showAllReadings}
 						onValueChange={(v) => updateSetting("showAllReadings", v)}
-						theme={theme}
 					/>
 				</View>
 
-				<View style={styles.panel}>
-					<Text style={styles.panelTitle}>Diagnostics</Text>
-					<Text style={styles.bodyText}>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[10px]"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Diagnostics</Text>
+					<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
 						View cache stats, sync state, and error log.
 					</Text>
 					<Pressable
 						onPress={() => navigation.navigate("Diagnostics")}
-						style={({ pressed }) => [
-							styles.diagnosticsButton,
-							pressed && styles.pressed,
-						]}
+						className="min-h-[44px] items-center justify-center rounded bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
+						style={({ pressed }) =>
+							pressed ? { opacity: 0.72, transform: [{ scale: 0.99 }] } : undefined
+						}
+						accessibilityRole="button"
+						accessibilityLabel="Open Diagnostics"
 					>
-						<Text style={styles.diagnosticsButtonText}>Open Diagnostics</Text>
+						<Text className="text-[14px] font-black text-text dark:text-text-dark">Open Diagnostics</Text>
 					</Pressable>
 				</View>
 
-				<View style={styles.dangerPanel}>
-					<Text style={styles.panelTitle}>Log Out</Text>
-					<Text style={styles.bodyText}>
+				<View
+					className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-danger dark:border-danger-dark gap-3"
+					style={{
+						shadowColor: "#000000",
+						shadowOpacity: theme.isDark ? 0.16 : 0.05,
+						shadowRadius: 18,
+						shadowOffset: { width: 0, height: 10 },
+						elevation: 4,
+					}}
+				>
+					<Text className="text-2xl font-black tracking-tight text-text dark:text-text-dark">Log Out</Text>
+					<Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
 						Clears token, cache, and pending queues.
 					</Text>
-					{error ? <Text style={styles.errorText}>{error}</Text> : null}
+					{error ? <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text> : null}
 					<Pressable
 						disabled={isLoggingOut}
 						onPress={confirmLogout}
+						className="min-h-[54px] items-center justify-center rounded-[20px] bg-danger dark:bg-danger-dark"
+						style={({ pressed }) => ({
+							opacity: pressed || isLoggingOut ? 0.72 : 1,
+							transform: [{ scale: pressed || isLoggingOut ? 0.99 : 1 }],
+							shadowColor: "#000000",
+							shadowOpacity: theme.isDark ? 0.2 : 0.12,
+							shadowRadius: 12,
+							shadowOffset: { width: 0, height: 6 },
+							elevation: 4,
+						})}
 						accessibilityRole="button"
 						accessibilityState={{ disabled: isLoggingOut, busy: isLoggingOut }}
 						accessibilityHint="Asks for confirmation before removing your token and local cache."
-						style={({ pressed }) => [
-							styles.logoutButton,
-							(pressed || isLoggingOut) && styles.pressed,
-						]}
 					>
-						<Text style={styles.logoutText}>
+						<Text className="text-[16px] font-black text-white">
 							{isLoggingOut ? "Logging out..." : "Log Out and Clear Cache"}
 						</Text>
 					</Pressable>
@@ -659,25 +672,23 @@ function SettingToggle({
 	detail,
 	value,
 	onValueChange,
-	theme,
 }: {
 	label: string;
 	detail?: string;
 	value: boolean;
 	onValueChange: (value: boolean) => void;
-	theme: AppTheme;
 }) {
-	const styles = makeStyles(theme);
+	const { colors } = useAppTheme();
 	return (
-		<View style={styles.row}>
-			<View style={styles.rowText}>
-				<Text style={styles.rowLabel}>{label}</Text>
-				{detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+		<View className="flex-row items-center justify-between gap-3 pt-[10px] border-t border-border dark:border-border-dark">
+			<View className="flex-1 gap-0.5">
+				<Text className="text-base font-heavy text-text dark:text-text-dark">{label}</Text>
+				{detail ? <Text className="text-[13px] leading-[18px] font-bold text-text-muted dark:text-text-muted-dark">{detail}</Text> : null}
 			</View>
 			<Switch
 				value={value}
 				onValueChange={onValueChange}
-				trackColor={{ false: theme.colors.border, true: theme.colors.kanji }}
+				trackColor={{ false: colors.border, true: "#ff00aa" }}
 				thumbColor="#ffffff"
 			/>
 		</View>
@@ -692,7 +703,6 @@ function SettingStepper({
 	max,
 	step = 1,
 	onChange,
-	theme,
 	displayValue,
 }: {
 	label: string;
@@ -702,29 +712,28 @@ function SettingStepper({
 	max: number;
 	step?: number;
 	onChange: (value: number) => void;
-	theme: AppTheme;
 	displayValue?: string;
 }) {
-	const styles = makeStyles(theme);
 	return (
-		<View style={styles.row}>
-			<View style={styles.rowText}>
-				<Text style={styles.rowLabel}>{label}</Text>
-				{detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}
+		<View className="flex-row items-center justify-between gap-3 pt-[10px] border-t border-border dark:border-border-dark">
+			<View className="flex-1 gap-0.5">
+				<Text className="text-base font-heavy text-text dark:text-text-dark">{label}</Text>
+				{detail ? <Text className="text-[13px] leading-[18px] font-bold text-text-muted dark:text-text-muted-dark">{detail}</Text> : null}
 			</View>
-			<View style={styles.stepperGroup}>
+			<View className="flex-row items-center gap-2">
 				<Pressable
 					disabled={value <= min}
 					onPress={() => onChange(Math.max(min, value - step))}
-					style={[styles.stepperButton, value <= min && styles.stepperDisabled]}
+					className="w-[36px] h-[36px] items-center justify-center rounded-[12px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+					style={value <= min ? { opacity: 0.4 } : undefined}
 					accessibilityLabel={`Decrease ${label}`}
-				accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
+					accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
 					accessibilityRole="button"
 				>
-					<Text style={styles.stepperButtonText}>-</Text>
+					<Text className="text-lg font-black text-text dark:text-text-dark">-</Text>
 				</Pressable>
 				<Text
-					style={styles.stepperValue}
+					className="text-[16px] font-black text-text dark:text-text-dark min-w-[32px] text-center"
 					accessibilityLabel={`${label}: ${displayValue ?? value}`}
 				>
 					{displayValue ?? value}
@@ -732,12 +741,13 @@ function SettingStepper({
 				<Pressable
 					disabled={value >= max}
 					onPress={() => onChange(Math.min(max, value + step))}
-					style={[styles.stepperButton, value >= max && styles.stepperDisabled]}
+					className="w-[36px] h-[36px] items-center justify-center rounded-[12px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+					style={value >= max ? { opacity: 0.4 } : undefined}
 					accessibilityLabel={`Increase ${label}`}
-				accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
+					accessibilityHint={`Current value: ${displayValue ?? String(value)}`}
 					accessibilityRole="button"
 				>
-					<Text style={styles.stepperButtonText}>+</Text>
+					<Text className="text-lg font-black text-text dark:text-text-dark">+</Text>
 				</Pressable>
 			</View>
 		</View>
@@ -747,14 +757,10 @@ function SettingStepper({
 function LessonOrderEditor({
 	order,
 	onChange,
-	theme,
 }: {
 	order: SubjectType[];
 	onChange: (order: SubjectType[]) => void;
-	theme: AppTheme;
 }) {
-	const styles = makeStyles(theme);
-
 	function move(fromIndex: number, toIndex: number) {
 		const next = [...order];
 		const removed = next.splice(fromIndex, 1);
@@ -763,312 +769,36 @@ function LessonOrderEditor({
 	}
 
 	return (
-		<View style={styles.lessonOrderList}>
+		<View className="gap-1.5">
 			{order.map((type, idx) => (
-				<View key={type} style={styles.lessonOrderRow}>
-					<Text style={styles.lessonOrderLabel}>
+				<View key={type} className="flex-row items-center justify-between rounded-[12px] px-3 py-[10px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark">
+					<Text className="text-base font-heavy text-text dark:text-text-dark">
 						{LESSON_ORDER_LABELS[type]}
 					</Text>
-					<View style={styles.lessonOrderButtons}>
+					<View className="flex-row gap-1.5">
 						<Pressable
 							disabled={idx === 0}
 							onPress={() => move(idx, idx - 1)}
-							style={[
-								styles.stepperButton,
-								idx === 0 && styles.stepperDisabled,
-							]}
+							className="w-[36px] h-[36px] items-center justify-center rounded-[12px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+							style={idx === 0 ? { opacity: 0.4 } : undefined}
 							accessibilityLabel={`Move ${LESSON_ORDER_LABELS[type]} up`}
 							accessibilityRole="button"
 						>
-							<Text style={styles.stepperButtonText}>↑</Text>
+							<Text className="text-lg font-black text-text dark:text-text-dark">↑</Text>
 						</Pressable>
 						<Pressable
 							disabled={idx === order.length - 1}
 							onPress={() => move(idx, idx + 1)}
-							style={[
-								styles.stepperButton,
-								idx === order.length - 1 && styles.stepperDisabled,
-							]}
+							className="w-[36px] h-[36px] items-center justify-center rounded-[12px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+							style={idx === order.length - 1 ? { opacity: 0.4 } : undefined}
 							accessibilityLabel={`Move ${LESSON_ORDER_LABELS[type]} down`}
 							accessibilityRole="button"
 						>
-							<Text style={styles.stepperButtonText}>↓</Text>
+							<Text className="text-lg font-black text-text dark:text-text-dark">↓</Text>
 						</Pressable>
 					</View>
 				</View>
 			))}
 		</View>
 	);
-}
-
-function makeStyles(theme: AppTheme) {
-	return StyleSheet.create({
-		safeArea: {
-			flex: 1,
-			backgroundColor: theme.isDark ? "#0c0b0f" : "#f7f4ef",
-		},
-		content: {
-			paddingHorizontal: 20,
-			paddingTop: 16,
-			paddingBottom: 28,
-			gap: 14,
-		},
-		backButton: {
-			alignSelf: "flex-start",
-			borderRadius: 999,
-			paddingHorizontal: 13,
-			paddingVertical: 9,
-			backgroundColor: theme.isDark ? "#201e26" : "#f2eee8",
-			borderWidth: 1,
-			borderColor: theme.isDark
-				? "rgba(255, 255, 255, 0.08)"
-				: "rgba(32, 26, 36, 0.06)",
-		},
-		backText: {
-			color: theme.colors.text,
-			fontWeight: "900",
-		},
-		headerBlock: {
-			paddingHorizontal: 2,
-			paddingTop: 14,
-			paddingBottom: 6,
-		},
-		kicker: {
-			color: theme.colors.mutedText,
-			fontSize: 12,
-			fontWeight: "800",
-			letterSpacing: 1.2,
-			textTransform: "uppercase",
-		},
-		title: {
-			marginTop: 6,
-			color: theme.colors.text,
-			fontSize: 40,
-			lineHeight: 46,
-			fontWeight: "900",
-			letterSpacing: -1.4,
-		},
-		subtitle: {
-			marginTop: 10,
-			color: theme.colors.mutedText,
-			fontSize: 16,
-			lineHeight: 22,
-			fontWeight: "700",
-		},
-		panel: {
-			borderRadius: 26,
-			padding: 18,
-			backgroundColor: theme.isDark ? "#15141a" : "#fffdf8",
-			borderWidth: 1,
-			borderColor: theme.isDark
-				? "rgba(255, 255, 255, 0.08)"
-				: "rgba(32, 26, 36, 0.08)",
-			gap: 10,
-			shadowColor: "#000000",
-			shadowOpacity: theme.isDark ? 0.16 : 0.05,
-			shadowRadius: 18,
-			shadowOffset: { width: 0, height: 10 },
-			elevation: 4,
-		},
-		dangerPanel: {
-			borderRadius: 26,
-			padding: 18,
-			backgroundColor: theme.isDark ? "#15141a" : "#fffdf8",
-			borderWidth: 1,
-			borderColor: theme.colors.danger,
-			gap: 12,
-			shadowColor: "#000000",
-			shadowOpacity: theme.isDark ? 0.16 : 0.05,
-			shadowRadius: 18,
-			shadowOffset: { width: 0, height: 10 },
-			elevation: 4,
-		},
-		panelTitle: {
-			color: theme.colors.text,
-			fontSize: 21,
-			fontWeight: "900",
-			letterSpacing: -0.3,
-		},
-		sectionLabel: {
-			color: theme.colors.mutedText,
-			fontSize: 12,
-			fontWeight: "900",
-			letterSpacing: 0.8,
-			textTransform: "uppercase",
-			marginTop: 6,
-		},
-		bodyText: {
-			color: theme.colors.mutedText,
-			fontSize: 15,
-			lineHeight: 21,
-			fontWeight: "700",
-		},
-		errorText: {
-			color: theme.colors.danger,
-			fontWeight: "800",
-		},
-		segmentGroup: {
-			flexDirection: "row",
-			gap: 8,
-		},
-		segmentButton: {
-			flex: 1,
-			minHeight: 44,
-			alignItems: "center",
-			justifyContent: "center",
-			borderRadius: 14,
-			backgroundColor: theme.colors.surface,
-			borderWidth: 1,
-			borderColor: theme.colors.border,
-		},
-		segmentActive: {
-			backgroundColor: theme.colors.kanji,
-			borderColor: theme.colors.kanji,
-		},
-		segmentText: {
-			color: theme.colors.text,
-			fontSize: 14,
-			fontWeight: "800",
-		},
-		segmentTextActive: {
-			color: "#ffffff",
-		},
-		pillGroup: {
-			flexDirection: "row",
-			flexWrap: "wrap",
-			gap: 8,
-		},
-		pill: {
-			borderRadius: 999,
-			paddingHorizontal: 14,
-			paddingVertical: 8,
-			backgroundColor: theme.colors.surface,
-			borderWidth: 1,
-			borderColor: theme.colors.border,
-		},
-		pillActive: {
-			backgroundColor: theme.colors.kanji,
-			borderColor: theme.colors.kanji,
-		},
-		pillText: {
-			color: theme.colors.text,
-			fontSize: 13,
-			fontWeight: "800",
-		},
-		pillTextActive: {
-			color: "#ffffff",
-		},
-		row: {
-			flexDirection: "row",
-			alignItems: "center",
-			justifyContent: "space-between",
-			gap: 12,
-			paddingTop: 10,
-			borderTopWidth: 1,
-			borderTopColor: theme.colors.border,
-		},
-		rowText: {
-			flex: 1,
-			gap: 2,
-		},
-		rowLabel: {
-			color: theme.colors.text,
-			fontSize: 15,
-			fontWeight: "800",
-		},
-		rowDetail: {
-			color: theme.colors.mutedText,
-			fontSize: 13,
-			lineHeight: 18,
-			fontWeight: "700",
-		},
-		stepperGroup: {
-			flexDirection: "row",
-			alignItems: "center",
-			gap: 8,
-		},
-		stepperButton: {
-			width: 36,
-			height: 36,
-			alignItems: "center",
-			justifyContent: "center",
-			borderRadius: 12,
-			backgroundColor: theme.colors.surfaceElevated,
-			borderWidth: 1,
-			borderColor: theme.colors.border,
-		},
-		stepperDisabled: {
-			opacity: 0.4,
-		},
-		stepperButtonText: {
-			color: theme.colors.text,
-			fontSize: 18,
-			fontWeight: "900",
-		},
-		stepperValue: {
-			color: theme.colors.text,
-			fontSize: 16,
-			fontWeight: "900",
-			minWidth: 32,
-			textAlign: "center",
-		},
-		logoutButton: {
-			minHeight: 54,
-			alignItems: "center",
-			justifyContent: "center",
-			borderRadius: 20,
-			backgroundColor: theme.colors.danger,
-			shadowColor: "#000000",
-			shadowOpacity: theme.isDark ? 0.2 : 0.12,
-			shadowRadius: 12,
-			shadowOffset: { width: 0, height: 6 },
-			elevation: 4,
-		},
-		diagnosticsButton: {
-			minHeight: 44,
-			alignItems: "center",
-			justifyContent: "center",
-			borderRadius: 14,
-			backgroundColor: theme.colors.surface,
-			borderWidth: 1,
-			borderColor: theme.colors.border,
-		},
-		diagnosticsButtonText: {
-			color: theme.colors.text,
-			fontSize: 14,
-			fontWeight: "900",
-		},
-		logoutText: {
-			color: "#ffffff",
-			fontSize: 16,
-			fontWeight: "900",
-		},
-		pressed: {
-			opacity: 0.72,
-			transform: [{ scale: 0.99 }],
-		},
-		lessonOrderList: {
-			gap: 6,
-		},
-		lessonOrderRow: {
-			flexDirection: "row",
-			alignItems: "center",
-			justifyContent: "space-between",
-			borderRadius: 12,
-			paddingHorizontal: 12,
-			paddingVertical: 10,
-			backgroundColor: theme.colors.surfaceElevated,
-			borderWidth: 1,
-			borderColor: theme.colors.border,
-		},
-		lessonOrderLabel: {
-			color: theme.colors.text,
-			fontSize: 15,
-			fontWeight: "800",
-		},
-		lessonOrderButtons: {
-			flexDirection: "row",
-			gap: 6,
-		},
-	});
 }

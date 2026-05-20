@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { StudyMaterialPayload } from '../domain/api/types';
@@ -13,14 +13,13 @@ import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { useSettingsStore } from '../domain/settings/settingsStore';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubjectDetail'>;
 
 export function SubjectDetailScreen({ navigation, route }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { colors } = useAppTheme();
   const { subjectId } = route.params;
 
   const [subject, setSubject] = useState<SubjectAnswerData | null>(null);
@@ -133,13 +132,24 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
     const message = isLoading ? 'Loading subject…' : loadError ? 'Could not load subject' : 'Subject not found';
     const detail = loadError ?? (!isLoading ? 'This subject may not be in your local cache yet. Try syncing from the dashboard.' : null);
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer} accessibilityLiveRegion="polite">
-          <Text style={styles.loadingText}>{message}</Text>
-          {detail ? <Text style={styles.emptyDetail}>{detail}</Text> : null}
+      <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
+        <View className="flex-1 items-center justify-center px-6 gap-3" accessibilityLiveRegion="polite">
+          <Text className="text-[16px] font-heavy text-text-muted dark:text-text-muted-dark text-center">
+            {message}
+          </Text>
+          {detail ? (
+            <Text className="text-[14px] leading-5 font-bold text-text-muted dark:text-text-muted-dark text-center">
+              {detail}
+            </Text>
+          ) : null}
           {!isLoading ? (
-            <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" style={styles.backButton}>
-              <Text style={styles.backText}>Back</Text>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              className="rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Text className="text-text dark:text-text-dark font-black">Back</Text>
             </Pressable>
           ) : null}
         </View>
@@ -147,14 +157,19 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const color = colorForSubjectType(theme.colors, subject.type);
+  const color = colorForSubjectType(colors, subject.type);
   const srsLabel = stats?.srsStage != null ? srsStageLabel(stats.srsStage) : 'Unlocked';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>Back</Text>
+    <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 14 }}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          className="self-start rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text className="text-text dark:text-text-dark font-black">Back</Text>
         </Pressable>
 
         <SubjectHeroCard
@@ -169,13 +184,13 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
         />
 
         {stats ? (
-          <View style={styles.statsRow}>
-            <View style={styles.statChip}>
-              <Text style={styles.statChipText}>{srsLabel}</Text>
+          <View className="flex-row gap-2 flex-wrap">
+            <View className="rounded-full px-3 py-1.5 bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]">
+              <Text className="text-xs font-heavy text-text dark:text-text-dark">{srsLabel}</Text>
             </View>
             {stats.percentageCorrect != null ? (
-              <View style={styles.statChip}>
-                <Text style={styles.statChipText}>{stats.percentageCorrect}% correct</Text>
+              <View className="rounded-full px-3 py-1.5 bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]">
+                <Text className="text-xs font-heavy text-text dark:text-text-dark">{stats.percentageCorrect}% correct</Text>
               </View>
             ) : null}
           </View>
@@ -197,26 +212,46 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           onEditReadingNote={(value) => handleSave('readingNote', value)}
         />
 
-        {saveMessage ? <Text style={saveMessage.startsWith('Could not') ? styles.errorText : styles.successText} accessibilityLiveRegion="polite">{saveMessage}</Text> : null}
+        {saveMessage ? (
+          <Text
+            className={`text-[14px] font-heavy ${saveMessage.startsWith('Could not') ? 'text-danger dark:text-danger-dark' : 'text-success dark:text-success-dark'}`}
+            accessibilityLiveRegion="polite"
+          >
+            {saveMessage}
+          </Text>
+        ) : null}
 
         {editingField === 'synonym' ? (
-          <View style={{ gap: 6 }}>
-            <Text style={{ color: theme.colors.mutedText, fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 }}>Edit Synonyms</Text>
-            <View style={{ borderRadius: 16, padding: 14, backgroundColor: theme.colors.surfaceElevated, borderWidth: 1, borderColor: theme.colors.border, gap: 4 }}>
+          <View className="gap-1.5">
+            <Text className="text-[13px] font-black uppercase tracking-ultra text-text-muted dark:text-text-muted-dark">
+              Edit Synonyms
+            </Text>
+            <View className="rounded-md p-[14px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark gap-1">
               <TextInput
-                style={styles.input}
+                className="min-h-[44px] rounded-[12px] border border-border dark:border-border-dark bg-surface-elevated dark:bg-surface-elevated-dark text-text dark:text-text-dark px-3 text-[14px] font-bold"
                 value={editValue}
                 onChangeText={setEditValue}
                 placeholder="comma, separated, synonyms"
-                placeholderTextColor={theme.colors.mutedText}
+                placeholderTextColor={colors.mutedText}
                 autoFocus
               />
-              <View style={styles.editActions}>
-                <Pressable style={styles.editButton} onPress={() => setEditingField(null)}>
-                  <Text style={styles.editButtonText}>Cancel</Text>
+              <View className="flex-row gap-2 mt-1.5">
+                <Pressable
+                  className="px-[14px] py-2 rounded-[10px] border border-border dark:border-border-dark"
+                  onPress={() => setEditingField(null)}
+                >
+                  <Text className="text-[13px] font-bold text-text dark:text-text-dark">Cancel</Text>
                 </Pressable>
-                <Pressable style={[styles.editButton, styles.editButtonPrimary]} onPress={() => handleSave('synonym', editValue)} disabled={isSaving} accessibilityRole="button" accessibilityState={{ disabled: isSaving, busy: isSaving }}>
-                  <Text style={styles.editButtonPrimaryText}>{isSaving ? 'Saving...' : 'Save'}</Text>
+                <Pressable
+                  className="px-[14px] py-2 rounded-[10px] bg-kanji"
+                  onPress={() => handleSave('synonym', editValue)}
+                  disabled={isSaving}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isSaving, busy: isSaving }}
+                >
+                  <Text className="text-[13px] font-bold text-white">
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -234,117 +269,4 @@ function srsStageLabel(stage: number): string {
   if (stage === 7) return 'Master';
   if (stage === 8) return 'Enlightened';
   return 'Burned';
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
-    },
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 28,
-      gap: 14,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-      borderRadius: 999,
-      paddingHorizontal: 13,
-      paddingVertical: 9,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    backText: {
-      color: theme.colors.text,
-      fontWeight: '900',
-    },
-    loadingContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 24,
-      gap: 12,
-    },
-    loadingText: {
-      color: theme.colors.mutedText,
-      fontSize: 16,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    emptyDetail: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      lineHeight: 20,
-      fontWeight: '700',
-      textAlign: 'center',
-    },
-    successText: {
-      color: theme.colors.success,
-      fontSize: 14,
-      fontWeight: '800',
-    },
-    errorText: {
-      color: theme.colors.danger,
-      fontSize: 14,
-      fontWeight: '800',
-    },
-    statsRow: {
-      flexDirection: 'row',
-      gap: 8,
-      flexWrap: 'wrap',
-    },
-    statChip: {
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    statChipText: {
-      color: theme.colors.text,
-      fontSize: 12,
-      fontWeight: '800',
-    },
-    input: {
-      minHeight: 44,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surfaceElevated,
-      color: theme.colors.text,
-      paddingHorizontal: 12,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    editActions: {
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: 6,
-    },
-    editButton: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    editButtonText: {
-      color: theme.colors.text,
-      fontWeight: '700',
-      fontSize: 13,
-    },
-    editButtonPrimary: {
-      backgroundColor: theme.colors.kanji,
-      borderWidth: 0,
-    },
-    editButtonPrimaryText: {
-      color: '#ffffff',
-      fontWeight: '700',
-      fontSize: 13,
-    },
-  });
 }

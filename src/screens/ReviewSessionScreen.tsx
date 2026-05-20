@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -26,7 +26,7 @@ import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewSession'>;
@@ -74,8 +74,7 @@ function emptyStateLabel(source: PracticeSource) {
 }
 
 export function ReviewSessionScreen({ navigation, route }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { colors } = useAppTheme();
   const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,9 +122,9 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     (async () => {
       try {
         const db = await openAppDatabase();
-        const settings = useSettingsStore.getState();
+        const currentSettings = useSettingsStore.getState();
         const [items, userRow] = await Promise.all([
-          getQueueForSource(db, practiceSource, settings),
+          getQueueForSource(db, practiceSource, currentSettings),
           db.getFirstAsync<{ level: number }>('SELECT level FROM user WHERE id = 1'),
         ]);
         if (!isMounted) return;
@@ -223,8 +222,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const displayItem = feedback?.item ?? currentItem;
   const displayTaskType = feedback?.taskType ?? taskType;
   const subjectColor = displayItem
-    ? colorForSubjectType(theme.colors, displayItem.subjectType)
-    : theme.colors.vocabulary;
+    ? colorForSubjectType(colors, displayItem.subjectType)
+    : colors.vocabulary;
   const isComplete = !feedback && (session?.isComplete ?? false);
   const progress = session
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
@@ -561,24 +560,27 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         shouldShowAnkiReveal ? (
           <Pressable
             onPress={() => setAnkiRevealed(true)}
+            className="min-h-[58px] items-center justify-center rounded-lg border-2 border-dashed bg-surface-elevated dark:bg-surface-elevated-dark"
             style={({ pressed }) => [
-              styles.ankiRevealButton,
               { borderColor: subjectColor },
-              pressed && styles.pressed,
+              pressed && { opacity: 0.58 },
             ]}
           >
-            <Text style={styles.ankiRevealButtonText}>Show Answer</Text>
+            <Text className="text-text dark:text-text-dark text-lg font-heavy">Show Answer</Text>
           </Pressable>
         ) : ankiRevealed && !feedback ? (
-          <View style={[styles.ankiAnswerCard, { borderColor: subjectColor }]}>
-            <Text style={styles.ankiAnswerLabel}>
+          <View
+            className="rounded-lg border-2 bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1"
+            style={{ borderColor: subjectColor }}
+          >
+            <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-black uppercase">
               Meaning
             </Text>
-            <Text style={styles.ankiAnswerText}>{acceptedMeanings}</Text>
+            <Text className="text-text dark:text-text-dark text-xl font-black">{acceptedMeanings}</Text>
             {showsReadingInAnki ? (
               <>
-                <Text style={[styles.ankiAnswerLabel, styles.ankiAnswerSecondaryLabel]}>Reading</Text>
-                <Text style={styles.ankiAnswerText}>{acceptedReadings}</Text>
+                <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-black uppercase mt-2">Reading</Text>
+                <Text className="text-text dark:text-text-dark text-xl font-black">{acceptedReadings}</Text>
               </>
             ) : null}
           </View>
@@ -595,8 +597,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           importantForAutofill="no"
           keyboardType="default"
           placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
-          placeholderTextColor={theme.colors.mutedText}
-          style={styles.input}
+          placeholderTextColor={colors.mutedText}
+          className="min-h-[58px] rounded-lg border border-border dark:border-border-dark bg-surface-elevated dark:bg-surface-elevated-dark text-text dark:text-text-dark px-[16px] text-lg font-bold"
           onFocus={() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
           }}
@@ -609,123 +611,115 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
       {feedback ? (
         <View
-          style={[
-            styles.feedbackCard,
-            { borderColor: feedback.correct ? theme.colors.success : theme.colors.danger },
-          ]}
+          className="rounded-2xl border bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1.5"
+          style={{ borderColor: feedback.correct ? colors.success : colors.danger }}
         >
           <Text
-            style={[
-              styles.feedbackTitle,
-              { color: feedback.correct ? theme.colors.success : theme.colors.danger },
-            ]}
+            className="text-lg font-black"
+            style={{ color: feedback.correct ? colors.success : colors.danger }}
           >
             {feedback.message}
           </Text>
-          <Text style={styles.feedbackDetail}>{feedback.detail}</Text>
+          <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark">
+            {feedback.detail}
+          </Text>
           {feedback.item.subjectType === 'vocabulary' ? (
             <>
               <Pressable
                 disabled={isOffline}
                 onPress={() => playAudioForItem(feedback.item)}
-                style={({ pressed }) => [
-                  styles.audioButton,
-                  isOffline && styles.audioButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
+                className={`self-start mt-1 rounded-full px-[14px] py-2 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark ${isOffline ? 'opacity-60' : ''}`}
+                style={({ pressed }) => pressed ? { opacity: 0.58 } : undefined}
                 accessibilityRole="button"
                 accessibilityLabel={isOffline ? 'Vocabulary audio unavailable offline' : 'Play vocabulary audio'}
               >
-                <Text style={[styles.audioButtonText, isOffline && styles.audioButtonTextDisabled]}>
+                <Text className={`text-[13px] font-black ${isOffline ? 'text-text-muted dark:text-text-muted-dark' : 'text-text dark:text-text-dark'}`}>
                   {isOffline ? 'Audio unavailable offline' : 'Play Audio'}
                 </Text>
               </Pressable>
-              {audioMessage ? <Text style={styles.audioMessage}>{audioMessage}</Text> : null}
+              {audioMessage ? (
+                <Text className="text-text-muted dark:text-text-muted-dark text-[13px] leading-[18px] font-bold">
+                  {audioMessage}
+                </Text>
+              ) : null}
             </>
           ) : null}
         </View>
       ) : null}
 
       {ankiMode && ankiRevealed && !feedback ? (
-        <View style={styles.ankiMarkGroup}>
+        <View className="flex-row gap-3">
           <Pressable
             onPress={() => handleAnkiMark(false)}
+            className="flex-1 min-h-[54px] items-center justify-center rounded-lg"
             style={({ pressed }) => [
-              styles.ankiMarkButton,
-              { backgroundColor: theme.colors.danger },
-              pressed && styles.pressed,
+              { backgroundColor: colors.danger },
+              pressed && { opacity: 0.58 },
             ]}
           >
-            <Text style={styles.ankiMarkButtonText}>Incorrect</Text>
+            <Text className="text-white text-[16px] font-black">Incorrect</Text>
           </Pressable>
           <Pressable
             onPress={() => handleAnkiMark(true)}
+            className="flex-1 min-h-[54px] items-center justify-center rounded-lg"
             style={({ pressed }) => [
-              styles.ankiMarkButton,
-              { backgroundColor: theme.colors.success },
-              pressed && styles.pressed,
+              { backgroundColor: colors.success },
+              pressed && { opacity: 0.58 },
             ]}
           >
-            <Text style={styles.ankiMarkButtonText}>Correct</Text>
+            <Text className="text-white text-[16px] font-black">Correct</Text>
           </Pressable>
         </View>
       ) : null}
 
       {!ankiMode ? (
         showCheats ? (
-          <View style={styles.cheatGroup}>
+          <View className="gap-2.5">
             <Pressable
               disabled={isContinuing}
               onPress={handleOverrideCorrect}
-              style={({ pressed }) => [
-                styles.cheatButton,
-                { borderColor: theme.colors.border },
-                (pressed || isContinuing) && styles.pressed,
-              ]}
+              className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+              style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
             >
-              <Text style={styles.cheatButtonText}>My answer was correct</Text>
+              <Text className="text-text dark:text-text-dark text-base font-heavy">My answer was correct</Text>
             </Pressable>
             <Pressable
               disabled={isContinuing}
               onPress={handleAskAgainLater}
-              style={({ pressed }) => [
-                styles.cheatButton,
-                { borderColor: theme.colors.border },
-                (pressed || isContinuing) && styles.pressed,
-              ]}
+              className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+              style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
             >
-              <Text style={styles.cheatButtonText}>Try again later</Text>
+              <Text className="text-text dark:text-text-dark text-base font-heavy">Try again later</Text>
             </Pressable>
             {canAddSynonym ? (
               <Pressable
                 disabled={isContinuing}
                 onPress={handleAddSynonym}
-                style={({ pressed }) => [
-                  styles.cheatButton,
-                  { borderColor: theme.colors.border },
-                  (pressed || isContinuing) && styles.pressed,
-                ]}
+                className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+                style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
               >
-                <Text style={styles.cheatButtonText}>Add as synonym</Text>
+                <Text className="text-text dark:text-text-dark text-base font-heavy">Add as synonym</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null
       ) : null}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>
+      ) : null}
 
       {!ankiMode && (
         <Pressable
           disabled={isContinuing || (!feedback && !answer.trim())}
           onPress={feedback ? continueSession : submit}
+          className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
           style={({ pressed }) => [
-            styles.primaryButton,
             { backgroundColor: subjectColor },
-            (pressed || isContinuing || (!feedback && !answer.trim())) && styles.pressed,
+            (pressed || isContinuing || (!feedback && !answer.trim())) && { opacity: 0.58 },
           ]}
         >
-          <Text style={styles.primaryButtonText}>
+          <Text className="text-white text-[16px] font-black">
             {feedback
               ? (isContinuing
                 ? 'Saving...'
@@ -741,13 +735,13 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         <Pressable
           disabled={isContinuing}
           onPress={continueSession}
+          className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
           style={({ pressed }) => [
-            styles.primaryButton,
             { backgroundColor: subjectColor },
-            (pressed || isContinuing) && styles.pressed,
+            (pressed || isContinuing) && { opacity: 0.58 },
           ]}
         >
-          <Text style={styles.primaryButtonText}>
+          <Text className="text-white text-[16px] font-black">
             {isContinuing ? 'Saving...' : 'Continue'}
           </Text>
         </Pressable>
@@ -757,13 +751,18 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         <Pressable
           disabled={Boolean(feedback) || isContinuing}
           onPress={wrapUp}
-          style={({ pressed }) => [styles.secondaryButton, (pressed || Boolean(feedback) || isContinuing) && styles.pressed]}
+          className="min-h-[52px] items-center justify-center rounded-lg px-[18px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
+          style={({ pressed }) => (pressed || Boolean(feedback) || isContinuing) ? { opacity: 0.58 } : undefined}
         >
-          <Text style={styles.secondaryButtonText}>Wrap Up</Text>
+          <Text className="text-text dark:text-text-dark text-[16px] font-black">Wrap Up</Text>
         </Pressable>
       ) : null}
 
-      {session?.wrappingUp ? <Text style={styles.wrapUpText}>Wrap-up mode: finish the current review batch. No new reviews will be added.</Text> : null}
+      {session?.wrappingUp ? (
+        <Text className="text-text-muted dark:text-text-muted-dark text-center text-[14px] leading-5 font-bold">
+          Wrap-up mode: finish the current review batch. No new reviews will be added.
+        </Text>
+      ) : null}
 
       {feedback && subjectDetailData && displayItem ? (
         showAllDetails || appSettings.showFullAnswer ? (
@@ -819,8 +818,6 @@ function ReviewSummary({
   wrappedUp: boolean;
   onBack: () => void;
 }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
   const incorrectItems = completedItems.filter((item) => item.meaningWrongCount > 0 || item.readingWrongCount > 0);
   const incorrectByLevel = groupIncorrectByLevel(incorrectItems);
 
@@ -828,50 +825,60 @@ function ReviewSummary({
     <ScreenLayout scrollable>
       <SessionHeader onBack={onBack} progress="Complete" />
 
-      <View style={styles.summaryHero}>
-        <Text style={styles.summaryKicker}>{wrappedUp ? 'Wrap-Up Complete' : 'Reviews Complete'}</Text>
-        <Text style={styles.summaryRate}>{successRate}</Text>
-        <Text style={styles.summaryMeta}>{completed} reviews completed</Text>
+      <View className="min-h-[210px] rounded-5xl items-center justify-center p-6 bg-kanji">
+        <Text className="text-white text-[14px] font-black tracking-ultra4 uppercase">
+          {wrappedUp ? 'Wrap-Up Complete' : 'Reviews Complete'}
+        </Text>
+        <Text className="mt-2.5 text-white text-6xl font-black">{successRate}</Text>
+        <Text className="text-white text-[16px] font-heavy" style={{ opacity: 0.86 }}>
+          {completed} reviews completed
+        </Text>
       </View>
 
-      <View style={styles.summaryStatsRow}>
+      <View className="flex-row gap-3">
         <SummaryStat label="Correct" value={String(Math.max(0, completedItems.length - incorrectItems.length))} />
         <SummaryStat label="Needs Review" value={String(incorrectItems.length)} />
       </View>
 
-      <View style={styles.summaryPanel}>
-        <Text style={styles.summaryPanelTitle}>Incorrect Items</Text>
+      <View className="rounded-[24px] p-[18px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark gap-3">
+        <Text className="text-text dark:text-text-dark text-lg font-black">Incorrect Items</Text>
         {incorrectByLevel.length ? (
           incorrectByLevel.map((group) => (
-            <View key={group.level} style={styles.levelGroup}>
-              <Text style={styles.levelTitle}>{group.level}</Text>
+            <View key={group.level} className="gap-2">
+              <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-black uppercase">{group.level}</Text>
               {group.items.map((item) => (
-                <View key={item.assignmentId} style={styles.incorrectRow}>
-                  <Text style={styles.incorrectName}>{primaryMeaning(item) || item.subject.japanese || item.subjectType}</Text>
-                  <Text style={styles.incorrectCounts}>{wrongCountText(item)}</Text>
+                <View key={item.assignmentId} className="flex-row justify-between gap-3 rounded-md p-3 bg-surface dark:bg-surface-dark">
+                  <Text className="flex-1 text-text dark:text-text-dark text-base font-black">
+                    {primaryMeaning(item) || item.subject.japanese || item.subjectType}
+                  </Text>
+                  <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-heavy">
+                    {wrongCountText(item)}
+                  </Text>
                 </View>
               ))}
             </View>
           ))
         ) : (
-          <Text style={styles.summaryEmpty}>No incorrect answers this session.</Text>
+          <Text className="text-text-muted dark:text-text-muted-dark text-base font-bold">No incorrect answers this session.</Text>
         )}
       </View>
 
-      <Pressable onPress={onBack} style={[styles.primaryButton, styles.summaryActionButton]}>
-        <Text style={styles.primaryButtonText}>Back to Dashboard</Text>
+      <Pressable
+        onPress={onBack}
+        className="min-h-[54px] items-center justify-center rounded-lg px-[18px] bg-kanji"
+        style={({ pressed }) => pressed ? { opacity: 0.58 } : undefined}
+      >
+        <Text className="text-white text-[16px] font-black">Back to Dashboard</Text>
       </Pressable>
     </ScreenLayout>
   );
 }
 
 function SummaryStat({ label, value }: { label: string; value: string }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
   return (
-    <View style={styles.summaryStat}>
-      <Text style={styles.summaryStatValue}>{value}</Text>
-      <Text style={styles.summaryStatLabel}>{label}</Text>
+    <View className="flex-1 rounded-2xl p-[16px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark">
+      <Text className="text-text dark:text-text-dark text-3xl font-black">{value}</Text>
+      <Text className="mt-0.5 text-text-muted dark:text-text-muted-dark text-[13px] font-heavy uppercase">{label}</Text>
     </View>
   );
 }
@@ -941,7 +948,7 @@ function InlineReviewDetails({
   const hasHidden = !meaningAttempted || !readingAttempted;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View className="gap-3">
       <SubjectDetailsContent
         subject={item.subject}
         componentSubjects={subjectDetailData.componentSubjects}
@@ -958,289 +965,12 @@ function InlineReviewDetails({
       {hasHidden ? (
         <Pressable
           onPress={onShowAll}
-          style={({ pressed }) => [
-            {
-              alignItems: 'center',
-              paddingVertical: 10,
-              borderRadius: 999,
-              backgroundColor: 'rgba(128, 128, 128, 0.08)',
-              opacity: pressed ? 0.72 : 1,
-            },
-          ]}
+          className="items-center py-2.5 rounded-full bg-[rgba(128,128,128,0.08)]"
+          style={({ pressed }) => pressed ? { opacity: 0.72 } : undefined}
         >
-          <Text style={{ color: '#666', fontSize: 13, fontWeight: '800' }}>Show all information</Text>
+          <Text className="text-[#666] text-[13px] font-heavy">Show all information</Text>
         </Pressable>
       ) : null}
     </View>
   );
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    input: {
-      minHeight: 58,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surfaceElevated,
-      color: theme.colors.text,
-      paddingHorizontal: 16,
-      fontSize: 18,
-      fontWeight: '700',
-    },
-    feedbackCard: {
-      borderRadius: 22,
-      borderWidth: 1,
-      backgroundColor: theme.colors.surfaceElevated,
-      padding: 16,
-      gap: 6,
-    },
-    feedbackTitle: {
-      fontSize: 18,
-      fontWeight: '900',
-    },
-    feedbackDetail: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      lineHeight: 22,
-      fontWeight: '700',
-    },
-    audioButton: {
-      alignSelf: 'flex-start',
-      marginTop: 4,
-      borderRadius: 999,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    audioButtonText: {
-      color: theme.colors.text,
-      fontSize: 13,
-      fontWeight: '900',
-    },
-    audioButtonDisabled: {
-      opacity: 0.6,
-    },
-    audioButtonTextDisabled: {
-      color: theme.colors.mutedText,
-    },
-    audioMessage: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      lineHeight: 18,
-      fontWeight: '700',
-    },
-    errorText: {
-      color: theme.colors.danger,
-      fontWeight: '800',
-    },
-    primaryButton: {
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      paddingHorizontal: 18,
-    },
-    primaryButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    secondaryButton: {
-      minHeight: 52,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      paddingHorizontal: 18,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    secondaryButtonText: {
-      color: theme.colors.text,
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    wrapUpText: {
-      color: theme.colors.mutedText,
-      textAlign: 'center',
-      fontSize: 14,
-      lineHeight: 20,
-      fontWeight: '700',
-    },
-    cheatGroup: {
-      gap: 10,
-    },
-    cheatButton: {
-      minHeight: 48,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 16,
-      paddingHorizontal: 16,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-    },
-    cheatButtonText: {
-      color: theme.colors.text,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    summaryHero: {
-      minHeight: 210,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      backgroundColor: theme.colors.kanji,
-    },
-    summaryKicker: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-    },
-    summaryRate: {
-      marginTop: 10,
-      color: '#ffffff',
-      fontSize: 64,
-      fontWeight: '900',
-    },
-    summaryMeta: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '800',
-      opacity: 0.86,
-    },
-    summaryStatsRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    summaryStat: {
-      flex: 1,
-      borderRadius: 22,
-      padding: 16,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    summaryStatValue: {
-      color: theme.colors.text,
-      fontSize: 28,
-      fontWeight: '900',
-    },
-    summaryStatLabel: {
-      marginTop: 2,
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-      textTransform: 'uppercase',
-    },
-    summaryPanel: {
-      borderRadius: 24,
-      padding: 18,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      gap: 12,
-    },
-    summaryActionButton: {
-      backgroundColor: theme.colors.kanji,
-    },
-    summaryPanelTitle: {
-      color: theme.colors.text,
-      fontSize: 18,
-      fontWeight: '900',
-    },
-    summaryEmpty: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      lineHeight: 22,
-      fontWeight: '700',
-    },
-    levelGroup: {
-      gap: 8,
-    },
-    levelTitle: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '900',
-      textTransform: 'uppercase',
-    },
-    incorrectRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 12,
-      borderRadius: 16,
-      padding: 12,
-      backgroundColor: theme.colors.surface,
-    },
-    incorrectName: {
-      flex: 1,
-      color: theme.colors.text,
-      fontSize: 15,
-      fontWeight: '900',
-    },
-    incorrectCounts: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-    },
-    pressed: {
-      opacity: 0.58,
-    },
-    ankiRevealButton: {
-      minHeight: 58,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      borderWidth: 2,
-      borderStyle: 'dashed',
-      backgroundColor: theme.colors.surfaceElevated,
-    },
-    ankiRevealButtonText: {
-      color: theme.colors.text,
-      fontSize: 18,
-      fontWeight: '800',
-    },
-    ankiAnswerCard: {
-      borderRadius: 18,
-      borderWidth: 2,
-      backgroundColor: theme.colors.surfaceElevated,
-      padding: 16,
-      gap: 4,
-    },
-    ankiAnswerLabel: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '900',
-      textTransform: 'uppercase',
-    },
-    ankiAnswerSecondaryLabel: {
-      marginTop: 8,
-    },
-    ankiAnswerText: {
-      color: theme.colors.text,
-      fontSize: 20,
-      fontWeight: '900',
-    },
-    ankiMarkGroup: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    ankiMarkButton: {
-      flex: 1,
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-    },
-    ankiMarkButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-    },
-  });
 }

@@ -1,20 +1,19 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ScreenLayout, SessionHeader, CenteredMessage } from '../components/ScreenLayout';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { openAppDatabase } from '../domain/db/database';
 import { getRadicalImagePreviewItems, RadicalImagePreviewItem } from '../domain/subjects/radicalImageRepository';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RadicalImagePreview'>;
 
 export function RadicalImagePreviewScreen({ navigation }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { colors } = useAppTheme();
   const [items, setItems] = useState<RadicalImagePreviewItem[]>([]);
   const [index, setIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,111 +73,66 @@ export function RadicalImagePreviewScreen({ navigation }: Props) {
         characterImageIsSvg={item.imageIsSvg}
         subjectType="radical"
         level={item.level}
-        color={colorForSubjectType(theme.colors, 'radical')}
+        color={colorForSubjectType(colors, 'radical')}
         minHeight={260}
       />
 
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>{item.slug ?? `Subject ${item.id}`}</Text>
-        <Text style={styles.bodyText}>Meanings: {meanings || 'None'}</Text>
-        <Text style={styles.bodyText}>Image type: {item.imageIsSvg ? 'SVG' : 'PNG'}</Text>
-        <Text style={styles.bodyText}>Resolved URL: {item.imageUrl ?? 'NONE'}</Text>
-        <Text style={styles.panelTitle}>{'Raw character_images:'}</Text>
+      <View className="rounded-3xl p-[18px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark gap-2">
+        <Text className="text-lg font-black text-text dark:text-text-dark">
+          {item.slug ?? `Subject ${item.id}`}
+        </Text>
+        <Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
+          Meanings: {meanings || 'None'}
+        </Text>
+        <Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
+          Image type: {item.imageIsSvg ? 'SVG' : 'PNG'}
+        </Text>
+        <Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
+          Resolved URL: {item.imageUrl ?? 'NONE'}
+        </Text>
+        <Text className="text-lg font-black text-text dark:text-text-dark">
+          Raw character_images:
+        </Text>
         {item.characterImages.map((img, i) => (
-          <View key={i} style={styles.imageInfoRow}>
-            <Text style={styles.bodyText}>{img.content_type ?? 'unknown'} | {img.style_name ?? '-'} | {img.color ?? '-'}</Text>
-            <Text selectable style={styles.urlText}>{img.url}</Text>
+          <View key={i} className="gap-0.5 pb-1.5">
+            <Text className="text-base leading-[21px] font-bold text-text-muted dark:text-text-muted-dark">
+              {img.content_type ?? 'unknown'} | {img.style_name ?? '-'} | {img.color ?? '-'}
+            </Text>
+            <Text selectable className="text-xs leading-[17px] font-bold text-text-muted dark:text-text-muted-dark">
+              {img.url}
+            </Text>
           </View>
         ))}
       </View>
 
-      <View style={styles.row}>
+      <View className="flex-row gap-3">
         <Pressable
           disabled={index === 0}
           onPress={() => setIndex((value) => Math.max(0, value - 1))}
-          style={({ pressed }) => [styles.secondaryButton, (pressed || index === 0) && styles.pressed]}
+          className="flex-1 min-h-[54px] items-center justify-center rounded-lg bg-surface dark:bg-surface-dark border border-border dark:border-border-dark px-[18px]"
+          style={({ pressed }) =>
+            pressed || index === 0 ? { opacity: 0.58 } : undefined
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Previous radical"
+          accessibilityState={{ disabled: index === 0 }}
         >
-          <Text style={styles.secondaryButtonText}>Previous</Text>
+          <Text className="text-[16px] font-black text-text dark:text-text-dark">Previous</Text>
         </Pressable>
         <Pressable
           disabled={index >= items.length - 1}
           onPress={() => setIndex((value) => Math.min(items.length - 1, value + 1))}
-          style={({ pressed }) => [styles.primaryButton, (pressed || index >= items.length - 1) && styles.pressed]}
+          className="flex-1 min-h-[54px] items-center justify-center rounded-lg bg-radical px-[18px]"
+          style={({ pressed }) =>
+            pressed || index >= items.length - 1 ? { opacity: 0.58 } : undefined
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Next radical"
+          accessibilityState={{ disabled: index >= items.length - 1 }}
         >
-          <Text style={styles.primaryButtonText}>Next</Text>
+          <Text className="text-[16px] font-black text-white">Next</Text>
         </Pressable>
       </View>
     </ScreenLayout>
   );
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    panel: {
-      borderRadius: 24,
-      padding: 18,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      gap: 8,
-    },
-    panelTitle: {
-      color: theme.colors.text,
-      fontSize: 18,
-      fontWeight: '900',
-    },
-    bodyText: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      lineHeight: 21,
-      fontWeight: '700',
-    },
-    urlText: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      lineHeight: 17,
-      fontWeight: '700',
-    },
-    imageInfoRow: {
-      gap: 2,
-      paddingBottom: 6,
-    },
-    row: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    primaryButton: {
-      flex: 1,
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: theme.colors.radical,
-      paddingHorizontal: 18,
-    },
-    primaryButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    secondaryButton: {
-      flex: 1,
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      paddingHorizontal: 18,
-    },
-    secondaryButtonText: {
-      color: theme.colors.text,
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    pressed: {
-      opacity: 0.58,
-    },
-  });
 }

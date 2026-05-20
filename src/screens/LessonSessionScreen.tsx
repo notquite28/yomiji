@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
@@ -27,7 +27,7 @@ import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { useConfirmLeave } from '../hooks/useConfirmLeave';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LessonSession'>;
@@ -42,8 +42,7 @@ type Feedback = {
 };
 
 export function LessonSessionScreen({ navigation, route }: Props) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
+  const { colors } = useAppTheme();
   const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -276,8 +275,6 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         onStartQuiz={startQuiz}
         onBack={handleBack}
         subjectLookup={subjectLookup}
-        styles={styles}
-        theme={theme}
         dimmed={confirmLeave}
         confirmLeaveBanner={
           <ConfirmLeaveBanner
@@ -323,7 +320,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     );
   }
 
-  const subjectColor = colorForSubjectType(theme.colors, displayItem.subjectType);
+  const subjectColor = colorForSubjectType(colors, displayItem.subjectType);
 
   return (
     <ScreenLayout
@@ -371,8 +368,8 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         importantForAutofill="no"
         keyboardType="default"
         placeholder={displayTaskType === 'meaning' ? 'Type the meaning' : '答え'}
-        placeholderTextColor={theme.colors.mutedText}
-        style={styles.input}
+        placeholderTextColor={colors.mutedText}
+        className="min-h-[58px] rounded-lg border border-border dark:border-border-dark bg-surface-elevated dark:bg-surface-elevated-dark text-text dark:text-text-dark px-[16px] text-lg font-bold"
         onFocus={() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }}
@@ -384,35 +381,35 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
       {feedback ? (
         <View
-          style={[
-            styles.feedbackCard,
-            { borderColor: feedback.correct ? theme.colors.success : theme.colors.danger },
-          ]}
+          className="rounded-2xl border bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1.5"
+          style={{ borderColor: feedback.correct ? colors.success : colors.danger }}
         >
           <Text
-            style={[
-              styles.feedbackTitle,
-              { color: feedback.correct ? theme.colors.success : theme.colors.danger },
-            ]}
+            className="text-lg font-black"
+            style={{ color: feedback.correct ? colors.success : colors.danger }}
           >
             {feedback.message}
           </Text>
-          <Text style={styles.feedbackDetail}>{feedback.detail}</Text>
+          <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark">
+            {feedback.detail}
+          </Text>
         </View>
       ) : null}
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>
+      ) : null}
 
       <Pressable
         disabled={isContinuing || (!feedback && !answer.trim())}
         onPress={feedback ? continueQuiz : submitQuizAnswer}
+        className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
         style={({ pressed }) => [
-          styles.primaryButton,
           { backgroundColor: subjectColor },
-          (pressed || isContinuing || (!feedback && !answer.trim())) && styles.pressed,
+          (pressed || isContinuing || (!feedback && !answer.trim())) && { opacity: 0.58 },
         ]}
       >
-        <Text style={styles.primaryButtonText}>
+        <Text className="text-white text-[16px] font-black">
           {feedback
             ? isContinuing
               ? 'Saving...'
@@ -433,8 +430,6 @@ function IntroPhase({
   onStartQuiz,
   onBack,
   subjectLookup,
-  styles,
-  theme,
   confirmLeaveBanner,
   dimmed,
 }: {
@@ -446,17 +441,16 @@ function IntroPhase({
   onStartQuiz: () => void;
   onBack: () => void;
   subjectLookup: Map<number, SubjectAnswerData>;
-  styles: ReturnType<typeof makeStyles>;
-  theme: AppTheme;
   confirmLeaveBanner?: React.ReactNode;
   dimmed?: boolean;
 }) {
+  const { colors } = useAppTheme();
   const item = items[index];
   if (!item) {
     return null;
   }
 
-  const subjectColor = colorForSubjectType(theme.colors, item.subjectType);
+  const subjectColor = colorForSubjectType(colors, item.subjectType);
   const isLast = index === items.length - 1;
   const progress = batchCount > 1
     ? `Batch ${batchIndex + 1}/${batchCount} · ${index + 1}/${items.length}`
@@ -466,27 +460,23 @@ function IntroPhase({
     <ScreenLayout scrollable overlay={confirmLeaveBanner}>
       <SessionHeader onBack={onBack} progress={progress} dimmed={dimmed} />
 
-      <View style={styles.chipRow}>
+      <View className="flex-row flex-wrap gap-1.5">
         {items.map((chipItem, chipIndex) => {
-          const chipColor = colorForSubjectType(theme.colors, chipItem.subjectType);
+          const chipColor = colorForSubjectType(colors, chipItem.subjectType);
           const isActive = chipIndex === index;
           return (
             <Pressable
               key={chipItem.subjectId}
               onPress={() => onIndexChange(chipIndex)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: isActive ? chipColor : theme.colors.surface,
-                  borderColor: isActive ? chipColor : theme.colors.border,
-                },
-              ]}
+              className="rounded-[12px] px-2.5 py-1.5 border"
+              style={{
+                backgroundColor: isActive ? chipColor : colors.surface,
+                borderColor: isActive ? chipColor : colors.border,
+              }}
             >
               <Text
-                style={[
-                  styles.chipText,
-                  { color: isActive ? '#ffffff' : theme.colors.mutedText },
-                ]}
+                className="text-[14px] font-black"
+                style={{ color: isActive ? '#ffffff' : colors.mutedText }}
               >
                 {chipItem.subject.japanese || '?'}
               </Text>
@@ -506,19 +496,18 @@ function IntroPhase({
         minHeight={200}
       />
 
-      <DetailSections item={item} subjectLookup={subjectLookup} styles={styles} theme={theme} />
+      <DetailSections item={item} subjectLookup={subjectLookup} />
 
-      <View style={styles.introNavRow}>
+      <View className="flex-row gap-3">
         <Pressable
           disabled={index === 0}
           onPress={() => onIndexChange(index - 1)}
-          style={({ pressed }) => [
-            styles.navButton,
-            index === 0 && styles.navButtonDisabled,
-            pressed && styles.pressed,
-          ]}
+          className={`flex-1 min-h-[52px] items-center justify-center rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark ${index === 0 ? 'opacity-40' : ''}`}
+          style={({ pressed }) => pressed ? { opacity: index === 0 ? 0.4 : 0.58 } : undefined}
         >
-          <Text style={[styles.navButtonText, index === 0 && styles.navButtonTextDisabled]}>
+          <Text
+            className={`text-base font-black ${index === 0 ? 'text-text-muted dark:text-text-muted-dark' : 'text-text dark:text-text-dark'}`}
+          >
             Back
           </Text>
         </Pressable>
@@ -526,21 +515,24 @@ function IntroPhase({
         {isLast ? (
           <Pressable
             onPress={onStartQuiz}
+            className="flex-1 min-h-[52px] items-center justify-center rounded-lg px-[18px]"
             style={({ pressed }) => [
-              styles.navButton,
-              styles.navButtonPrimary,
               { backgroundColor: subjectColor },
-              pressed && styles.pressed,
+              pressed && { opacity: 0.58 },
             ]}
           >
-            <Text style={styles.navButtonPrimaryText}>Start Quiz</Text>
+            <Text className="text-white text-base font-black">Start Quiz</Text>
           </Pressable>
         ) : (
           <Pressable
             onPress={() => onIndexChange(index + 1)}
-            style={({ pressed }) => [styles.navButton, styles.navButtonPrimary, { backgroundColor: subjectColor }, pressed && styles.pressed]}
+            className="flex-1 min-h-[52px] items-center justify-center rounded-lg px-[18px]"
+            style={({ pressed }) => [
+              { backgroundColor: subjectColor },
+              pressed && { opacity: 0.58 },
+            ]}
           >
-            <Text style={styles.navButtonPrimaryText}>Next</Text>
+            <Text className="text-white text-base font-black">Next</Text>
           </Pressable>
         )}
       </View>
@@ -551,14 +543,11 @@ function IntroPhase({
 function DetailSections({
   item,
   subjectLookup,
-  styles,
-  theme,
 }: {
   item: StudyQueueItem;
   subjectLookup: Map<number, SubjectAnswerData>;
-  styles: ReturnType<typeof makeStyles>;
-  theme: AppTheme;
 }) {
+  const { colors } = useAppTheme();
   const { subject } = item;
   const subjectType = item.subjectType;
 
@@ -586,39 +575,51 @@ function DetailSections({
     .filter((s): s is SubjectAnswerData => s != null);
 
   return (
-    <View style={styles.sections}>
-      <DetailSection title="Meaning" theme={theme} styles={styles}>
-        <Text style={styles.sectionValue}>{primaryMeanings.join(', ')}</Text>
+    <View className="gap-4">
+      <DetailSection title="Meaning">
+        <Text className="text-[16px] leading-[22px] font-heavy text-text dark:text-text-dark">
+          {primaryMeanings.join(', ')}
+        </Text>
         {secondaryMeanings.length > 0 ? (
-          <Text style={styles.sectionSecondary}>{secondaryMeanings.join(', ')}</Text>
+          <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">
+            {secondaryMeanings.join(', ')}
+          </Text>
         ) : null}
       </DetailSection>
 
       {primaryReadings.length > 0 ? (
-        <DetailSection title="Reading" theme={theme} styles={styles}>
-          <Text style={styles.sectionValue}>{primaryReadings.join(', ')}</Text>
+        <DetailSection title="Reading">
+          <Text className="text-[16px] leading-[22px] font-heavy text-text dark:text-text-dark">
+            {primaryReadings.join(', ')}
+          </Text>
           {alternateReadings.length > 0 ? (
-            <Text style={styles.sectionSecondary}>{alternateReadings.join(', ')}</Text>
+            <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">
+              {alternateReadings.join(', ')}
+            </Text>
           ) : null}
         </DetailSection>
       ) : null}
 
       {componentNames.length > 0 ? (
-        <DetailSection title={subjectType === 'kanji' ? 'Radical Combination' : 'Kanji'} theme={theme} styles={styles}>
-          <View style={styles.componentRow}>
+        <DetailSection title={subjectType === 'kanji' ? 'Radical Combination' : 'Kanji'}>
+          <View className="flex-row flex-wrap gap-2 items-center">
             {componentNames.map((comp, idx) => {
               const compMeaning = comp.meanings
                 .find((m) => m.type === 'primary' && m.acceptedAnswer !== false)?.meaning;
+              const compColor = colorForSubjectType(colors, comp.type);
               return (
-                <View key={comp.id ?? comp.japanese} style={styles.componentPair}>
-                  {idx > 0 ? <Text style={styles.componentPlus}>+</Text> : null}
+                <View key={comp.id ?? comp.japanese} className="flex-row items-center gap-1.5">
+                  {idx > 0 ? (
+                    <Text className="text-[16px] font-heavy text-text-muted dark:text-text-muted-dark">+</Text>
+                  ) : null}
                   <View
-                    style={[styles.componentChip, { borderColor: colorForSubjectType(theme.colors, comp.type) }]}
+                    className="rounded-[10px] px-3 py-1.5 bg-surface dark:bg-surface-dark border-[1.5px]"
+                    style={{ borderColor: compColor }}
                   >
-                    <ComponentChipContent subject={comp} styles={styles} theme={theme} />
+                    <ComponentChipContent subject={comp} color={compColor} />
                   </View>
                   {compMeaning ? (
-                    <Text style={styles.componentChipMeaning}>{compMeaning}</Text>
+                    <Text className="text-[14px] font-bold text-text dark:text-text-dark">{compMeaning}</Text>
                   ) : null}
                 </View>
               );
@@ -630,53 +631,61 @@ function DetailSections({
       {subject.meaningMnemonic ? (
         <DetailSection
           title={subjectType === 'radical' ? 'Mnemonic' : 'Meaning Explanation'}
-          theme={theme}
-          styles={styles}
         >
-          <MnemonicText text={subject.meaningMnemonic} subjectLookup={subjectLookup} styles={styles} />
+          <MnemonicText text={subject.meaningMnemonic} subjectLookup={subjectLookup} />
           {subject.meaningHint ? (
-            <Text style={styles.hintText}>Hint: {subject.meaningHint}</Text>
+            <Text className="text-[13px] italic font-bold text-text-muted dark:text-text-muted-dark mt-1">
+              Hint: {subject.meaningHint}
+            </Text>
           ) : null}
         </DetailSection>
       ) : null}
 
       {subject.readingMnemonic ? (
-        <DetailSection title="Reading Explanation" theme={theme} styles={styles}>
-          <MnemonicText text={subject.readingMnemonic} subjectLookup={subjectLookup} styles={styles} />
+        <DetailSection title="Reading Explanation">
+          <MnemonicText text={subject.readingMnemonic} subjectLookup={subjectLookup} />
           {subject.readingHint ? (
-            <Text style={styles.hintText}>Hint: {subject.readingHint}</Text>
+            <Text className="text-[13px] italic font-bold text-text-muted dark:text-text-muted-dark mt-1">
+              Hint: {subject.readingHint}
+            </Text>
           ) : null}
         </DetailSection>
       ) : null}
 
       {subject.contextSentences && subject.contextSentences.length > 0 ? (
-        <DetailSection title="Context Sentences" theme={theme} styles={styles}>
+        <DetailSection title="Context Sentences">
           {subject.contextSentences.map((sentence, idx) => (
-            <View key={idx} style={styles.sentenceRow}>
-              <Text style={styles.sentenceJa}>{sentence.ja}</Text>
-              <Text style={styles.sentenceEn}>{sentence.en}</Text>
+            <View key={idx} className="gap-0.5">
+              <Text className="text-base font-heavy text-text dark:text-text-dark">{sentence.ja}</Text>
+              <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">{sentence.en}</Text>
             </View>
           ))}
         </DetailSection>
       ) : null}
 
       {subject.partsOfSpeech && subject.partsOfSpeech.length > 0 ? (
-        <DetailSection title="Part of Speech" theme={theme} styles={styles}>
-          <Text style={styles.sectionValue}>{subject.partsOfSpeech.join(', ')}</Text>
+        <DetailSection title="Part of Speech">
+          <Text className="text-[16px] leading-[22px] font-heavy text-text dark:text-text-dark">
+            {subject.partsOfSpeech.join(', ')}
+          </Text>
         </DetailSection>
       ) : null}
 
       {amalgamationNames.length > 0 ? (
-        <DetailSection title="Used In" theme={theme} styles={styles}>
-          <View style={styles.componentRow}>
-            {amalgamationNames.map((amalgam) => (
-              <View
-                key={amalgam.id ?? amalgam.japanese}
-                style={[styles.componentChip, { borderColor: colorForSubjectType(theme.colors, amalgam.type) }]}
-              >
-                <ComponentChipContent subject={amalgam} styles={styles} theme={theme} />
-              </View>
-            ))}
+        <DetailSection title="Used In">
+          <View className="flex-row flex-wrap gap-2 items-center">
+            {amalgamationNames.map((amalgam) => {
+              const amColor = colorForSubjectType(colors, amalgam.type);
+              return (
+                <View
+                  key={amalgam.id ?? amalgam.japanese}
+                  className="rounded-[10px] px-3 py-1.5 bg-surface dark:bg-surface-dark border-[1.5px]"
+                  style={{ borderColor: amColor }}
+                >
+                  <ComponentChipContent subject={amalgam} color={amColor} />
+                </View>
+              );
+            })}
           </View>
         </DetailSection>
       ) : null}
@@ -686,42 +695,41 @@ function DetailSections({
 
 function ComponentChipContent({
   subject,
-  styles,
-  theme,
+  color,
 }: {
   subject: SubjectAnswerData;
-  styles: ReturnType<typeof makeStyles>;
-  theme: AppTheme;
+  color: string;
 }) {
-  const color = colorForSubjectType(theme.colors, subject.type);
   if (!subject.japanese && subject.characterImageUrl && !subject.characterImageIsSvg) {
     return (
       <Image
         source={{ uri: subject.characterImageUrl }}
-        style={styles.componentChipImage}
+        className="w-6 h-6"
         resizeMode="contain"
       />
     );
   }
 
-  return <Text style={[styles.componentChipText, { color }]}>{subject.japanese || subject.type}</Text>;
+  return (
+    <Text className="text-[16px] font-black" style={{ color }}>
+      {subject.japanese || subject.type}
+    </Text>
+  );
 }
 
 function DetailSection({
   title,
   children,
-  theme,
-  styles,
 }: {
   title: string;
   children: React.ReactNode;
-  theme: AppTheme;
-  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={[styles.sectionBody, { borderColor: theme.colors.border }]}>
+    <View className="gap-1.5">
+      <Text className="text-[13px] font-black uppercase tracking-ultra text-text-muted dark:text-text-muted-dark">
+        {title}
+      </Text>
+      <View className="rounded-md p-3.5 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark gap-1">
         {children}
       </View>
     </View>
@@ -731,26 +739,29 @@ function DetailSection({
 function MnemonicText({
   text,
   subjectLookup,
-  styles,
 }: {
   text: string;
   subjectLookup: Map<number, SubjectAnswerData>;
-  styles: ReturnType<typeof makeStyles>;
 }) {
-  const colorMap: Record<string, string> = {
-    radical: styles.mnemonicRadical.color,
-    kanji: styles.mnemonicKanji.color,
-    reading: styles.mnemonicReading.color,
-    meaning: styles.mnemonicMeaning.color,
+  const tagColors: Record<string, string> = {
+    radical: '#00aaff',
+    kanji: '#ff00aa',
+    reading: '#aa00ff',
+    meaning: '#ff00aa',
   };
+  const defaultHighlightColor = '#ff00aa';
 
   const tokens = parseMnemonic(text);
   return (
-    <Text style={styles.sectionValue}>
+    <Text className="text-[16px] leading-[22px] font-heavy text-text dark:text-text-dark">
       {tokens.map((token, idx) => {
         if (token.type === 'tag') {
-          const color = colorMap[token.tag ?? ''] ?? styles.mnemonicHighlight.color;
-          return <Text key={idx} style={[styles.mnemonicHighlight, { color }]}>{token.text}</Text>;
+          const color = tagColors[token.tag ?? ''] ?? defaultHighlightColor;
+          return (
+            <Text key={idx} className="font-black" style={{ color }}>
+              {token.text}
+            </Text>
+          );
         }
         if (token.type === 'curly') {
           const content = token.text;
@@ -760,9 +771,17 @@ function MnemonicText({
               s.japanese === content,
           );
           if (subject?.japanese) {
-            return <Text key={idx} style={styles.mnemonicHighlight}>{subject.japanese}</Text>;
+            return (
+              <Text key={idx} className="font-black text-kanji">
+                {subject.japanese}
+              </Text>
+            );
           }
-          return <Text key={idx} style={styles.mnemonicHighlight}>{content}</Text>;
+          return (
+            <Text key={idx} className="font-black text-kanji">
+              {content}
+            </Text>
+          );
         }
         return <Text key={idx}>{token.text}</Text>;
       })}
@@ -818,28 +837,31 @@ function LessonQuizSummary({
   onContinue: () => void;
   onBack: () => void;
 }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
-
   return (
     <ScreenLayout scrollable>
-      <SessionHeader onBack={onBack} progress={hasNextBatch ? `Batch ${batchIndex + 1}/${batchCount}` : 'Complete'} />
+      <SessionHeader
+        onBack={onBack}
+        progress={hasNextBatch ? `Batch ${batchIndex + 1}/${batchCount}` : 'Complete'}
+      />
 
-      <View style={styles.summaryHero}>
-        <Text style={styles.summaryKicker}>{hasNextBatch ? 'Batch Complete' : 'Lessons Complete'}</Text>
-        <Text style={styles.summaryRate}>{successRate}</Text>
-        <Text style={styles.summaryMeta}>{completed} of {totalItems} lessons completed</Text>
+      <View className="min-h-[210px] rounded-5xl items-center justify-center p-6 bg-lesson">
+        <Text className="text-white text-[14px] font-black tracking-ultra4 uppercase">
+          {hasNextBatch ? 'Batch Complete' : 'Lessons Complete'}
+        </Text>
+        <Text className="mt-2.5 text-white text-6xl font-black">{successRate}</Text>
+        <Text className="text-white text-[16px] font-heavy" style={{ opacity: 0.86 }}>
+          {completed} of {totalItems} lessons completed
+        </Text>
       </View>
 
       <Pressable
         onPress={hasNextBatch ? onContinue : onBack}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          styles.summaryActionButton,
-          pressed && styles.pressed,
-        ]}
+        className="min-h-[54px] items-center justify-center rounded-lg px-[18px] bg-lesson"
+        style={({ pressed }) => pressed ? { opacity: 0.58 } : undefined}
       >
-        <Text style={styles.primaryButtonText}>{hasNextBatch ? 'Continue Lessons' : 'Back to Dashboard'}</Text>
+        <Text className="text-white text-[16px] font-black">
+          {hasNextBatch ? 'Continue Lessons' : 'Back to Dashboard'}
+        </Text>
       </Pressable>
     </ScreenLayout>
   );
@@ -857,238 +879,4 @@ function subjectTypeLabel(type: string) {
     default:
       return 'Lesson';
   }
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    input: {
-      minHeight: 58,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surfaceElevated,
-      color: theme.colors.text,
-      paddingHorizontal: 16,
-      fontSize: 18,
-      fontWeight: '700',
-    },
-    feedbackCard: {
-      borderRadius: 22,
-      borderWidth: 1,
-      backgroundColor: theme.colors.surfaceElevated,
-      padding: 16,
-      gap: 6,
-    },
-    feedbackTitle: {
-      fontSize: 18,
-      fontWeight: '900',
-    },
-    feedbackDetail: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      lineHeight: 22,
-      fontWeight: '700',
-    },
-    errorText: {
-      color: theme.colors.danger,
-      fontWeight: '800',
-    },
-    primaryButton: {
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      paddingHorizontal: 18,
-    },
-    primaryButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    pressed: {
-      opacity: 0.58,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-    },
-    chip: {
-      borderRadius: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderWidth: 1,
-    },
-    chipText: {
-      fontSize: 14,
-      fontWeight: '900',
-    },
-    sections: {
-      gap: 16,
-    },
-    section: {
-      gap: 6,
-    },
-    sectionTitle: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '900',
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
-    },
-    sectionBody: {
-      borderRadius: 16,
-      padding: 14,
-      backgroundColor: theme.colors.surfaceElevated,
-      borderWidth: 1,
-      gap: 4,
-    },
-    sectionValue: {
-      color: theme.colors.text,
-      fontSize: 16,
-      lineHeight: 22,
-      fontWeight: '800',
-    },
-    sectionSecondary: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    hintText: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontStyle: 'italic',
-      fontWeight: '700',
-      marginTop: 4,
-    },
-    mnemonicHighlight: {
-      fontWeight: '900',
-      color: theme.colors.kanji,
-    },
-    mnemonicRadical: {
-      color: theme.colors.radical,
-    },
-    mnemonicKanji: {
-      color: theme.colors.kanji,
-    },
-    mnemonicReading: {
-      color: theme.colors.vocabulary,
-    },
-    mnemonicMeaning: {
-      color: theme.colors.kanji,
-    },
-    componentRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      alignItems: 'center',
-    },
-    componentPair: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    componentPlus: {
-      color: theme.colors.mutedText,
-      fontSize: 16,
-      fontWeight: '800',
-    },
-    componentChip: {
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1.5,
-    },
-    componentChipText: {
-      color: theme.colors.text,
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    componentChipImage: {
-      width: 24,
-      height: 24,
-    },
-    componentChipMeaning: {
-      color: theme.colors.text,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    sentenceRow: {
-      gap: 2,
-    },
-    sentenceJa: {
-      color: theme.colors.text,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    sentenceEn: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    introNavRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    navButton: {
-      flex: 1,
-      minHeight: 52,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    navButtonDisabled: {
-      opacity: 0.4,
-    },
-    navButtonText: {
-      color: theme.colors.text,
-      fontSize: 15,
-      fontWeight: '900',
-    },
-    navButtonTextDisabled: {
-      color: theme.colors.mutedText,
-    },
-    navButtonPrimary: {
-      borderWidth: 0,
-    },
-    navButtonPrimaryText: {
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '900',
-    },
-    summaryHero: {
-      minHeight: 210,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      backgroundColor: theme.colors.lesson,
-    },
-    summaryKicker: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-    },
-    summaryRate: {
-      marginTop: 10,
-      color: '#ffffff',
-      fontSize: 64,
-      fontWeight: '900',
-    },
-    summaryMeta: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '800',
-      opacity: 0.86,
-    },
-    summaryActionButton: {
-      backgroundColor: theme.colors.lesson,
-    },
-  });
 }

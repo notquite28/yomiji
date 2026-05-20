@@ -84,11 +84,11 @@ describe('loadSettings', () => {
   test('new fields are filled from defaultSettings via spread merge', async () => {
     const stored = {
       _version: CURRENT_SETTINGS_VERSION,
-      appearance: 'dark' as const,
+      reviewBatchSize: 7,
     };
     mockedGetItem.mockResolvedValueOnce(JSON.stringify(stored));
     const result = await loadSettings();
-    expect(result.appearance).toBe('dark');
+    expect(result.reviewBatchSize).toBe(7);
     // All other fields should come from defaults
     expect(result.reviewOrder).toBe(defaultSettings.reviewOrder);
     expect(result.lessonBatchSize).toBe(defaultSettings.lessonBatchSize);
@@ -96,27 +96,37 @@ describe('loadSettings', () => {
     expect((result as Record<string, unknown>)['_version']).toBeUndefined();
   });
 
+  test('legacy appearance setting is removed', async () => {
+    const stored = {
+      _version: CURRENT_SETTINGS_VERSION,
+      appearance: 'dark' as const,
+    };
+    mockedGetItem.mockResolvedValueOnce(JSON.stringify(stored));
+    const result = await loadSettings();
+    expect((result as Record<string, unknown>)['appearance']).toBeUndefined();
+  });
+
   test('migrations run in order', async () => {
-    // Temporarily push a v2 migration to verify ordering
+    // Temporarily push a future migration to verify ordering
     const originalLength = settingsMigrations.length;
-    const v2: SettingsMigration = {
-      version: 2,
+    const v3: SettingsMigration = {
+      version: 3,
       migrate(stored: Record<string, unknown>): Record<string, unknown> {
         const result = { ...stored };
         result['reviewBatchSize'] = 10;
         return result;
       },
     };
-    settingsMigrations.push(v2);
+    settingsMigrations.push(v3);
 
     try {
-      // Stored at v0 — should trigger both v1 and v2
+      // Stored at v0 — should trigger all migrations including the temporary one
       const stored = { notificationsAllReviews: true };
       mockedGetItem.mockResolvedValueOnce(JSON.stringify(stored));
       const result = await loadSettings();
       // v1 should have run
       expect(result.notificationsEnabled).toBe(true);
-      // v2 should have run
+      // temporary migration should have run
       expect(result.reviewBatchSize).toBe(10);
       // Should persist with updated version
       const savedArg = JSON.parse(mockedSetItem.mock.calls[0][1]);
@@ -131,10 +141,11 @@ describe('loadSettings', () => {
 describe('saveSettings', () => {
   test('includes _version in stored JSON', async () => {
     mockedGetItem.mockResolvedValueOnce(JSON.stringify({ ...defaultSettings, _version: CURRENT_SETTINGS_VERSION }));
-    await saveSettings({ appearance: 'light' });
+    await saveSettings({ reviewBatchSize: 8 });
     expect(mockedSetItem).toHaveBeenCalledTimes(1);
     const savedArg = JSON.parse(mockedSetItem.mock.calls[0][1]);
     expect(savedArg._version).toBe(CURRENT_SETTINGS_VERSION);
-    expect(savedArg.appearance).toBe('light');
+    expect(savedArg.reviewBatchSize).toBe(8);
+    expect(savedArg.appearance).toBeUndefined();
   });
 });

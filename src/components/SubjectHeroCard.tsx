@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { SvgCss } from 'react-native-svg/css';
 
 import { replaceCssVariableFallbacksForHero } from '../domain/subjects/radicalSvg';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
 export function SubjectHeroCard({
   kicker,
@@ -26,15 +25,12 @@ export function SubjectHeroCard({
   minHeight?: number;
   compact?: boolean;
 }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
-
   const renderContent = () => {
     if (!characterImageUrl) {
       const textProps = compact
         ? ({ numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const)
         : ({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.3 } as const);
-      return <Text style={styles.characters} {...textProps}>{japanese || subjectType}</Text>;
+      return <Text className="mt-3 text-white text-8xl font-black text-center" {...textProps}>{japanese || subjectType}</Text>;
     }
     if (characterImageIsSvg) {
       return <RadicalSvgImage uri={characterImageUrl} fallback={japanese || subjectType} compact={compact} />;
@@ -43,10 +39,15 @@ export function SubjectHeroCard({
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: color, minHeight }]}>
-      <Text style={styles.kicker}>{kicker}</Text>
+    <View
+      className="rounded-5xl items-center justify-center p-6"
+      style={{ backgroundColor: color, minHeight }}
+    >
+      <Text className="text-white text-[14px] font-black tracking-ultra4 uppercase">
+        {kicker}
+      </Text>
       {renderContent()}
-      <Text style={styles.meta}>
+      <Text className="mt-2.5 text-white text-base font-heavy opacity-[0.86] capitalize">
         Level {level ?? '?'} · {subjectType}
       </Text>
     </View>
@@ -54,8 +55,6 @@ export function SubjectHeroCard({
 }
 
 function RadicalPngImage({ uri, fallback, compact = false }: { uri: string; fallback: string; compact?: boolean }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
   const [failed, setFailed] = useState(false);
   const handleError = useCallback(() => setFailed(true), []);
 
@@ -64,14 +63,14 @@ function RadicalPngImage({ uri, fallback, compact = false }: { uri: string; fall
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters} {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
+    return <Text className="mt-3 text-white text-8xl font-black text-center" {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
   }
 
   return (
-    <View style={styles.imageFrame}>
+    <View className="mt-4 w-[150px] h-[150px] items-center justify-center rounded-4xl bg-transparent">
       <Image
         source={{ uri }}
-        style={styles.radicalImage}
+        className="w-[112px] h-[112px]"
         resizeMode="contain"
         onError={handleError}
       />
@@ -80,8 +79,6 @@ function RadicalPngImage({ uri, fallback, compact = false }: { uri: string; fall
 }
 
 function RadicalSvgImage({ uri, fallback, compact = false }: { uri: string; fallback: string; compact?: boolean }) {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
   const [xml, setXml] = useState(() => svgCache.get(uri) ?? null);
   const [failed, setFailed] = useState(false);
   const handleError = useCallback(() => setFailed(true), []);
@@ -120,60 +117,14 @@ function RadicalSvgImage({ uri, fallback, compact = false }: { uri: string; fall
   }, [uri]);
 
   if (failed) {
-    return <Text style={styles.characters} {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
+    return <Text className="mt-3 text-white text-8xl font-black text-center" {...(compact ? { numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.5 } as const : {})}>{fallback}</Text>;
   }
 
   return (
-    <View style={styles.imageFrame}>
+    <View className="mt-4 w-[150px] h-[150px] items-center justify-center rounded-4xl bg-transparent">
       <SvgCss xml={xml} width={112} height={112} onError={handleError} />
     </View>
   );
 }
 
 const svgCache = new Map<string, string>();
-
-function makeStyles(_theme: AppTheme) {
-  return StyleSheet.create({
-    card: {
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-    },
-    kicker: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 1.4,
-      textTransform: 'uppercase',
-    },
-    characters: {
-      marginTop: 12,
-      color: '#ffffff',
-      fontSize: 72,
-      fontWeight: '900',
-      textAlign: 'center',
-    },
-    imageFrame: {
-      marginTop: 16,
-      width: 150,
-      height: 150,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 28,
-      backgroundColor: 'transparent',
-    },
-    radicalImage: {
-      width: 112,
-      height: 112,
-    },
-    meta: {
-      marginTop: 10,
-      color: '#ffffff',
-      fontSize: 15,
-      fontWeight: '800',
-      opacity: 0.86,
-      textTransform: 'capitalize',
-    },
-  });
-}

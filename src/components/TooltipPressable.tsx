@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
-
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { Pressable, Text, View } from 'react-native';
+import type { GestureResponderEvent, StyleProp, ViewStyle } from 'react-native';
 
 type ToastEntry = { id: number; text: string };
 let toastListeners: Array<(entry: ToastEntry | null) => void> = [];
@@ -15,8 +13,6 @@ function showToast(text: string) {
 }
 
 export function ToastHost() {
-  const theme = useAppTheme();
-  const styles = makeStyles(theme);
   const [entry, setEntry] = useState<ToastEntry | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,15 +34,17 @@ export function ToastHost() {
   }, []);
 
   return entry ? (
-    <View style={styles.host} pointerEvents="box-none">
+    <View className="absolute bottom-10 left-0 right-0 items-center" pointerEvents="box-none">
       <Pressable
-        style={styles.toast}
+        className="rounded px-4 py-2.5 bg-text dark:bg-surface-elevated-dark max-w-[300px]"
         onPress={() => {
           if (timerRef.current) clearTimeout(timerRef.current);
           setEntry(null);
         }}
       >
-        <Text style={styles.toastText}>{entry.text}</Text>
+        <Text className="text-white text-[14px] font-bold text-center">
+          {entry.text}
+        </Text>
       </Pressable>
     </View>
   ) : null;
@@ -58,6 +56,7 @@ export function TooltipPressable({
   onLongPress: onLongPressProp,
   onPress,
   disabled,
+  className,
   style,
   accessibilityLabel,
   accessibilityHint,
@@ -67,7 +66,8 @@ export function TooltipPressable({
   onLongPress?: (e: GestureResponderEvent) => void;
   onPress?: (e: GestureResponderEvent) => void;
   disabled?: boolean;
-  style?: Parameters<typeof Pressable>[0]['style'];
+  className?: string;
+  style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
   accessibilityLabel?: string;
   accessibilityHint?: string;
 }) {
@@ -84,6 +84,7 @@ export function TooltipPressable({
       onPress={onPress}
       onLongPress={handleLongPress}
       disabled={disabled}
+      className={className}
       style={style}
       accessibilityLabel={accessibilityLabel ?? tooltip}
       accessibilityHint={accessibilityHint}
@@ -92,29 +93,4 @@ export function TooltipPressable({
       {children}
     </Pressable>
   );
-}
-
-function makeStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    host: {
-      position: 'absolute',
-      bottom: 40,
-      left: 0,
-      right: 0,
-      alignItems: 'center',
-    },
-    toast: {
-      borderRadius: 14,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      backgroundColor: theme.isDark ? '#2c2134' : '#201a24',
-      maxWidth: 300,
-    },
-    toastText: {
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: '700',
-      textAlign: 'center',
-    },
-  });
 }
