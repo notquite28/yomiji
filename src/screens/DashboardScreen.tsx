@@ -316,7 +316,6 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
             color={colors.radical}
             isCompact={isCompact}
             disabled={isVacation}
-            reduceMotion={reduceMotion}
             onPress={() => navigation.navigate('LessonSession', {})}
           />
           <StudyAction
@@ -326,7 +325,6 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
             color={colors.kanji}
             isCompact={isCompact}
             disabled={isVacation}
-            reduceMotion={reduceMotion}
             onPress={() => navigation.navigate('ReviewSession')}
           />
         </Animated.View>
@@ -503,7 +501,6 @@ function StudyAction({
   color,
   isCompact,
   disabled,
-  reduceMotion,
   onPress,
 }: {
   label: string;
@@ -512,137 +509,71 @@ function StudyAction({
   color: string;
   isCompact: boolean;
   disabled: boolean;
-  reduceMotion: boolean;
   onPress: () => void;
 }) {
   const { colors, isDark } = useAppTheme();
   const isDisabled = disabled || value <= 0;
-  const pulse = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (isDisabled || reduceMotion) {
-      pulse.setValue(1);
-      return;
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.25, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [isDisabled, reduceMotion, pulse]);
-
-  const cardBg = isDark ? '#15141a' : '#fffdf8';
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(32,26,36,0.08)';
+  const iconColor = isDisabled ? colors.mutedText : color;
 
   return (
-    <Pressable
-      disabled={isDisabled}
-      onPress={onPress}
-      android_ripple={{ color: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(32,26,36,0.05)' }}
-      accessibilityLabel={`${label}: ${value} available`}
-      accessibilityHint={hint}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled }}
-      style={({ pressed }) => ({
-        flex: isCompact ? 0 : 1,
+    <View
+      className="rounded-[26px] border bg-[#fffdf8] dark:bg-[#15141a] border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)]"
+      style={{
+        flexGrow: isCompact ? 0 : 1,
+        flexShrink: isCompact ? 0 : 1,
+        flexBasis: isCompact ? 'auto' : 0,
+        alignSelf: isCompact ? 'stretch' : undefined,
         width: isCompact ? '100%' : undefined,
-        minHeight: isCompact ? 150 : 180,
-        borderRadius: 26,
-        backgroundColor: cardBg,
-        borderWidth: 1,
-        borderColor: cardBorder,
-        overflow: 'hidden',
-        opacity: isDisabled ? 0.45 : pressed ? 0.95 : 1,
+        minHeight: isCompact ? 150 : 172,
         shadowColor: '#000',
-        shadowOpacity: isDark ? 0.22 : 0.07,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 14 },
-        elevation: 6,
-        transform: [{ scale: pressed && !isDisabled ? 0.985 : 1 }],
-      })}
+        shadowOpacity: isDark ? 0.16 : 0.05,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 4,
+      }}
     >
-      {/* Colored top accent strip */}
-      <View
-        style={{
-          height: 4,
-          backgroundColor: isDisabled ? colors.mutedText : color,
-          opacity: isDisabled ? 0.35 : 1,
-        }}
-      />
-
-      {/* Card body */}
-      <View style={{ flex: 1, padding: 18, justifyContent: 'space-between' }}>
-        {/* Label row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text
-            className="text-[11px] leading-[14px] font-black tracking-ultra2 uppercase"
-            style={{ color: colors.mutedText }}
-          >
-            {label}
-          </Text>
-          {!isDisabled && (
-            <Animated.View
-              importantForAccessibility="no"
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: 3.5,
-                backgroundColor: color,
-                opacity: pulse,
-                shadowColor: color,
-                shadowOpacity: 0.5,
-                shadowRadius: 4,
-                shadowOffset: { width: 0, height: 0 },
-              }}
-            />
-          )}
-        </View>
-
-        {/* Hero number */}
+      <Pressable
+        disabled={isDisabled}
+        onPress={onPress}
+        accessibilityLabel={`${label}: ${value} available`}
+        accessibilityHint={hint}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled }}
+        className="flex-1 p-[18px] rounded-[26px]"
+        style={({ pressed }) => ({ opacity: isDisabled ? 0.5 : pressed ? 0.86 : 1, transform: [{ scale: pressed && !isDisabled ? 0.99 : 1 }] })}
+      >
+        <View pointerEvents="none" importantForAccessibility="no" className="absolute left-[18px] bottom-[18px] w-[28px] h-[3px] rounded-full" style={{ backgroundColor: color, opacity: isDisabled ? 0.45 : 1 }} />
         <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.5}
-          style={{
-            color: isDisabled ? colors.mutedText : color,
-            fontSize: 72,
-            fontWeight: '900',
-            letterSpacing: -2,
-            opacity: isDisabled ? 0.4 : 1,
-          }}
+          className="absolute top-[22px] left-[18px] text-[11px] leading-[14px] font-black tracking-ultra2 uppercase"
+          style={{ color: colors.mutedText }}
         >
-          {value}
+          {label}
         </Text>
-
-        {/* Hint row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text className="text-[13px] font-bold tracking-normal" style={{ color: colors.mutedText }}>
-            {hint}
-          </Text>
-          <StudyChevron color={isDisabled ? colors.mutedText : color} />
+        <View className="absolute top-4 right-4 w-8 h-8 items-center justify-center" importantForAccessibility="no">
+          <ArrowIcon color={iconColor} />
         </View>
-      </View>
-    </Pressable>
+        <View className="flex-1 justify-end pt-[50px] pb-3">
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.65}
+            style={{ color: iconColor, fontSize: 56, fontWeight: '900', letterSpacing: -1.6, lineHeight: 62 }}
+          >
+            {value}
+          </Text>
+          <Text className="text-[13px] font-bold tracking-normal" style={{ color: colors.mutedText }}>{hint}</Text>
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
-function StudyChevron({ color }: { color: string }) {
+function ArrowIcon({ color }: { color: string }) {
   return (
-    <View style={{ width: 20, height: 12, justifyContent: 'center', alignItems: 'flex-end' }} importantForAccessibility="no">
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRightWidth: 2,
-          borderTopWidth: 2,
-          borderColor: color,
-          borderRadius: 1,
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
+    <View style={{ width: 15, height: 12, justifyContent: 'center' }}>
+      <View style={{ width: 15, height: 2, borderRadius: 999, backgroundColor: color }} />
+      <View style={{ position: 'absolute', right: -1, top: 2, width: 8, height: 2, borderRadius: 999, transform: [{ rotate: '45deg' }], backgroundColor: color }} />
+      <View style={{ position: 'absolute', right: -1, bottom: 2, width: 8, height: 2, borderRadius: 999, transform: [{ rotate: '-45deg' }], backgroundColor: color }} />
     </View>
   );
 }
