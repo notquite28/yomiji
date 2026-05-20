@@ -14,10 +14,11 @@ pnpm start                           # expo start --dev-client
 pnpm start -- --clear                # clear Metro cache when UI changes look stale
 pnpm android                         # expo run:android; creates/runs a dev build
 pnpm ios                             # expo run:ios
+pnpm web                             # expo start --web; experimental/unsupported
 pnpm typecheck                       # tsc --noEmit
 pnpm test                            # jest --runInBand
-pnpm test -- path/to/file.test.ts    # focused Jest test
-pnpm version:bump [patch|minor|major] # updates package/app versions, commits, tags
+pnpm test -- src/path/file.test.ts   # focused Jest test
+pnpm version:bump [patch|minor|major] # bumps package/app/native versions, commits, tags
 pnpm exec expo install --check       # dependency compatibility check
 ```
 
@@ -88,6 +89,6 @@ pnpm exec expo install --check       # dependency compatibility check
 ## Release/versioning
 
 - Do not bump versions unless asked. Pre-1.0 semver: patch for fixes, minor for features, major for milestones.
-- `pnpm version:bump` updates `package.json` and `app.json` (`version`, Android `versionCode`, iOS `buildNumber`), commits `Release vX.Y.Z`, and tags `vX.Y.Z`.
+- `pnpm version:bump` updates `package.json`, `app.json` (`version`, Android `versionCode`, iOS `buildNumber`, runtime versions), and `android/app/build.gradle`, then commits `Release vX.Y.Z` and tags `vX.Y.Z`.
 - Android release workflow runs on `v*` tags or manual dispatch. CI uses Node 22, pnpm 9, Java 17, runs install/typecheck/tests, then `eas build --platform android --profile production --local --output build.apk`.
 - Release APK signing requires `YOMIJI_KEYSTORE_BASE64` and `YOMIJI_KEYSTORE_PASSWORD`; alias is `yomiji`. Release builds fail closed if signing material is missing; debug builds use local debug signing.

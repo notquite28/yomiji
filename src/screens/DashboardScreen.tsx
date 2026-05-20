@@ -1,7 +1,8 @@
+import { BlurTargetView, BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
@@ -494,6 +495,12 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
   );
 }
 
+const styles = StyleSheet.create({
+  blurBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});
+
 function StudyAction({
   label,
   hint,
@@ -514,10 +521,21 @@ function StudyAction({
   const { colors, isDark } = useAppTheme();
   const isDisabled = disabled || value <= 0;
   const iconColor = isDisabled ? colors.mutedText : color;
+  const blurTargetRef = useRef<View | null>(null);
+
+  const cardBg = isDark ? 'rgba(13, 11, 18, 0.76)' : 'rgba(255, 255, 255, 0.38)';
+  const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.28)';
+  const tint = isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight';
+  const baseColor = isDark ? '#05040a' : '#fff8ee';
+  const highlightSheen = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.15)';
+  const highlightRim = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.38)';
+  const labelColor = isDark ? '#d8cce0' : '#6f6574';
+  const hintColor = isDark ? '#9e8eab' : '#8a7d92';
+  const numberColor = isDisabled ? hintColor : color;
 
   return (
     <View
-      className="rounded-[26px] border bg-[#fffdf8] dark:bg-[#15141a] border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)]"
+      className="overflow-hidden rounded-[26px]"
       style={{
         flexGrow: isCompact ? 0 : 1,
         flexShrink: isCompact ? 0 : 1,
@@ -525,13 +543,35 @@ function StudyAction({
         alignSelf: isCompact ? 'stretch' : undefined,
         width: isCompact ? '100%' : undefined,
         minHeight: isCompact ? 150 : 172,
+        backgroundColor: cardBg,
+        borderWidth: 1,
+        borderColor,
         shadowColor: '#000',
         shadowOpacity: isDark ? 0.16 : 0.05,
         shadowRadius: 18,
         shadowOffset: { width: 0, height: 10 },
         elevation: 4,
+        opacity: isDisabled ? 0.52 : 1,
       }}
     >
+      <BlurTargetView ref={blurTargetRef} style={styles.blurBackground}>
+        <View style={StyleSheet.absoluteFill} collapsable={false}>
+          <View className="absolute inset-0" style={{ backgroundColor: baseColor }} />
+          <View className="absolute -right-10 -bottom-12 h-[130px] w-[130px] rounded-full" style={{ backgroundColor: color, opacity: isDark ? 0.3 : 0.45 }} />
+          <View className="absolute left-6 top-[22px] h-[38px] w-[38px] rounded-full" style={{ backgroundColor: color, opacity: isDark ? 0.15 : 0.22 }} />
+        </View>
+      </BlurTargetView>
+      <BlurView
+        blurTarget={blurTargetRef}
+        intensity={60}
+        blurReductionFactor={2}
+        tint={tint}
+        blurMethod={Platform.OS === 'android' && (Platform.Version as number) >= 31 ? 'dimezisBlurViewSdk31Plus' : undefined}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View pointerEvents="none" className="absolute left-2.5 right-2.5 top-2.5 h-[38px] rounded-full opacity-50" style={{ backgroundColor: highlightSheen }} />
+      <View pointerEvents="none" className="absolute bottom-0 left-4 right-4 h-[1px] opacity-70" style={{ backgroundColor: highlightRim }} />
       <Pressable
         disabled={isDisabled}
         onPress={onPress}
@@ -539,17 +579,17 @@ function StudyAction({
         accessibilityHint={hint}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled }}
-        className="flex-1 p-[18px] rounded-[26px]"
-        style={({ pressed }) => ({ opacity: isDisabled ? 0.5 : pressed ? 0.86 : 1, transform: [{ scale: pressed && !isDisabled ? 0.99 : 1 }] })}
+        className="flex-1 p-[18px]"
+        style={({ pressed }) => pressed && !isDisabled ? { opacity: 0.92, transform: [{ scale: 0.99 }] } : undefined}
       >
-        <View pointerEvents="none" importantForAccessibility="no" className="absolute left-[18px] bottom-[18px] w-[28px] h-[3px] rounded-full" style={{ backgroundColor: color, opacity: isDisabled ? 0.45 : 1 }} />
+        <View pointerEvents="none" importantForAccessibility="no" className="absolute left-[18px] bottom-[18px] w-[28px] h-[3px] rounded-full" style={{ backgroundColor: numberColor, opacity: 0.7 }} />
         <Text
           className="absolute top-[22px] left-[18px] text-[11px] leading-[14px] font-black tracking-ultra2 uppercase"
-          style={{ color: colors.mutedText }}
+          style={{ color: labelColor }}
         >
           {label}
         </Text>
-        <View className="absolute top-4 right-4 w-8 h-8 items-center justify-center" importantForAccessibility="no">
+        <View className="absolute top-[13px] right-[18px] w-8 h-8 items-center justify-center" importantForAccessibility="no">
           <ArrowIcon color={iconColor} />
         </View>
         <View className="flex-1 justify-end pt-[50px] pb-3">
@@ -557,11 +597,11 @@ function StudyAction({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.65}
-            style={{ color: iconColor, fontSize: 56, fontWeight: '900', letterSpacing: -1.6, lineHeight: 62 }}
+            style={{ color: numberColor, fontSize: 56, fontWeight: '900', letterSpacing: -1.6, lineHeight: 62 }}
           >
             {value}
           </Text>
-          <Text className="text-[13px] font-bold tracking-normal" style={{ color: colors.mutedText }}>{hint}</Text>
+          <Text className="text-[13px] font-bold tracking-normal" style={{ color: hintColor }}>{hint}</Text>
         </View>
       </Pressable>
     </View>
