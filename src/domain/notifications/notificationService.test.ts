@@ -1,11 +1,13 @@
 /**
  * Integration tests for rescheduleReviewNotifications.
  *
- * Mocks: expoNotifications, loadSettings, Platform.
- * Uses real in-memory SQLite via createTestDatabase.
+ * Mocks: expoNotifications, Platform.
+ * Uses real in-memory SQLite via createTestDatabase and real Zustand settings store.
  */
 import { createTestDatabase } from "../../test/testDb";
 import type { AppDatabase } from "../db/database";
+import { useSettingsStore } from "../settings/settingsStore";
+import { defaultSettings } from "../settings/settings";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +86,7 @@ jest.mock("expo-notifications", () => ({
 	setNotificationChannelAsync: jest.fn(() => Promise.resolve(null)),
 }));
 
-// Mock @react-native-async-storage/async-storage for loadSettings.
+// Mock @react-native-async-storage/async-storage for the settings store.
 jest.mock("@react-native-async-storage/async-storage", () => ({
 	getItem: jest.fn(() => Promise.resolve(null)),
 	setItem: jest.fn(() => Promise.resolve()),
@@ -107,25 +109,35 @@ jest.mock("../db/database", () => {
 	};
 });
 
-// Mock loadSettings with configurable notification settings.
-let mockSettings: Record<string, unknown>;
-jest.mock("../settings/settings", () => ({
-	loadSettings: jest.fn(() => Promise.resolve(mockSettings)),
-}));
-
 // Import AFTER mocks are set up.
 import { rescheduleReviewNotifications, clearReviewNotifications } from "./notificationService";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function defaultNotificationSettings() {
-	return {
+/**
+ * Set notification-related settings in the Zustand store directly.
+ * All non-notification fields retain their default values.
+ */
+function setNotificationSettings(overrides: Partial<{
+	notificationsEnabled: boolean;
+	notificationsBadging: boolean;
+	notificationSounds: boolean;
+	notificationThreshold: number;
+	notificationDailyTime: number | null;
+}>) {
+	const { hydrate, updateSetting } = useSettingsStore.getState();
+	useSettingsStore.setState({
+		...defaultSettings,
 		notificationsEnabled: true,
 		notificationsBadging: true,
 		notificationSounds: false,
 		notificationThreshold: 5,
-		notificationDailyTime: null as number | null,
-	};
+		notificationDailyTime: null,
+		...overrides,
+		_hydrated: true,
+		hydrate,
+		updateSetting,
+	});
 }
 
 function resetMockState() {
@@ -133,7 +145,9 @@ function resetMockState() {
 	cancelledIds.length = 0;
 	badgeCount = 0;
 	permissionStatus = "granted";
-	mockSettings = defaultNotificationSettings();
+	// Preserve store methods; reset only the data fields.
+	const { hydrate, updateSetting } = useSettingsStore.getState();
+	useSettingsStore.setState({ ...defaultSettings, _hydrated: true, hydrate, updateSetting });
 }
 
 async function insertAvailableAssignment(
@@ -176,10 +190,9 @@ describe("rescheduleReviewNotifications", () => {
 
 	test("vacation mode clears badge and notifications", async () => {
 		await insertUser({ vacation_started_at: "2026-01-01T00:00:00Z" });
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
-		};
+		});
 
 		await rescheduleReviewNotifications();
 
@@ -188,11 +201,10 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("badge-only mode sets badge without scheduling notifications", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: false,
 			notificationsBadging: true,
-		};
+		});
 
 		// Insert 3 available reviews.
 		for (let i = 1; i <= 3; i++) {
@@ -206,13 +218,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("threshold not yet met — schedules review-available for the Nth future review", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: false,
 			notificationThreshold: 3,
 			notificationDailyTime: null,
-		};
+		});
 
 		// 0 currently available, 3rd future at 2026-06-01.
 		await insertAvailableAssignment(testDb, 1, "2026-05-01T00:00:00Z");
@@ -232,13 +243,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("threshold already met — no review-available scheduled", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: false,
 			notificationThreshold: 3,
 			notificationDailyTime: null,
-		};
+		});
 
 		// Insert 5 already-available reviews (>= threshold of 3).
 		for (let i = 1; i <= 5; i++) {
@@ -254,13 +264,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("daily time configured — uses DAILY trigger type", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: false,
 			notificationThreshold: 50,
 			notificationDailyTime: 20,
-		};
+		});
 
 		await rescheduleReviewNotifications();
 
@@ -274,13 +283,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("both triggers — both scheduled independently", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: false,
 			notificationThreshold: 2,
 			notificationDailyTime: 8,
-		};
+		});
 
 		// 1 available now, threshold=2, so need 1 more future.
 		await insertAvailableAssignment(testDb, 1, "2026-01-01T00:00:00Z");
@@ -294,13 +302,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("legacy review-hour-* notifications are cancelled on reschedule", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: false,
 			notificationThreshold: 50,
 			notificationDailyTime: null,
-		};
+		});
 
 		await rescheduleReviewNotifications();
 
@@ -310,13 +317,12 @@ describe("rescheduleReviewNotifications", () => {
 	});
 
 	test("no notification content includes badge property", async () => {
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: true,
 			notificationThreshold: 2,
 			notificationDailyTime: 20,
-		};
+		});
 
 		// 1 available now, threshold=2.
 		await insertAvailableAssignment(testDb, 1, "2026-01-01T00:00:00Z");
@@ -331,11 +337,10 @@ describe("rescheduleReviewNotifications", () => {
 
 	test("denied permission clears notifications", async () => {
 		permissionStatus = "denied";
-		mockSettings = {
-			...defaultNotificationSettings(),
+		setNotificationSettings({
 			notificationsEnabled: true,
 			notificationsBadging: true,
-		};
+		});
 
 		await rescheduleReviewNotifications();
 

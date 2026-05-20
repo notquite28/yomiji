@@ -6,7 +6,8 @@ import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { openAppDatabase } from '../domain/db/database';
-import { defaultSettings, loadSettings, AppSettings } from '../domain/settings/settings';
+import { AppSettings } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 import {
   chunkLessonItems,
   getLessonItemsByIds,
@@ -46,7 +47,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const settings = useSettingsStore();
 
   const [phase, setPhase] = useState<LessonPhase>('intro');
   const [introIndex, setIntroIndex] = useState(0);
@@ -104,13 +105,13 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     const selectedIds = route.params?.selectedIds;
     const selectedSet = selectedIds ? new Set(selectedIds) : null;
 
-    Promise.all([openAppDatabase(), loadSettings()])
-      .then(async ([db, loadedSettings]) => {
+    openAppDatabase()
+      .then(async (db) => {
+        const currentSettings = useSettingsStore.getState();
         const items = selectedSet && selectedSet.size > 0
-          ? await getLessonItemsByIds(db, loadedSettings, selectedSet)
-          : await getLessonQueue(db, loadedSettings, loadedSettings.lessonSessionSize);
+          ? await getLessonItemsByIds(db, currentSettings, selectedSet)
+          : await getLessonQueue(db, currentSettings, currentSettings.lessonSessionSize);
         if (isMounted) {
-          setSettings(loadedSettings);
           setQueueItems(items);
         }
         const relatedSubjectIds = [

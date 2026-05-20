@@ -21,8 +21,9 @@ import {
 } from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
 import { describeSyncError } from '../domain/db/errorLog';
-import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
+
 import { isSyncAuthError, runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
+import { useSyncStore } from '../domain/sync/syncStore';
 import { RecentItemList, LeechItemList } from '../components/DashboardItemList';
 import { LevelProgressChart } from '../components/LevelProgressChart';
 import { ReviewForecastChart } from '../components/ReviewForecastChart';
@@ -33,9 +34,6 @@ import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'> & {
   apiToken: string;
-  lifecycleSyncProgress?: SyncProgress | null;
-  lifecycleSyncError?: string | null;
-  syncRevision?: number;
   onAuthError?: () => void;
 };
 
@@ -47,7 +45,7 @@ type StudyActionTheme = {
   rippleColor: string;
 };
 
-export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, lifecycleSyncError, syncRevision, onAuthError }: Props) {
+export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
   const theme = useAppTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
@@ -65,12 +63,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasLoadedSummary, setHasLoadedSummary] = useState(false);
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    loadSettings().then(setSettings);
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -133,13 +126,14 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
     }, [refreshSummary]),
   );
 
-  const prevSyncRevision = useRef(syncRevision);
+  const storeSyncRevision = useSyncStore((s) => s.syncRevision);
+  const prevSyncRevision = useRef(storeSyncRevision);
   useEffect(() => {
-    if (syncRevision !== prevSyncRevision.current) {
-      prevSyncRevision.current = syncRevision;
+    if (storeSyncRevision !== prevSyncRevision.current) {
+      prevSyncRevision.current = storeSyncRevision;
       refreshSummary().catch((caught: unknown) => setError(caught instanceof Error ? caught.message : String(caught)));
     }
-  }, [refreshSummary, syncRevision]);
+  }, [refreshSummary, storeSyncRevision]);
 
   useEffect(() => {
     if (!summary?.level) return;
@@ -179,8 +173,10 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
   const isVacation = Boolean(summary?.vacationStartedAt);
   const levelText = summary?.level ? `Level ${summary.level}` : 'Ready to sync';
   const lastSyncedText = summary?.lastSyncedAt ? formatDate(summary.lastSyncedAt) : 'Not yet';
-  const activeSyncProgress = syncProgress ?? lifecycleSyncProgress ?? null;
-  const activeSyncError = error ?? lifecycleSyncError ?? null;
+  const storeSyncProgress = useSyncStore((s) => s.syncProgress);
+  const storeSyncError = useSyncStore((s) => s.syncError);
+  const activeSyncProgress = syncProgress ?? storeSyncProgress ?? null;
+  const activeSyncError = error ?? storeSyncError ?? null;
   const hasLocalCache = Boolean(summary?.lastSyncedAt) || (summary?.cachedSubjects ?? 0) > 0;
   const shouldShowFirstSync = hasLoadedSummary && !hasLocalCache;
   const isSyncing = isRefreshing || Boolean(activeSyncProgress);
@@ -451,7 +447,7 @@ export function DashboardScreen({ apiToken, navigation, lifecycleSyncProgress, l
             <Text style={styles.panelMeta}>{lastSyncedText}</Text>
           </View>
           <Text style={styles.bodyText}>{syncStatus}</Text>
-          {error || lifecycleSyncError ? <Text style={styles.errorText}>{error ?? lifecycleSyncError}</Text> : null}
+          {activeSyncError ? <Text style={styles.errorText}>{activeSyncError}</Text> : null}
           <Pressable disabled={isRefreshing} onPress={sync} style={({ pressed }) => [styles.primaryButton, (pressed || isRefreshing) && styles.pressed]}>
             <Text style={styles.primaryButtonText}>{isRefreshing ? 'Syncing...' : 'Sync now'}</Text>
           </Pressable>

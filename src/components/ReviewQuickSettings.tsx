@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppSettings, saveSettings } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 
 type BooleanSettingKey =
@@ -23,8 +23,6 @@ type BooleanSettingKey =
 
 type Props = {
   visible: boolean;
-  settings: AppSettings;
-  onSettingsChange: (next: AppSettings) => void;
   onClose: () => void;
   onEndSession: () => void;
   onWrapUp: () => void;
@@ -36,8 +34,6 @@ type Props = {
 
 export function ReviewQuickSettings({
   visible,
-  settings,
-  onSettingsChange,
   onClose,
   onEndSession,
   onWrapUp,
@@ -48,15 +44,29 @@ export function ReviewQuickSettings({
 }: Props) {
   const theme = useAppTheme();
   const styles = makeStyles(theme);
+  const exactMatch = useSettingsStore((s) => s.exactMatch);
+  const enableCheats = useSettingsStore((s) => s.enableCheats);
+  const showFullAnswer = useSettingsStore((s) => s.showFullAnswer);
+  const playAudioAutomatically = useSettingsStore((s) => s.playAudioAutomatically);
+  const interruptBackgroundAudio = useSettingsStore((s) => s.interruptBackgroundAudio);
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   const toggle = useCallback(
     (key: BooleanSettingKey) => {
-      const next = { ...settings, [key]: !settings[key] };
-      onSettingsChange(next);
-      saveSettings({ [key]: next[key] }).catch(() => {});
+      updateSetting(key, !getFieldValue(key));
     },
-    [settings, onSettingsChange],
+    [updateSetting, exactMatch, enableCheats, showFullAnswer, playAudioAutomatically, interruptBackgroundAudio],
   );
+
+  function getFieldValue(key: BooleanSettingKey): boolean {
+    switch (key) {
+      case 'exactMatch': return exactMatch;
+      case 'enableCheats': return enableCheats;
+      case 'showFullAnswer': return showFullAnswer;
+      case 'playAudioAutomatically': return playAudioAutomatically;
+      case 'interruptBackgroundAudio': return interruptBackgroundAudio;
+    }
+  }
 
   const canWrapUpNow = canWrapUp && !wrappingUp && !hasFeedback;
   const confirmEndSession = () => {
@@ -93,14 +103,14 @@ export function ReviewQuickSettings({
             <Text style={styles.sectionTitle}>Answers &amp; Marking</Text>
             <ToggleRow
               label="Exact match"
-              value={settings.exactMatch}
+              value={exactMatch}
               onToggle={() => toggle('exactMatch')}
               theme={theme}
               styles={styles}
             />
             <ToggleRow
               label="Allow cheats"
-              value={settings.enableCheats}
+              value={enableCheats}
               onToggle={() => toggle('enableCheats')}
               theme={theme}
               styles={styles}
@@ -111,7 +121,7 @@ export function ReviewQuickSettings({
             <Text style={styles.sectionTitle}>Display</Text>
             <ToggleRow
               label="Show full answer"
-              value={settings.showFullAnswer}
+              value={showFullAnswer}
               onToggle={() => toggle('showFullAnswer')}
               theme={theme}
               styles={styles}
@@ -122,14 +132,14 @@ export function ReviewQuickSettings({
             <Text style={styles.sectionTitle}>Audio</Text>
             <ToggleRow
               label="Autoplay audio"
-              value={settings.playAudioAutomatically}
+              value={playAudioAutomatically}
               onToggle={() => toggle('playAudioAutomatically')}
               theme={theme}
               styles={styles}
             />
             <ToggleRow
               label="Interrupt background audio"
-              value={settings.interruptBackgroundAudio}
+              value={interruptBackgroundAudio}
               onToggle={() => toggle('interruptBackgroundAudio')}
               theme={theme}
               styles={styles}

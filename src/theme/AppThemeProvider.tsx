@@ -1,7 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, useColorScheme, View } from 'react-native';
 
-import { AppearanceMode, loadSettings, saveSettings } from '../domain/settings/settings';
+import { AppearanceMode } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 
 import { AppColors, darkColors, lightColors } from './palette';
 
@@ -19,35 +20,26 @@ const AppThemeContext = createContext<AppTheme | null>(null);
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
-  const [mode, setModeInternal] = useState<AppearanceMode>('system');
+  const appearance = useSettingsStore((s) => s.appearance);
+  const storeHydrated = useSettingsStore((s) => s._hydrated);
+  const updateSetting = useSettingsStore((s) => s.updateSetting);
   const [hydrated, setHydrated] = useState(false);
 
+  // Trigger hydration once on mount (idempotent — guarded by _hydrated flag)
   useEffect(() => {
-    let isMounted = true;
-    loadSettings()
-      .then((settings) => {
-        if (isMounted) {
-          setModeInternal(settings.appearance);
-        }
-      })
-      .catch(() => {
-        // Fall back to the default system theme if settings cannot be read.
-      })
-      .finally(() => {
-        if (isMounted) {
-          setHydrated(true);
-        }
-      });
-    return () => {
-      isMounted = false;
-    };
+    useSettingsStore.getState().hydrate();
   }, []);
+
+  // Watch for hydration completion
+  useEffect(() => {
+    if (storeHydrated) setHydrated(true);
+  }, [storeHydrated]);
 
   const setMode = useCallback((nextMode: AppearanceMode) => {
-    setModeInternal(nextMode);
-    saveSettings({ appearance: nextMode }).catch(() => {});
-  }, []);
+    updateSetting('appearance', nextMode);
+  }, [updateSetting]);
 
+  const mode = appearance;
   const isDark = mode === 'dark' || (mode === 'system' && systemScheme === 'dark');
 
   const value = useMemo<AppTheme>(

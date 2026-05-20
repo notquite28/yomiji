@@ -2,7 +2,8 @@ import type * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 import { openAppDatabase } from "../db/database";
-import { loadSettings } from "../settings/settings";
+import { useSettingsStore } from "../settings/settingsStore";
+import { defaultSettings } from "../settings/settings";
 import * as ExpoNotifications from "./expoNotifications";
 
 import type { NotificationConfig } from "./types";
@@ -68,8 +69,11 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 // Read notification config from app settings
 // ---------------------------------------------------------------------------
 
-async function readNotificationConfig(): Promise<NotificationConfig> {
-	const settings = await loadSettings();
+function readNotificationConfig(): NotificationConfig {
+	const state = useSettingsStore.getState();
+	// Fall back to defaults if the store has not yet hydrated (rare race window
+	// before AppThemeProvider triggers hydrate()).
+	const settings = state._hydrated ? state : defaultSettings;
 	return {
 		enabled: settings.notificationsEnabled,
 		badging: settings.notificationsBadging,

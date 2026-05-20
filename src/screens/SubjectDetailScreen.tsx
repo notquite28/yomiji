@@ -12,7 +12,7 @@ import { queueStudyMaterialUpdate } from '../domain/study/studyRepository';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
-import { loadSettings } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
@@ -38,10 +38,8 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [subjectSettings, setSubjectSettings] = useState<{ useKatakanaForOnyomi: boolean; showAllReadings: boolean }>({
-    useKatakanaForOnyomi: false,
-    showAllReadings: false,
-  });
+  const useKatakana = useSettingsStore((s) => s.useKatakanaForOnyomi);
+  const showAllReadings = useSettingsStore((s) => s.showAllReadings);
 
   const loadSubject = useCallback(async () => {
     setIsLoading(true);
@@ -54,12 +52,6 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
       return;
     }
     setSubject(s);
-
-    const settings = await loadSettings();
-    setSubjectSettings({
-      useKatakanaForOnyomi: settings.useKatakanaForOnyomi,
-      showAllReadings: settings.showAllReadings,
-    });
 
     if ((s.componentSubjectIds ?? []).length > 0) {
       const comps = await getSubjectsByIds(db, s.componentSubjectIds ?? []);
@@ -198,8 +190,8 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           readingAttempted={true}
           showFullAnswer={true}
           isReview={false}
-          useKatakanaForOnyomi={subjectSettings.useKatakanaForOnyomi}
-          showAllReadings={subjectSettings.showAllReadings}
+          useKatakanaForOnyomi={useKatakana}
+          showAllReadings={showAllReadings}
           onNavigateToSubject={(id) => navigation.push('SubjectDetail', { subjectId: id })}
           onEditMeaningNote={(value) => handleSave('meaningNote', value)}
           onEditReadingNote={(value) => handleSave('readingNote', value)}

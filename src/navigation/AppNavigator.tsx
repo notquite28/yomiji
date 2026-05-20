@@ -22,8 +22,8 @@ import {
 	isSyncAuthError,
 	runIncrementalSync,
 	runPendingSync,
-	type SyncProgress,
 } from "../domain/sync/syncService";
+import { useSyncStore } from "../domain/sync/syncStore";
 import { DashboardScreen } from "../screens/DashboardScreen";
 import { DiagnosticsScreen } from "../screens/DiagnosticsScreen";
 import { LessonPickerScreen } from "../screens/LessonPickerScreen";
@@ -48,12 +48,6 @@ export function AppNavigator() {
 	const theme = useAppTheme();
 	const [apiToken, setApiToken] = useState<string | null>(null);
 	const [isBooting, setIsBooting] = useState(true);
-	const [lifecycleSyncProgress, setLifecycleSyncProgress] =
-		useState<SyncProgress | null>(null);
-	const [lifecycleSyncError, setLifecycleSyncError] = useState<string | null>(
-		null,
-	);
-	const [syncRevision, setSyncRevision] = useState(0);
 	const appState = useRef<AppStateStatus>(AppState.currentState);
 	const lastForegroundCheckAt = useRef(0);
 	const lastPendingFlushAt = useRef(0);
@@ -65,7 +59,7 @@ export function AppNavigator() {
 			setApiToken(null);
 			return;
 		}
-		setLifecycleSyncError(describeSyncError(caught).message);
+		useSyncStore.getState().setSyncError(describeSyncError(caught).message);
 	}, []);
 
 	const beginLifecycleSync = useCallback(() => {
@@ -76,7 +70,7 @@ export function AppNavigator() {
 				activeLifecycleSyncCount.current - 1,
 			);
 			if (activeLifecycleSyncCount.current === 0) {
-				setLifecycleSyncProgress(null);
+				useSyncStore.getState().setSyncProgress(null);
 			}
 		};
 	}, []);
@@ -113,7 +107,7 @@ export function AppNavigator() {
 		lastForegroundCheckAt.current = now;
 
 		const finishLifecycleSync = beginLifecycleSync();
-		setLifecycleSyncError(null);
+		useSyncStore.getState().setSyncError(null);
 		try {
 			const db = await openAppDatabase();
 			const hasLocalWrites = await hasPendingWrites(db);
@@ -126,19 +120,19 @@ export function AppNavigator() {
 				await runPendingSync({
 					db,
 					client: new WaniKaniClient(apiToken),
-					onProgress: setLifecycleSyncProgress,
+					onProgress: useSyncStore.getState().setSyncProgress,
 				});
-				setSyncRevision((value) => value + 1);
+				useSyncStore.getState().bumpRevision();
 			}
 
 			if (cacheIsStale) {
 				await runIncrementalSync({
 					db,
 					client: new WaniKaniClient(apiToken),
-					onProgress: setLifecycleSyncProgress,
-					onCheckpoint: () => setSyncRevision((value) => value + 1),
+					onProgress: useSyncStore.getState().setSyncProgress,
+					onCheckpoint: () => useSyncStore.getState().bumpRevision(),
 				});
-				setSyncRevision((value) => value + 1);
+				useSyncStore.getState().bumpRevision();
 			}
 		} catch (caught) {
 			await handleSyncError(caught);
@@ -181,9 +175,9 @@ export function AppNavigator() {
 			await runPendingSync({
 				db,
 				client: new WaniKaniClient(apiToken),
-				onProgress: setLifecycleSyncProgress,
+				onProgress: useSyncStore.getState().setSyncProgress,
 			});
-			setSyncRevision((value) => value + 1);
+			useSyncStore.getState().bumpRevision();
 		} catch (caught) {
 			await handleSyncError(caught);
 		} finally {
@@ -275,9 +269,6 @@ export function AppNavigator() {
 							<DashboardScreen
 								{...props}
 								apiToken={apiToken}
-								lifecycleSyncProgress={lifecycleSyncProgress}
-								lifecycleSyncError={lifecycleSyncError}
-								syncRevision={syncRevision}
 								onAuthError={() => {
 									deleteApiToken().then(() => setApiToken(null));
 								}}

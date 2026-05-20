@@ -8,7 +8,8 @@ import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { playVocabularyAudio, stopVocabularyAudio } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase } from '../domain/db/database';
-import { AppSettings, defaultSettings, loadSettings } from '../domain/settings/settings';
+import { AppSettings } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 import {
   MarkResult,
   ReviewItem,
@@ -83,7 +84,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const [lastMarkResult, setLastMarkResult] = useState<MarkResult | null>(null);
   const [isContinuing, setIsContinuing] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [appSettings, setAppSettings] = useState<AppSettings>(defaultSettings);
+  const appSettings = useSettingsStore();
   const [userLevel, setUserLevel] = useState<number | undefined>(undefined);
   const [ankiRevealed, setAnkiRevealed] = useState(false);
   const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
@@ -121,12 +122,10 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     let isMounted = true;
     (async () => {
       try {
-        const loaded = await loadSettings();
-        if (!isMounted) return;
-        setAppSettings(loaded);
         const db = await openAppDatabase();
+        const settings = useSettingsStore.getState();
         const [items, userRow] = await Promise.all([
-          getQueueForSource(db, practiceSource, loaded),
+          getQueueForSource(db, practiceSource, settings),
           db.getFirstAsync<{ level: number }>('SELECT level FROM user WHERE id = 1'),
         ]);
         if (!isMounted) return;
@@ -458,11 +457,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     }
     session.setWrappingUp(true);
     session.nextTask();
-    setRevision((r) => r + 1);
-  };
-
-  const handleQuickSettingsChange = (next: AppSettings) => {
-    setAppSettings(next);
     setRevision((r) => r + 1);
   };
 
@@ -800,8 +794,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
       <ReviewQuickSettings
         visible={quickSettingsOpen}
-        settings={appSettings}
-        onSettingsChange={handleQuickSettingsChange}
         onClose={() => setQuickSettingsOpen(false)}
         onEndSession={handleEndSession}
         onWrapUp={handleQuickWrapUp}

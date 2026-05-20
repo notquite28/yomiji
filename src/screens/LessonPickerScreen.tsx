@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { openAppDatabase } from '../domain/db/database';
-import { defaultSettings, loadSettings, AppSettings } from '../domain/settings/settings';
+import { AppSettings } from '../domain/settings/settings';
+import { useSettingsStore } from '../domain/settings/settingsStore';
 import { getLessonQueue, StudyQueueItem } from '../domain/study/studyRepository';
 import { ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { RootStackParamList } from '../navigation/types';
@@ -26,17 +27,16 @@ export function LessonPickerScreen({ navigation }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const settings = useSettingsStore();
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([openAppDatabase(), loadSettings()])
-      .then(([db, loadedSettings]) =>
-        getLessonQueue(db, loadedSettings, 100).then((items) => ({ items, loadedSettings })),
+    openAppDatabase()
+      .then((db) =>
+        getLessonQueue(db, useSettingsStore.getState(), 100).then((items) => ({ items })),
       )
-      .then(({ items, loadedSettings }) => {
+      .then(({ items }) => {
         if (isMounted) {
-          setSettings(loadedSettings);
           setAllItems(items);
         }
       })

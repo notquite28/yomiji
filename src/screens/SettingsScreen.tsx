@@ -26,11 +26,10 @@ import {
 import {
 	type AppSettings,
 	defaultSettings,
-	loadSettings,
-	saveSettings,
 	type ReviewOrder,
 	type SubjectType,
 } from "../domain/settings/settings";
+import { useSettingsStore } from "../domain/settings/settingsStore";
 import { deleteApiToken } from "../domain/storage/secureToken";
 import type { RootStackParamList } from "../navigation/types";
 import {
@@ -77,7 +76,8 @@ function formatHour(hour: number): string {
 export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 	const theme = useAppTheme();
 	const styles = makeStyles(theme);
-	const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+	const settings = useSettingsStore();
+	const updateSetting = useSettingsStore((s) => s.updateSetting);
 	const [voiceActors, setVoiceActors] = useState<VoiceActorOption[]>([]);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -85,15 +85,11 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 	useEffect(() => {
 		let isMounted = true;
 		(async () => {
-			const [loadedSettings, db] = await Promise.all([
-				loadSettings(),
-				openAppDatabase(),
-			]);
+			const db = await openAppDatabase();
 			const loadedVoiceActors = await getVoiceActorOptions(db);
 			if (!isMounted) {
 				return;
 			}
-			setSettings(loadedSettings);
 			setVoiceActors(loadedVoiceActors);
 		})().catch(() => {});
 		return () => {
@@ -108,8 +104,8 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		const unsubscribe = navigation.addListener("focus", async () => {
 			if (hasWarnedRevoked.current) return;
 
-			// Read settings directly from storage to avoid stale default state.
-			const currentSettings = await loadSettings();
+			// Read settings from the store (hydrated, in-memory).
+			const currentSettings = useSettingsStore.getState();
 			const hasNotificationEnabled =
 				currentSettings.notificationsEnabled ||
 				currentSettings.notificationsBadging ||
@@ -134,14 +130,6 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		});
 		return unsubscribe;
 	}, [navigation]);
-
-	const updateSetting = useCallback(
-		<K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
-			setSettings((prev) => ({ ...prev, [key]: value }));
-			saveSettings({ [key]: value }).catch(() => {});
-		},
-		[],
-	);
 
 	const updateNotificationSetting = useCallback(
 		async <
@@ -178,8 +166,7 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 				}
 			}
 
-			setSettings((prev) => ({ ...prev, [key]: value }));
-			await saveSettings({ [key]: value });
+		updateSetting(key, value);
 			await rescheduleReviewNotifications();
 		},
 		[],

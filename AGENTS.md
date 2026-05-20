@@ -20,7 +20,7 @@
 4. Sync flushes pending writes before fetching remote updates. A singleton `activeSync` prevents concurrent syncs.
 5. Lifecycle sync: foreground full sync when stale (>15 min), background flush only if pending writes exist. Pull-to-refresh is the explicit full-sync escape hatch.
 
-**State management:** React hooks and local component state only — no global state library (no Zustand, Redux, Recoil). Settings persist via AsyncStorage. API token in expo-secure-store.
+**State management:** React hooks and local component state for transient UI and session state. Zustand for global stores: `useSettingsStore` (settings, persisted via AsyncStorage) and `useSyncStore` (sync progress/error/revision, ephemeral). Both stores defined in `src/domain/settings/settingsStore.ts` and `src/domain/sync/syncStore.ts`.
 
 ## Key Directories
 
