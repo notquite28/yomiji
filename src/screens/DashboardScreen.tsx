@@ -1,7 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
@@ -20,7 +20,7 @@ import {
   ReviewForecastHour,
 } from '../domain/dashboard/dashboardRepository';
 import { openAppDatabase } from '../domain/db/database';
-import { describeSyncError } from '../domain/db/errorLog';
+import { describeSyncError, logSyncError } from '../domain/db/errorLog';
 
 import { isSyncAuthError, runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
 import { useSyncStore } from '../domain/sync/syncStore';
@@ -30,26 +30,17 @@ import { ReviewForecastChart } from '../components/ReviewForecastChart';
 import { SrsBar } from '../components/SrsBar';
 import { TooltipPressable } from '../components/TooltipPressable';
 import { RootStackParamList } from '../navigation/types';
-import { AppTheme, useAppTheme } from '../theme/AppThemeProvider';
+import { useAppTheme } from '../theme/AppThemeProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'> & {
   apiToken: string;
   onAuthError?: () => void;
 };
 
-type StudyActionTheme = {
-  surfaceColor: string;
-  borderColor: string;
-  pillColor: string;
-  mutedColor: string;
-  rippleColor: string;
-};
-
 export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
-  const theme = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { width } = useWindowDimensions();
   const isCompact = width < 390;
-  const styles = makeStyles(theme, isCompact);
   const entrance = useRef(new Animated.Value(0)).current;
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [forecast, setForecast] = useState<ReviewForecastHour[]>([]);
@@ -153,12 +144,16 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
   const sync = async () => {
     setError(null);
     setIsRefreshing(true);
+    let db: Awaited<ReturnType<typeof openAppDatabase>> | null = null;
     try {
-      const db = await openAppDatabase();
+      db = await openAppDatabase();
       const client = new WaniKaniClient(apiToken);
       await runIncrementalSync({ db, client, onProgress: setSyncProgress, onCheckpoint: refreshSummary });
       await refreshSummary();
     } catch (caught) {
+      if (db) {
+        await logSyncError(db, caught, 'manual_sync').catch(() => {});
+      }
       if (isSyncAuthError(caught)) {
         onAuthError?.();
         return;
@@ -182,20 +177,13 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
   const isSyncing = isRefreshing || Boolean(activeSyncProgress);
   const syncStatus = activeSyncProgress?.label ?? (summary?.lastSyncedAt ? 'Cache ready' : 'Pull to refresh or use the sync button below');
   const srsEntries = [
-    { label: 'Apprentice', count: summary?.apprentice ?? 0, color: theme.colors.apprentice, srsMin: 1, srsMax: 4 },
-    { label: 'Guru', count: summary?.guru ?? 0, color: theme.colors.guru, srsMin: 5, srsMax: 6 },
-    { label: 'Master', count: summary?.master ?? 0, color: theme.colors.master, srsMin: 7, srsMax: 7 },
-    { label: 'Enlightened', count: summary?.enlightened ?? 0, color: theme.colors.enlightened, srsMin: 8, srsMax: 8 },
-    { label: 'Burned', count: summary?.burned ?? 0, color: theme.colors.burned, srsMin: 9, srsMax: 9 },
+    { label: 'Apprentice', count: summary?.apprentice ?? 0, color: colors.apprentice, srsMin: 1, srsMax: 4 },
+    { label: 'Guru', count: summary?.guru ?? 0, color: colors.guru, srsMin: 5, srsMax: 6 },
+    { label: 'Master', count: summary?.master ?? 0, color: colors.master, srsMin: 7, srsMax: 7 },
+    { label: 'Enlightened', count: summary?.enlightened ?? 0, color: colors.enlightened, srsMin: 8, srsMax: 8 },
+    { label: 'Burned', count: summary?.burned ?? 0, color: colors.burned, srsMin: 9, srsMax: 9 },
   ];
   const totalSrs = srsEntries.reduce((total, row) => total + row.count, 0);
-  const actionCardTheme: StudyActionTheme = {
-    surfaceColor: theme.isDark ? '#15141a' : '#fffdf8',
-    borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
-    pillColor: theme.isDark ? '#201e26' : '#f2eee8',
-    mutedColor: theme.colors.mutedText,
-    rippleColor: theme.isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(32, 26, 36, 0.05)',
-  };
   const entranceStyle = reduceMotion
     ? undefined
     : {
@@ -209,155 +197,193 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
           },
         ],
       };
+  const actionGap = 14;
+
+  const panelShadow = {
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.16 : 0.05,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 } as const,
+    elevation: 4,
+  };
+
+  const primaryButtonShadow = {
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.2 : 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 } as const,
+    elevation: 4,
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 14 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isRefreshing} tintColor={theme.colors.kanji} onRefresh={sync} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} tintColor={colors.kanji} onRefresh={sync} />}
       >
-        <Animated.View style={[styles.header, entranceStyle]}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>読路</Text>
-            <Text style={styles.title}>{summary?.username ?? 'Local cache'}</Text>
-            <View style={styles.metaRow}>
+        <Animated.View className="flex-row items-start justify-between gap-4 px-[2px] pt-1.5 pb-1" style={entranceStyle}>
+          <View className="flex-1">
+            <Text className="text-[12px] font-heavy tracking-ultra3 uppercase text-text-muted dark:text-text-muted-dark">読路</Text>
+            <Text className="mt-1.5 text-text dark:text-text-dark text-4xl font-black tracking-tighter">{summary?.username ?? 'Local cache'}</Text>
+            <View className="flex-row flex-wrap gap-2 mt-2.5">
               {summary?.level ? (
                 <TooltipPressable
                   tooltip="Browse subjects at your level"
                   accessibilityHint="Opens subject catalog grouped by type"
                   onPress={() => navigation.navigate('SubjectCatalog', { level: summary.level ?? 1 })}
-                  style={({ pressed }) => [styles.metaPill, pressed && styles.pressed]}
+                  className="rounded-full px-3 py-[7px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)] flex-row items-center gap-1.5"
+                  style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
                 >
-                  <GridIcon color={theme.colors.text} />
-                  <Text style={styles.metaPillText}>{levelText}</Text>
+                  <GridIcon color={colors.text} />
+                  <Text className="text-text dark:text-text-dark text-[12px] font-black tracking-widest">{levelText}</Text>
                 </TooltipPressable>
               ) : (
-                <View style={styles.metaPill}>
-                  <Text style={styles.metaPillText}>{levelText}</Text>
+                <View className="rounded-full px-3 py-[7px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)] flex-row items-center gap-1.5">
+                  <Text className="text-text dark:text-text-dark text-[12px] font-black tracking-widest">{levelText}</Text>
                 </View>
               )}
-              <View style={styles.metaPill}>
-                <Text style={styles.metaPillText}>{summary?.cachedSubjects ?? 0} cached</Text>
+              <View className="rounded-full px-3 py-[7px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)] flex-row items-center gap-1.5">
+                <Text className="text-text dark:text-text-dark text-[12px] font-black tracking-widest">{summary?.cachedSubjects ?? 0} cached</Text>
               </View>
             </View>
           </View>
-          <View style={styles.headerActions}>
+          <View className="flex-row gap-2">
             <TooltipPressable
               tooltip="Search subjects"
               accessibilityHint="Search by Japanese, meaning, or reading"
               onPress={() => navigation.navigate('SubjectSearch')}
-              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+              className="rounded-full w-[42px] h-[42px] items-center justify-center bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+              style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
             >
-              <SearchIcon color={theme.colors.text} />
+              <SearchIcon color={colors.text} />
             </TooltipPressable>
             <TooltipPressable
               tooltip="Settings"
               accessibilityHint="Open app settings"
               onPress={() => navigation.navigate('Settings')}
-              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+              className="rounded-full w-[42px] h-[42px] items-center justify-center bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+              style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
             >
-              <SettingsIcon color={theme.colors.text} />
+              <SettingsIcon color={colors.text} />
             </TooltipPressable>
           </View>
         </Animated.View>
 
-        {isVacation ? <Text style={styles.vacationBanner}>Vacation mode active</Text> : null}
+        {isVacation ? (
+          <Text className="overflow-hidden rounded-lg px-4 py-[13px] bg-warning dark:bg-warning-dark text-white dark:text-[#1d1200] text-[14px] font-black tracking-wider">
+            Vacation mode active
+          </Text>
+        ) : null}
 
         {shouldShowFirstSync ? (
-          <View style={styles.firstSyncPanel} accessibilityLiveRegion="polite">
-            <Text style={styles.panelTitle}>Sync your WaniKani data</Text>
-            <Text style={styles.bodyText}>
+          <View
+            className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border-2 border-kanji gap-[14px]"
+            style={panelShadow}
+            accessibilityLiveRegion="polite"
+          >
+            <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Sync your WaniKani data</Text>
+            <Text className="text-text-muted dark:text-text-muted-dark text-base font-bold">
               Download your local cache before lessons, reviews, search, and subject details unlock. If your account has no available work yet, syncing still confirms your latest status.
             </Text>
-            {activeSyncProgress ? <Text style={styles.bodyText}>{activeSyncProgress.label}</Text> : null}
-            {activeSyncError ? <Text style={styles.errorText} accessibilityRole="alert">{activeSyncError}</Text> : null}
+            {activeSyncProgress ? <Text className="text-text-muted dark:text-text-muted-dark text-base font-bold">{activeSyncProgress.label}</Text> : null}
+            {activeSyncError ? <Text className="text-danger dark:text-danger-dark text-[14px] font-bold" accessibilityRole="alert">{activeSyncError}</Text> : null}
             <Pressable
               disabled={isSyncing}
               accessibilityRole="button"
               accessibilityState={{ disabled: isSyncing, busy: isSyncing }}
               accessibilityHint="Downloads subjects, assignments, reviews, and study data from WaniKani."
               onPress={sync}
-              style={({ pressed }) => [styles.primaryButton, (pressed || isSyncing) && styles.pressed]}
+              className="min-h-[54px] items-center justify-center rounded-xl bg-kanji"
+              style={({ pressed }) => [
+                primaryButtonShadow,
+                (pressed || isSyncing) && { opacity: 0.7, transform: [{ scale: 0.99 }] },
+              ]}
             >
-              <Text style={styles.primaryButtonText}>{isSyncing ? 'Syncing…' : 'Sync WaniKani data'}</Text>
+              <Text className="text-white text-[16px] font-black tracking-wide">{isSyncing ? 'Syncing…' : 'Sync WaniKani data'}</Text>
             </Pressable>
           </View>
         ) : null}
 
-        <Animated.View key={theme.isDark ? 'dark-actions' : 'light-actions'} style={[styles.actionStack, entranceStyle]}>
+        <Animated.View
+          key={isDark ? 'dark-actions' : 'light-actions'}
+          style={[entranceStyle, { alignSelf: 'stretch', width: '100%', flexDirection: isCompact ? 'column' : 'row', gap: 14 }]}
+        >
           <StudyAction
             label="Lessons"
             hint="Unlocked pool"
             value={summary?.availableLessons ?? 0}
-            color={theme.colors.radical}
-            cardTheme={actionCardTheme}
+            color={colors.radical}
             isCompact={isCompact}
             disabled={isVacation}
-            featured
+            reduceMotion={reduceMotion}
             onPress={() => navigation.navigate('LessonSession', {})}
           />
           <StudyAction
             label="Reviews"
             hint="Due now"
             value={summary?.availableReviews ?? 0}
-            color={theme.colors.kanji}
-            cardTheme={actionCardTheme}
+            color={colors.kanji}
             isCompact={isCompact}
             disabled={isVacation}
+            reduceMotion={reduceMotion}
             onPress={() => navigation.navigate('ReviewSession')}
           />
         </Animated.View>
 
         {(summary?.availableLessons ?? 0) > 0 && !isVacation ? (
           <Animated.View style={entranceStyle}>
-            <Pressable onPress={() => navigation.navigate('LessonPicker')} style={({ pressed }) => [styles.pickerButton, pressed && styles.pressed]}>
-              <Text style={styles.pickerButtonText}>Lesson Picker</Text>
+            <Pressable
+              onPress={() => navigation.navigate('LessonPicker')}
+              className="min-h-[48px] items-center justify-center rounded-lg bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
+              style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
+            >
+              <Text className="text-text-muted dark:text-text-muted-dark text-[14px] font-black tracking-wider">Lesson Picker</Text>
             </Pressable>
           </Animated.View>
         ) : null}
 
         {forecast.length > 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Upcoming Reviews</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <View className="flex-row items-center justify-between gap-2.5">
+              <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Upcoming Reviews</Text>
             </View>
             <ReviewForecastChart
               hours={forecast}
-              barColor={theme.colors.kanji}
-              textColor={theme.colors.text}
-              mutedColor={theme.colors.mutedText}
-              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+              barColor={colors.kanji}
+              textColor={colors.text}
+              mutedColor={colors.mutedText}
+              trackColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
             />
           </View>
         ) : null}
 
         {levelProgress.length > 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Current Level</Text>
-              <Text style={styles.panelMeta}>Level {summary?.level}</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <View className="flex-row items-center justify-between gap-2.5">
+              <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Current Level</Text>
+              <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-heavy">Level {summary?.level}</Text>
             </View>
             <LevelProgressChart
               progress={levelProgress}
-              colors={theme.colors}
-              textColor={theme.colors.text}
-              mutedColor={theme.colors.mutedText}
-              trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+              colors={colors}
+              textColor={colors.text}
+              mutedColor={colors.mutedText}
+              trackColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
             />
           </View>
         ) : null}
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>SRS</Text>
-            <Text style={styles.panelMeta}>{totalSrs} active</Text>
+        <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+          <View className="flex-row items-center justify-between gap-2.5">
+            <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">SRS</Text>
+            <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-heavy">{totalSrs} active</Text>
           </View>
           <SrsBar
             entries={srsEntries}
-            textColor={theme.colors.text}
-            mutedColor={theme.colors.mutedText}
-            trackColor={theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
+            textColor={colors.text}
+            mutedColor={colors.mutedText}
+            trackColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)'}
             onEntryPress={(entry) => {
               if (entry.srsMin != null && entry.srsMax != null) {
                 navigation.navigate('SubjectBrowse', {
@@ -371,85 +397,98 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
         </View>
 
         {recentMistakes.length > 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Recent Mistakes</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <View className="flex-row items-center justify-between gap-2.5">
+              <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Recent Mistakes</Text>
               <Pressable
                 onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'recentMistakes' })}
-                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+                className="min-h-[34px] px-[14px] items-center justify-center rounded-full bg-kanji"
+                style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
               >
-                <Text style={styles.inlineButtonText}>Practice</Text>
+                <Text className="text-white text-[13px] font-black tracking-wide">Practice</Text>
               </Pressable>
             </View>
-            <RecentItemList items={recentMistakes} colors={theme.colors} />
+            <RecentItemList items={recentMistakes} colors={colors} />
           </View>
         ) : null}
 
         {allLeeches.length > 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Leeches</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <View className="flex-row items-center justify-between gap-2.5">
+              <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Leeches</Text>
               <Pressable
                 onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'allLeeches' })}
-                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+                className="min-h-[34px] px-[14px] items-center justify-center rounded-full bg-kanji"
+                style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
               >
-                <Text style={styles.inlineButtonText}>Practice</Text>
+                <Text className="text-white text-[13px] font-black tracking-wide">Practice</Text>
               </Pressable>
             </View>
-            <LeechItemList items={allLeeches} colors={theme.colors} />
+            <LeechItemList items={allLeeches} colors={colors} />
           </View>
         ) : null}
 
         {apprenticeLeeches.length > 0 && allLeeches.length === 0 ? (
-          <View style={styles.panel}>
-            <View style={styles.panelHeader}>
-              <Text style={styles.panelTitle}>Apprentice Leeches</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <View className="flex-row items-center justify-between gap-2.5">
+              <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Apprentice Leeches</Text>
               <Pressable
                 onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'apprenticeLeeches' })}
-                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+                className="min-h-[34px] px-[14px] items-center justify-center rounded-full bg-kanji"
+                style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
               >
-                <Text style={styles.inlineButtonText}>Practice</Text>
+                <Text className="text-white text-[13px] font-black tracking-wide">Practice</Text>
               </Pressable>
             </View>
-            <LeechItemList items={apprenticeLeeches} colors={theme.colors} />
+            <LeechItemList items={apprenticeLeeches} colors={colors} />
           </View>
         ) : null}
 
         {burnedCount > 0 || excludedCount > 0 ? (
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Shortcuts</Text>
+          <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+            <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Shortcuts</Text>
             {burnedCount > 0 ? (
               <Pressable
                 onPress={() => navigation.navigate('ReviewSession', { practiceSource: 'burnedItems' })}
-                style={({ pressed }) => [styles.shortcutRow, pressed && styles.pressed]}
+                className="flex-row items-center gap-2.5 pt-2 border-t border-[rgba(128,128,128,0.08)]"
+                style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
               >
-                <View style={[styles.typeDot, { backgroundColor: theme.colors.burned }]} />
-                <Text style={styles.shortcutLabel}>Burned Item Practice</Text>
-                <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{burnedCount}</Text>
+                <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.burned }} />
+                <Text className="flex-1 text-base font-heavy text-text dark:text-text-dark">Burned Item Practice</Text>
+                <Text className="text-[12px] font-bold" style={{ color: colors.mutedText }}>{burnedCount}</Text>
               </Pressable>
             ) : null}
             {excludedCount > 0 ? (
               <Pressable
                 onPress={() => navigation.navigate('SubjectBrowse', { title: 'Excluded Items', excluded: true })}
-                style={({ pressed }) => [styles.shortcutRow, pressed && styles.pressed]}
+                className="flex-row items-center gap-2.5 pt-2 border-t border-[rgba(128,128,128,0.08)]"
+                style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
               >
-                <View style={[styles.typeDot, { backgroundColor: theme.colors.mutedText }]} />
-                <Text style={styles.shortcutLabel}>Excluded Items</Text>
-                <Text style={[styles.shortcutMeta, { color: theme.colors.mutedText }]}>{excludedCount}</Text>
+                <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.mutedText }} />
+                <Text className="flex-1 text-base font-heavy text-text dark:text-text-dark">Excluded Items</Text>
+                <Text className="text-[12px] font-bold" style={{ color: colors.mutedText }}>{excludedCount}</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Sync</Text>
-            <Text style={styles.panelMeta}>{lastSyncedText}</Text>
+        <View className="rounded-[26px] p-[18px] bg-[#fffdf8] dark:bg-[#15141a] border border-[rgba(32,26,36,0.08)] dark:border-[rgba(255,255,255,0.08)] gap-[14px]" style={panelShadow}>
+          <View className="flex-row items-center justify-between gap-2.5">
+            <Text className="text-text dark:text-text-dark text-2xl font-black tracking-tight">Sync</Text>
+            <Text className="text-text-muted dark:text-text-muted-dark text-[13px] font-heavy">{lastSyncedText}</Text>
           </View>
-          <Text style={styles.bodyText}>{syncStatus}</Text>
-          {activeSyncError ? <Text style={styles.errorText}>{activeSyncError}</Text> : null}
-          <Pressable disabled={isRefreshing} onPress={sync} style={({ pressed }) => [styles.primaryButton, (pressed || isRefreshing) && styles.pressed]}>
-            <Text style={styles.primaryButtonText}>{isRefreshing ? 'Syncing...' : 'Sync now'}</Text>
+          <Text className="text-text-muted dark:text-text-muted-dark text-base font-bold">{syncStatus}</Text>
+          {activeSyncError ? <Text className="text-danger dark:text-danger-dark text-[14px] font-bold">{activeSyncError}</Text> : null}
+          <Pressable
+            disabled={isRefreshing}
+            onPress={sync}
+            className="min-h-[54px] items-center justify-center rounded-xl bg-kanji"
+            style={({ pressed }) => [
+              primaryButtonShadow,
+              (pressed || isRefreshing) && { opacity: 0.7, transform: [{ scale: 0.99 }] },
+            ]}
+          >
+            <Text className="text-white text-[16px] font-black tracking-wide">{isRefreshing ? 'Syncing...' : 'Sync now'}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -462,475 +501,182 @@ function StudyAction({
   hint,
   value,
   color,
-  cardTheme,
   isCompact,
   disabled,
-  featured = false,
+  reduceMotion,
   onPress,
 }: {
   label: string;
   hint: string;
   value: number;
   color: string;
-  cardTheme: StudyActionTheme;
   isCompact: boolean;
   disabled: boolean;
-  featured?: boolean;
+  reduceMotion: boolean;
   onPress: () => void;
 }) {
+  const { colors, isDark } = useAppTheme();
   const isDisabled = disabled || value <= 0;
-  const iconColor = isDisabled ? cardTheme.mutedColor : color;
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isDisabled || reduceMotion) {
+      pulse.setValue(1);
+      return;
+    }
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.25, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [isDisabled, reduceMotion, pulse]);
+
+  const cardBg = isDark ? '#15141a' : '#fffdf8';
+  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(32,26,36,0.08)';
+
   return (
     <Pressable
       disabled={isDisabled}
       onPress={onPress}
-      android_ripple={{ color: cardTheme.rippleColor }}
+      android_ripple={{ color: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(32,26,36,0.05)' }}
       accessibilityLabel={`${label}: ${value} available`}
       accessibilityHint={hint}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
-      style={({ pressed }) => [
-        actionStyles.card,
-        featured ? actionStyles.featuredCard : actionStyles.secondaryCard,
-        isCompact && actionStyles.compactCard,
-        {
-          backgroundColor: cardTheme.surfaceColor,
-          borderColor: cardTheme.borderColor,
-          opacity: isDisabled ? 0.5 : pressed ? 0.8 : 1,
-        },
-      ]}
+      style={({ pressed }) => ({
+        flex: isCompact ? 0 : 1,
+        width: isCompact ? '100%' : undefined,
+        minHeight: isCompact ? 150 : 180,
+        borderRadius: 26,
+        backgroundColor: cardBg,
+        borderWidth: 1,
+        borderColor: cardBorder,
+        overflow: 'hidden',
+        opacity: isDisabled ? 0.45 : pressed ? 0.95 : 1,
+        shadowColor: '#000',
+        shadowOpacity: isDark ? 0.22 : 0.07,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 14 },
+        elevation: 6,
+        transform: [{ scale: pressed && !isDisabled ? 0.985 : 1 }],
+      })}
     >
-      <View pointerEvents="none" importantForAccessibility="no" style={[actionStyles.accentMark, { backgroundColor: color }]} />
-      <Text style={[actionStyles.label, { color: cardTheme.mutedColor }]}>{label}</Text>
-      <View style={[actionStyles.statusPill, { backgroundColor: cardTheme.pillColor }]} importantForAccessibility="no">
-        <ArrowIcon color={iconColor} />
-      </View>
-      <View style={actionStyles.actionBody}>
+      {/* Colored top accent strip */}
+      <View
+        style={{
+          height: 4,
+          backgroundColor: isDisabled ? colors.mutedText : color,
+          opacity: isDisabled ? 0.35 : 1,
+        }}
+      />
+
+      {/* Card body */}
+      <View style={{ flex: 1, padding: 18, justifyContent: 'space-between' }}>
+        {/* Label row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text
+            className="text-[11px] leading-[14px] font-black tracking-ultra2 uppercase"
+            style={{ color: colors.mutedText }}
+          >
+            {label}
+          </Text>
+          {!isDisabled && (
+            <Animated.View
+              importantForAccessibility="no"
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 3.5,
+                backgroundColor: color,
+                opacity: pulse,
+                shadowColor: color,
+                shadowOpacity: 0.5,
+                shadowRadius: 4,
+                shadowOffset: { width: 0, height: 0 },
+              }}
+            />
+          )}
+        </View>
+
+        {/* Hero number */}
         <Text
           numberOfLines={1}
-          style={[actionStyles.value, featured && actionStyles.featuredValue, { color }]}
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+          style={{
+            color: isDisabled ? colors.mutedText : color,
+            fontSize: 72,
+            fontWeight: '900',
+            letterSpacing: -2,
+            opacity: isDisabled ? 0.4 : 1,
+          }}
         >
           {value}
         </Text>
-        <Text style={[actionStyles.hint, { color: cardTheme.mutedColor }]}>{hint}</Text>
+
+        {/* Hint row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text className="text-[13px] font-bold tracking-normal" style={{ color: colors.mutedText }}>
+            {hint}
+          </Text>
+          <StudyChevron color={isDisabled ? colors.mutedText : color} />
+        </View>
       </View>
     </Pressable>
   );
 }
 
-function ArrowIcon({ color }: { color: string }) {
+function StudyChevron({ color }: { color: string }) {
   return (
-    <View style={actionStyles.arrowIcon}>
-      <View style={[actionStyles.arrowStem, { backgroundColor: color }]} />
-      <View style={[actionStyles.arrowHeadTop, { backgroundColor: color }]} />
-      <View style={[actionStyles.arrowHeadBottom, { backgroundColor: color }]} />
+    <View style={{ width: 20, height: 12, justifyContent: 'center', alignItems: 'flex-end' }} importantForAccessibility="no">
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRightWidth: 2,
+          borderTopWidth: 2,
+          borderColor: color,
+          borderRadius: 1,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
     </View>
   );
 }
 
 function SettingsIcon({ color }: { color: string }) {
   return (
-    <View style={actionStyles.settingsIcon}>
-      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 16 }]} />
-      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 11 }]} />
-      <View style={[actionStyles.settingsLine, { backgroundColor: color, width: 14 }]} />
+    <View style={{ width: 18, gap: 4, alignItems: 'flex-end' }}>
+      <View style={{ height: 2, borderRadius: 999, backgroundColor: color, width: 16 }} />
+      <View style={{ height: 2, borderRadius: 999, backgroundColor: color, width: 11 }} />
+      <View style={{ height: 2, borderRadius: 999, backgroundColor: color, width: 14 }} />
     </View>
   );
 }
 
 function SearchIcon({ color }: { color: string }) {
   return (
-    <View style={actionStyles.searchIcon}>
-      <View style={[actionStyles.searchCircle, { borderColor: color }]} />
-      <View style={[actionStyles.searchHandle, { backgroundColor: color }]} />
+    <View style={{ width: 18, height: 18, position: 'relative' }}>
+      <View style={{ width: 13, height: 13, borderRadius: 999, borderWidth: 2, borderColor: color, position: 'absolute', top: 0, left: 0 }} />
+      <View style={{ width: 7, height: 2, borderRadius: 999, backgroundColor: color, position: 'absolute', bottom: 1, right: 0, transform: [{ rotate: '45deg' }] }} />
     </View>
   );
 }
 
 function GridIcon({ color }: { color: string }) {
   return (
-    <View style={actionStyles.gridIcon}>
-      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
-      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
-      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
-      <View style={[actionStyles.gridDot, { backgroundColor: color }]} />
+    <View style={{ width: 12, height: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: color }} />
+      <View style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: color }} />
     </View>
   );
 }
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-}
-
-const actionStyles = StyleSheet.create({
-  card: {
-    overflow: 'hidden',
-    borderRadius: 26,
-    borderWidth: 1,
-    padding: 18,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
-  },
-  featuredCard: {
-    flex: 1.65,
-    minHeight: 172,
-    borderRadius: 28,
-  },
-  secondaryCard: {
-    flex: 1,
-    minHeight: 172,
-  },
-  compactCard: {
-    flex: 0,
-    minHeight: 150,
-  },
-  accentMark: {
-    position: 'absolute',
-    left: 18,
-    bottom: 18,
-    width: 28,
-    height: 3,
-    borderRadius: 999,
-  },
-  label: {
-    position: 'absolute',
-    top: 22,
-    left: 18,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.9,
-    lineHeight: 14,
-    textTransform: 'uppercase',
-  },
-  statusPill: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  arrowIcon: {
-    width: 15,
-    height: 12,
-    justifyContent: 'center',
-  },
-  arrowStem: {
-    width: 15,
-    height: 2,
-    borderRadius: 999,
-  },
-  arrowHeadTop: {
-    position: 'absolute',
-    right: -1,
-    top: 2,
-    width: 8,
-    height: 2,
-    borderRadius: 999,
-    transform: [{ rotate: '45deg' }],
-  },
-  arrowHeadBottom: {
-    position: 'absolute',
-    right: -1,
-    bottom: 2,
-    width: 8,
-    height: 2,
-    borderRadius: 999,
-    transform: [{ rotate: '-45deg' }],
-  },
-  actionBody: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingTop: 50,
-    paddingBottom: 12,
-  },
-  value: {
-    fontSize: 40,
-    fontWeight: '900',
-    letterSpacing: -1.6,
-    lineHeight: 48,
-  },
-  featuredValue: {
-    fontSize: 68,
-    lineHeight: 74,
-  },
-  hint: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.1,
-  },
-  settingsIcon: {
-    width: 18,
-    gap: 4,
-    alignItems: 'flex-end',
-  },
-  settingsLine: {
-    height: 2,
-    borderRadius: 999,
-  },
-  searchIcon: {
-    width: 18,
-    height: 18,
-    position: 'relative',
-  },
-  searchCircle: {
-    width: 13,
-    height: 13,
-    borderRadius: 999,
-    borderWidth: 2,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  searchHandle: {
-    width: 7,
-    height: 2,
-    borderRadius: 999,
-    position: 'absolute',
-    bottom: 1,
-    right: 0,
-    transform: [{ rotate: '45deg' }],
-  },
-  gridIcon: {
-    width: 12,
-    height: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gridDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 1,
-  },
-});
-
-function makeStyles(theme: AppTheme, isCompact: boolean) {
-  return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: theme.isDark ? '#0c0b0f' : '#f7f4ef',
-    },
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 28,
-      gap: 14,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: 16,
-      paddingHorizontal: 2,
-      paddingTop: 6,
-      paddingBottom: 4,
-    },
-    headerCopy: {
-      flex: 1,
-    },
-    kicker: {
-      color: theme.colors.mutedText,
-      fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-    },
-    title: {
-      marginTop: 6,
-      color: theme.colors.text,
-      fontSize: 34,
-      lineHeight: 39,
-      fontWeight: '900',
-      letterSpacing: -1.2,
-    },
-    metaRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      marginTop: 10,
-    },
-    metaPill: {
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    metaPillText: {
-      color: theme.colors.text,
-      fontSize: 12,
-      fontWeight: '900',
-      letterSpacing: 0.4,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    iconButton: {
-      borderRadius: 999,
-      width: 42,
-      height: 42,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    pressed: {
-      opacity: 0.7,
-      transform: [{ scale: 0.99 }],
-    },
-    vacationBanner: {
-      overflow: 'hidden',
-      borderRadius: 18,
-      paddingHorizontal: 16,
-      paddingVertical: 13,
-      backgroundColor: theme.colors.warning,
-      color: theme.isDark ? '#1d1200' : '#ffffff',
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 0.3,
-    },
-    actionStack: {
-      flexDirection: isCompact ? 'column' : 'row',
-      gap: 14,
-    },
-    panel: {
-      borderRadius: 26,
-      padding: 18,
-      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.08)',
-      gap: 14,
-      shadowColor: '#000000',
-      shadowOpacity: theme.isDark ? 0.16 : 0.05,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 4,
-    },
-    firstSyncPanel: {
-      borderRadius: 26,
-      padding: 18,
-      backgroundColor: theme.isDark ? '#15141a' : '#fffdf8',
-      borderWidth: 2,
-      borderColor: theme.colors.kanji,
-      gap: 14,
-      shadowColor: '#000000',
-      shadowOpacity: theme.isDark ? 0.16 : 0.05,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 4,
-    },
-    panelHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
-    },
-    panelTitle: {
-      color: theme.colors.text,
-      fontSize: 21,
-      fontWeight: '900',
-      letterSpacing: -0.3,
-    },
-    panelMeta: {
-      color: theme.colors.mutedText,
-      fontSize: 13,
-      fontWeight: '800',
-    },
-    bodyText: {
-      color: theme.colors.mutedText,
-      fontSize: 15,
-      lineHeight: 21,
-      fontWeight: '700',
-    },
-    errorText: {
-      color: theme.colors.danger,
-      fontSize: 14,
-      lineHeight: 20,
-      fontWeight: '700',
-    },
-    primaryButton: {
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 20,
-      backgroundColor: theme.colors.kanji,
-      shadowColor: '#000000',
-      shadowOpacity: theme.isDark ? 0.2 : 0.12,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 4,
-    },
-    primaryButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '900',
-      letterSpacing: 0.2,
-    },
-    pickerButton: {
-      minHeight: 48,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: theme.isDark ? '#201e26' : '#f2eee8',
-      borderWidth: 1,
-      borderColor: theme.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(32, 26, 36, 0.06)',
-    },
-    pickerButtonText: {
-      color: theme.colors.mutedText,
-      fontSize: 14,
-      fontWeight: '900',
-      letterSpacing: 0.3,
-    },
-    inlineButton: {
-      minHeight: 34,
-      paddingHorizontal: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 999,
-      backgroundColor: theme.colors.kanji,
-    },
-    inlineButtonText: {
-      color: '#ffffff',
-      fontSize: 13,
-      fontWeight: '900',
-      letterSpacing: 0.2,
-    },
-    shortcutRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: 'rgba(128, 128, 128, 0.08)',
-    },
-    typeDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 999,
-    },
-    shortcutLabel: {
-      flex: 1,
-      fontSize: 15,
-      fontWeight: '800',
-      color: theme.colors.text,
-    },
-    shortcutMeta: {
-      fontSize: 12,
-      fontWeight: '700',
-    },
-  });
 }

@@ -9,7 +9,7 @@ import {
 
 import { WaniKaniClient } from "../domain/api/WaniKaniClient";
 import { getLastSyncTime, openAppDatabase } from "../domain/db/database";
-import { describeSyncError } from "../domain/db/errorLog";
+import { describeSyncError, logSyncError } from "../domain/db/errorLog";
 import {
 	ensureReviewNotificationChannel,
 	getNotificationPermissionStatus,
@@ -108,8 +108,10 @@ export function AppNavigator() {
 
 		const finishLifecycleSync = beginLifecycleSync();
 		useSyncStore.getState().setSyncError(null);
+
+		let db: Awaited<ReturnType<typeof openAppDatabase>> | null = null;
 		try {
-			const db = await openAppDatabase();
+			db = await openAppDatabase();
 			const hasLocalWrites = await hasPendingWrites(db);
 			const lastSyncTime = await getLastSyncTime(db);
 			const cacheIsStale =
@@ -135,6 +137,9 @@ export function AppNavigator() {
 				useSyncStore.getState().bumpRevision();
 			}
 		} catch (caught) {
+			if (db) {
+				await logSyncError(db, caught, 'lifecycle_foreground').catch(() => {});
+			}
 			await handleSyncError(caught);
 		} finally {
 			finishLifecycleSync();
@@ -166,8 +171,10 @@ export function AppNavigator() {
 		lastPendingFlushAt.current = now;
 
 		const finishLifecycleSync = beginLifecycleSync();
+
+		let db: Awaited<ReturnType<typeof openAppDatabase>> | null = null;
 		try {
-			const db = await openAppDatabase();
+			db = await openAppDatabase();
 			if (!(await hasPendingWrites(db))) {
 				return;
 			}
@@ -179,6 +186,9 @@ export function AppNavigator() {
 			});
 			useSyncStore.getState().bumpRevision();
 		} catch (caught) {
+			if (db) {
+				await logSyncError(db, caught, 'lifecycle_background').catch(() => {});
+			}
 			await handleSyncError(caught);
 		} finally {
 			finishLifecycleSync();
