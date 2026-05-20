@@ -24,11 +24,12 @@ pnpm exec expo install --check       # dependency compatibility check
 
 - There is no lint/formatter script; do not invent one.
 - After code changes, run `pnpm typecheck`. For domain changes, run the matching `*.test.ts` when available; otherwise run `pnpm test`.
+- Jest `testMatch` is `**/*.test.ts` (not `.tsx`). Write component/screen tests as `.test.ts` even when the source is `.tsx`.
 - JS-only UI edits should not require a native rebuild, but stale dev-client output often needs `pnpm start -- --clear` plus app reload. Native/config changes need `pnpm android`/`pnpm ios`; `npx expo prebuild --clean` regenerates native dirs.
 
 ## Runtime/tooling facts
 
-- Node 22, pnpm 9, Expo SDK 55, React Native 0.83.6, Hermes, TypeScript 5.9 strict mode with `noUncheckedIndexedAccess`.
+- Node 22, pnpm 9+, Expo SDK 55, React Native 0.83.6, Hermes, TypeScript 5.9 strict mode with `noUncheckedIndexedAccess`.
 - Jest runs in Node via `ts-jest`; `expo-sqlite` is mapped to `src/test/__mocks__/expo-sqlite.ts` and integration DB tests use `better-sqlite3` through `src/test/sqliteShim.ts`.
 - NativeWind is enabled through `babel.config.js` and `tailwind.config.js` (`darkMode: 'class'`, content: `App.tsx` + `src/**/*.{ts,tsx}`).
 
@@ -61,6 +62,7 @@ pnpm exec expo install --check       # dependency compatibility check
 - For cache resets, delete child rows before `subjects`: `assignments`, `study_materials`, `review_stats`, `audio_urls`, `subject_progress`, `pending_study_materials`.
 - Use `colorForSubjectType()` from `src/theme/subjectColors.ts`; do not duplicate subject-type color switches.
 - Styling is mixed NativeWind `className` plus theme inline styles. Preserve existing local style approach in the file you touch rather than mass-converting.
+- Keyboard-aware bottom UI (e.g. `FloatingReviewPill`) should use `useKeyboardHeight()` from `src/hooks/useKeyboardHeight.ts` on Android, with `softwareKeyboardLayoutMode: "pan"` in `app.json`.
 - Dashboard Lessons/Reviews action cards (`StudyAction` in `src/screens/DashboardScreen.tsx`) use absolute labels with large `tracking-ultra2`; do not add a `right` constraint to the label or it truncates (`LESSO...`, `RE...`). Let the arrow pill paint over overlap.
 - Radical `characters` can be `null`; render `characters ?? ''` and never fall back to `slug` because it leaks the answer.
 - Image-only radicals use `character_images`; prefer PNG, with SVG/CSS fallback via `src/domain/subjects/radicalSvg.ts`.
@@ -78,6 +80,7 @@ pnpm exec expo install --check       # dependency compatibility check
 - `app.json` uses custom scheme `yomiji`, package/bundle `app.yomiji`, and plugins `expo-secure-store`, `expo-sqlite`, `expo-notifications`, `./config-plugins/withPredictiveBackGesture`.
 - `npx expo prebuild --clean` wipes generated `android/` and `ios/`; route Android manifest changes through config plugins, not manual native edits.
 - Expo SDK 55 lacks a native `predictiveBackGestureEnabled` config option; keep using `config-plugins/withPredictiveBackGesture.js` for `android:enableOnBackInvokedCallback="true"`.
+- Android `softwareKeyboardLayoutMode` is `"pan"` (not `"resize"`). Keyboard-aware footers handle their own bottom padding via `useKeyboardHeight()`.
 
 ## Testing notes
 
@@ -92,3 +95,35 @@ pnpm exec expo install --check       # dependency compatibility check
 - `pnpm version:bump` updates `package.json`, `app.json` (`version`, Android `versionCode`, iOS `buildNumber`, runtime versions), and `android/app/build.gradle`, then commits `Release vX.Y.Z` and tags `vX.Y.Z`.
 - Android release workflow runs on `v*` tags or manual dispatch. CI uses Node 22, pnpm 9, Java 17, runs install/typecheck/tests, then `eas build --platform android --profile production --local --output build.apk`.
 - Release APK signing requires `YOMIJI_KEYSTORE_BASE64` and `YOMIJI_KEYSTORE_PASSWORD`; alias is `yomiji`. Release builds fail closed if signing material is missing; debug builds use local debug signing.
+
+## CI build gotchas
+
+### Kotlin daemon memory (Metaspace OOM)
+
+`org.gradle.jvmargs` in `android/gradle.properties` only affects the Gradle daemon. KSP and the Kotlin compiler run in a **separate Kotlin daemon** with its own JVM args. Without `kotlin.daemon.jvmargs`, the Kotlin daemon defaults to ~256m Metaspace, which is far too small for expo-modules-core annotation processing. The CI build will fail with `kspReleaseKotlin: OutOfMemoryError: Metaspace`.
+
+`android/gradle.properties` must contain both:
+```properties
+org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8
+kotlin.daemon.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+```
+
+If the CI runner has limited RAM (e.g. GitHub `ubuntu-latest` = ~7GB on older images), also add swap space via `pierotofy/set-swap-space@master` in the workflow (6GB). Newer `ubuntu-24.04` runners have 15GB; the swap step is a safety net.
+
+### `@babel/plugin-transform-react-jsx` dependency
+
+`babel-preset-expo` requires `@babel/plugin-transform-react-jsx` at build time (for `createReleaseUpdatesResources`), but it is **not** a transitive dependency. It must be an explicit `devDependency`:
+
+```json
+"@babel/plugin-transform-react-jsx": "^7.25.9"
+```
+
+Without it, the release build fails with `[BABEL] Cannot find module '@babel/plugin-transform-react-jsx'`.
+
+### EAS expo-updates channel warning (benign)
+
+The CI build logs a warning about `update.url` being set in `app.json` without an EAS Update channel. This is benign for local builds — EAS Update is simply disabled. No action needed unless the project adopts OTA updates.
+
+### `expo-asset` peer dependency (benign)
+
+`expo doctor` warns about `expo-audio` requiring `expo-asset` as a peer. The module is autolinked at build time regardless, so this is non-fatal. Only add it if the project explicitly imports `expo-asset` directly.
