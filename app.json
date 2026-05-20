@@ -16,7 +16,7 @@
     "android": {
       "package": "app.yomiji",
       "versionCode": 14,
-      "softwareKeyboardLayoutMode": "resize",
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/yomiji.png",
         "backgroundColor": "#f7f4ef"

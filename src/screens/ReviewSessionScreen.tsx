@@ -5,7 +5,6 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
-import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { playVocabularyAudio, stopVocabularyAudio } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase } from '../domain/db/database';
 import { AppSettings } from '../domain/settings/settings';
@@ -20,6 +19,7 @@ import { findBySubjectId } from '../domain/db/studyMaterialRepository';
 import { getSubjectsByIds } from '../domain/db/subjectRepository';
 import { getBurnedItemPracticeQueue, getLeechPracticeQueue, getRecentMistakePracticeQueue, getReviewQueue, queueReviewResult, queueStudyMaterialUpdate, StudyQueueItem } from '../domain/study/studyRepository';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
+import { FloatingReviewPill } from '../components/FloatingReviewPill';
 import { useConfirmLeave } from '../hooks/useConfirmLeave';
 import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
@@ -32,8 +32,6 @@ import { colorForSubjectType } from '../theme/subjectColors';
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewSession'>;
 type Feedback = {
   correct: boolean;
-  message: string;
-  detail: string;
   item: ReviewItem;
   taskType: TaskType;
   subjectFinished: boolean;
@@ -98,6 +96,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
   const sessionRef = useRef<ReviewSession | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const audioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const practiceSource = route.params?.practiceSource;
 
   const settings = useMemo<ReviewSessionSettings>(
@@ -167,6 +166,12 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     stopVocabularyAudio().catch(() => {});
   }, []);
 
+  useEffect(() => () => {
+    if (audioTimerRef.current) {
+      clearTimeout(audioTimerRef.current);
+    }
+  }, []);
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOffline(state.isConnected === false || state.isInternetReachable === false);
@@ -181,7 +186,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     if (!feedback?.item) {
       setSubjectDetailData(null);
       setShowAllDetails(false);
-      setAudioMessage(null);
       return;
     }
 
@@ -225,41 +229,56 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     ? colorForSubjectType(colors, displayItem.subjectType)
     : colors.vocabulary;
   const isComplete = !feedback && (session?.isComplete ?? false);
+  const showPill = displayItem !== null && !isComplete;
+  const isVocabulary = displayItem?.subjectType === 'vocabulary';
   const progress = session
     ? `${Math.min(session.reviewsCompleted + (feedback?.subjectFinished ? 0 : 1), session.totalReviews)}/${session.totalReviews}`
     : '0/0';
   const completedItems = session?.completedItems ?? [];
   const shouldConfirmLeave = session !== null && !isComplete;
-  const { confirmLeave, allowLeavingRef, handleBack, handleCancelLeave, handleConfirmLeave } =
+  const { confirmLeave, allowLeavingRef, handleBack, handleCancelLeave, handleConfirmLeave: rawHandleConfirmLeave } =
     useConfirmLeave(navigation, shouldConfirmLeave);
+
+  const handleConfirmLeave = () => {
+    setAudioMessage(null);
+    rawHandleConfirmLeave();
+  };
 
   const subjectLookup = useMemo(
     () => new Map(queueItems.map((item) => [item.subjectId, item.subject])),
     [queueItems],
   );
 
-  const shouldShowAnkiReveal = ankiMode && !feedback && !ankiRevealed;
-
-  const playAudioForItem = (item: ReviewItem) => {
+  const playAudioForItem = async (item: ReviewItem) => {
     if (item.subjectType !== 'vocabulary') {
       return;
     }
     if (isOffline) {
-      setAudioMessage('Audio streaming is unavailable while offline.');
       return;
     }
 
-    openAppDatabase()
-      .then((db) => playVocabularyAudio(db, item.subjectId, {
+    try {
+      const db = await openAppDatabase();
+      const success = await playVocabularyAudio(db, item.subjectId, {
         interruptBackgroundAudio: appSettings.interruptBackgroundAudio,
         preferredVoiceActorId: appSettings.preferredVoiceActorId,
-      }))
-      .then((played) => {
-        setAudioMessage(played ? null : 'No audio is available for this vocabulary item.');
-      })
-      .catch(() => {
-        setAudioMessage('Audio could not be played. Check your connection and try again.');
       });
+      if (!success) {
+        setAudioMessage('No audio is available for this vocabulary item');
+        if (audioTimerRef.current) {
+          clearTimeout(audioTimerRef.current);
+          audioTimerRef.current = null;
+        }
+        audioTimerRef.current = setTimeout(() => setAudioMessage(null), 3000);
+      }
+    } catch {
+      setAudioMessage('Unable to play audio');
+      if (audioTimerRef.current) {
+        clearTimeout(audioTimerRef.current);
+        audioTimerRef.current = null;
+      }
+      audioTimerRef.current = setTimeout(() => setAudioMessage(null), 3000);
+    }
   };
 
   const maybeAutoplayAudio = (item: ReviewItem, answeredTaskType: TaskType, correct: boolean) => {
@@ -300,10 +319,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     setLastMarkResult(markResult);
     setFeedback({
       correct,
-      message: feedbackTitle(result),
-      detail: correct
-        ? 'Continue to the next prompt.'
-        : correctAnswerText(currentItem, answeredTaskType),
       item: currentItem,
       taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
@@ -322,10 +337,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     setLastMarkResult(markResult);
     setFeedback({
       correct,
-      message: correct ? 'Correct' : 'Incorrect',
-      detail: correct
-        ? 'Continue to the next prompt.'
-        : combinedAnkiAnswerText(currentItem),
       item: currentItem,
       taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
@@ -364,6 +375,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       setAnswer('');
       setLastMarkResult(null);
       setAnkiRevealed(false);
+      setAudioMessage(null);
       session.nextTask();
       setRevision((r) => r + 1);
     } catch (caught) {
@@ -383,8 +395,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     setFeedback({
       ...feedback,
       correct: true,
-      message: 'Correct',
-      detail: 'Answer overridden as correct.',
       subjectFinished: result.subjectFinished,
     });
     setRevision((r) => r + 1);
@@ -404,6 +414,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       setAnswer('');
       setLastMarkResult(null);
       setAnkiRevealed(false);
+      setAudioMessage(null);
       session.nextTask();
       setRevision((r) => r + 1);
     } catch (caught) {
@@ -430,8 +441,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       setFeedback({
         ...feedback,
         correct: true,
-        message: 'Synonym added',
-        detail: `"${answer.trim()}" added as a meaning synonym. Answer marked correct.`,
         subjectFinished: result.subjectFinished,
       });
 
@@ -468,13 +477,14 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
   const handleEndSession = () => {
     setQuickSettingsOpen(false);
+    setAudioMessage(null);
     allowLeavingRef.current = true;
     navigation.goBack();
   };
 
   const enableCheats = settings.enableCheats;
-  const showCheats = enableCheats && feedback && !feedback.correct;
-  const canAddSynonym = showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0;
+  const showCheats = Boolean(enableCheats && feedback && !feedback.correct);
+  const canAddSynonym = Boolean(showCheats && feedback?.taskType === 'meaning' && answer.trim().length > 0);
 
   if (isLoading) {
     return <CenteredMessage label={practiceSource ? 'Loading practice...' : 'Loading reviews...'} />;
@@ -526,6 +536,31 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       keyboardShouldPersistTaps
       keyboardAvoiding
       scrollViewRef={scrollViewRef}
+      footer={
+        <FloatingReviewPill
+          subjectColor={subjectColor}
+          visible={showPill}
+          feedback={feedback}
+          isContinuing={isContinuing}
+          ankiMode={ankiMode}
+          ankiRevealed={ankiRevealed}
+          answerEmpty={!answer.trim()}
+          canWrapUp={session?.canWrapUp ?? false}
+          wrappingUp={session?.wrappingUp ?? false}
+          showCheats={showCheats}
+          canAddSynonym={canAddSynonym}
+          isOffline={isOffline}
+          isVocabulary={isVocabulary}
+          onSubmit={submit}
+          onContinue={continueSession}
+          onAnkiMark={handleAnkiMark}
+          onWrapUp={wrapUp}
+          onPlayAudio={() => displayItem && playAudioForItem(displayItem)}
+          onOverrideCorrect={handleOverrideCorrect}
+          onAskAgainLater={handleAskAgainLater}
+          onAddSynonym={handleAddSynonym}
+        />
+      }
       overlay={
         <ConfirmLeaveBanner
           visible={confirmLeave}
@@ -557,18 +592,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       />
 
       {ankiMode ? (
-        shouldShowAnkiReveal ? (
-          <Pressable
-            onPress={() => setAnkiRevealed(true)}
-            className="min-h-[58px] items-center justify-center rounded-lg border-2 border-dashed bg-surface-elevated dark:bg-surface-elevated-dark"
-            style={({ pressed }) => [
-              { borderColor: subjectColor },
-              pressed && { opacity: 0.58 },
-            ]}
-          >
-            <Text className="text-text dark:text-text-dark text-lg font-heavy">Show Answer</Text>
-          </Pressable>
-        ) : ankiRevealed && !feedback ? (
+        ankiRevealed && !feedback ? (
           <View
             className="rounded-lg border-2 bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1"
             style={{ borderColor: subjectColor }}
@@ -609,153 +633,12 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         />
       )}
 
-      {feedback ? (
-        <View
-          className="rounded-2xl border bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1.5"
-          style={{ borderColor: feedback.correct ? colors.success : colors.danger }}
-        >
-          <Text
-            className="text-lg font-black"
-            style={{ color: feedback.correct ? colors.success : colors.danger }}
-          >
-            {feedback.message}
-          </Text>
-          <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark">
-            {feedback.detail}
-          </Text>
-          {feedback.item.subjectType === 'vocabulary' ? (
-            <>
-              <Pressable
-                disabled={isOffline}
-                onPress={() => playAudioForItem(feedback.item)}
-                className={`self-start mt-1 rounded-full px-[14px] py-2 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark ${isOffline ? 'opacity-60' : ''}`}
-                style={({ pressed }) => pressed ? { opacity: 0.58 } : undefined}
-                accessibilityRole="button"
-                accessibilityLabel={isOffline ? 'Vocabulary audio unavailable offline' : 'Play vocabulary audio'}
-              >
-                <Text className={`text-[13px] font-black ${isOffline ? 'text-text-muted dark:text-text-muted-dark' : 'text-text dark:text-text-dark'}`}>
-                  {isOffline ? 'Audio unavailable offline' : 'Play Audio'}
-                </Text>
-              </Pressable>
-              {audioMessage ? (
-                <Text className="text-text-muted dark:text-text-muted-dark text-[13px] leading-[18px] font-bold">
-                  {audioMessage}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
-        </View>
-      ) : null}
-
-      {ankiMode && ankiRevealed && !feedback ? (
-        <View className="flex-row gap-3">
-          <Pressable
-            onPress={() => handleAnkiMark(false)}
-            className="flex-1 min-h-[54px] items-center justify-center rounded-lg"
-            style={({ pressed }) => [
-              { backgroundColor: colors.danger },
-              pressed && { opacity: 0.58 },
-            ]}
-          >
-            <Text className="text-white text-[16px] font-black">Incorrect</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => handleAnkiMark(true)}
-            className="flex-1 min-h-[54px] items-center justify-center rounded-lg"
-            style={({ pressed }) => [
-              { backgroundColor: colors.success },
-              pressed && { opacity: 0.58 },
-            ]}
-          >
-            <Text className="text-white text-[16px] font-black">Correct</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {!ankiMode ? (
-        showCheats ? (
-          <View className="gap-2.5">
-            <Pressable
-              disabled={isContinuing}
-              onPress={handleOverrideCorrect}
-              className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
-              style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
-            >
-              <Text className="text-text dark:text-text-dark text-base font-heavy">My answer was correct</Text>
-            </Pressable>
-            <Pressable
-              disabled={isContinuing}
-              onPress={handleAskAgainLater}
-              className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
-              style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
-            >
-              <Text className="text-text dark:text-text-dark text-base font-heavy">Try again later</Text>
-            </Pressable>
-            {canAddSynonym ? (
-              <Pressable
-                disabled={isContinuing}
-                onPress={handleAddSynonym}
-                className="min-h-[48px] items-center justify-center rounded-md px-4 bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
-                style={({ pressed }) => (pressed || isContinuing) ? { opacity: 0.58 } : undefined}
-              >
-                <Text className="text-text dark:text-text-dark text-base font-heavy">Add as synonym</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null
-      ) : null}
-
       {error ? (
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>
       ) : null}
 
-      {!ankiMode && (
-        <Pressable
-          disabled={isContinuing || (!feedback && !answer.trim())}
-          onPress={feedback ? continueSession : submit}
-          className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
-          style={({ pressed }) => [
-            { backgroundColor: subjectColor },
-            (pressed || isContinuing || (!feedback && !answer.trim())) && { opacity: 0.58 },
-          ]}
-        >
-          <Text className="text-white text-[16px] font-black">
-            {feedback
-              ? (isContinuing
-                ? 'Saving...'
-                : feedback.correct
-                  ? 'Continue'
-                  : 'Got it wrong')
-              : 'Submit Answer'}
-          </Text>
-        </Pressable>
-      )}
-
-      {ankiMode && feedback && (
-        <Pressable
-          disabled={isContinuing}
-          onPress={continueSession}
-          className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
-          style={({ pressed }) => [
-            { backgroundColor: subjectColor },
-            (pressed || isContinuing) && { opacity: 0.58 },
-          ]}
-        >
-          <Text className="text-white text-[16px] font-black">
-            {isContinuing ? 'Saving...' : 'Continue'}
-          </Text>
-        </Pressable>
-      )}
-
-      {session?.canWrapUp && !session.wrappingUp ? (
-        <Pressable
-          disabled={Boolean(feedback) || isContinuing}
-          onPress={wrapUp}
-          className="min-h-[52px] items-center justify-center rounded-lg px-[18px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark"
-          style={({ pressed }) => (pressed || Boolean(feedback) || isContinuing) ? { opacity: 0.58 } : undefined}
-        >
-          <Text className="text-text dark:text-text-dark text-[16px] font-black">Wrap Up</Text>
-        </Pressable>
+      {audioMessage ? (
+        <Text className="text-text-muted dark:text-text-muted-dark font-heavy">{audioMessage}</Text>
       ) : null}
 
       {session?.wrappingUp ? (
@@ -907,21 +790,6 @@ function wrongCountText(item: ReviewItem) {
   return parts.join(' · ');
 }
 
-function combinedAnkiAnswerText(item: ReviewItem) {
-  const meanings = item.subject.meanings
-    .filter((meaning) => meaning.acceptedAnswer !== false && meaning.type !== 'blacklist')
-    .map((meaning) => meaning.meaning)
-    .join(', ');
-  const readings = item.subject.readings
-    ?.filter((reading) => reading.acceptedAnswer !== false)
-    .map((reading) => reading.reading)
-    .join(', ') ?? '';
-
-  if (!readings) {
-    return `Accepted meanings: ${meanings}`;
-  }
-  return `Accepted meanings: ${meanings}. Accepted readings: ${readings}`;
-}
 
 function InlineReviewDetails({
   item,

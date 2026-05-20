@@ -18,3 +18,5 @@ ios/build/
 *.xcuserstate
 *.apk
 .pi-lens/
+.pi/
+.sem/

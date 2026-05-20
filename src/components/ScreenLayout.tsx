@@ -11,6 +11,7 @@ export function ScreenLayout({
   keyboardAvoiding = false,
   scrollViewRef,
   overlay,
+  footer,
 }: {
   children: ReactNode;
   scrollable?: boolean;
@@ -18,16 +19,33 @@ export function ScreenLayout({
   keyboardAvoiding?: boolean;
   scrollViewRef?: React.RefObject<RNScrollView | null>;
   overlay?: ReactNode;
+  footer?: ReactNode;
 }) {
   if (scrollable) {
     const scrollView = (
       <RNScrollView
         ref={scrollViewRef}
-        contentContainerStyle={{ flexGrow: 1, padding: 20, gap: 18 }}
+        className="flex-1"
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: footer ? 32 : 20,
+          gap: 18,
+        }}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps ? 'handled' : undefined}
       >
         {children}
       </RNScrollView>
+    );
+
+    const bodyContent = footer ? (
+      <View className="flex-1">
+        {scrollView}
+        {footer}
+      </View>
+    ) : (
+      scrollView
     );
 
     const body = keyboardAvoiding ? (
@@ -35,10 +53,10 @@ export function ScreenLayout({
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {scrollView}
+        {bodyContent}
       </KeyboardAvoidingView>
     ) : (
-      scrollView
+      bodyContent
     );
 
     return (
@@ -49,9 +67,18 @@ export function ScreenLayout({
     );
   }
 
+  const bodyContent = footer ? (
+    <View className="flex-1">
+      <View className="flex-1">{children}</View>
+      {footer}
+    </View>
+  ) : (
+    <View className="flex-1">{children}</View>
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      <View className="flex-1">{children}</View>
+      {bodyContent}
       {overlay}
     </SafeAreaView>
   );

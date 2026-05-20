@@ -1,3 +1,4 @@
+/** Discriminates whether the answer is being checked against a reading or meaning task. */
 export type TaskType = 'reading' | 'meaning';
 export type KanaAlphabet = 'hiragana' | 'katakana';
 
@@ -6,6 +7,7 @@ export type TextRange = {
   length: number;
 };
 
+/** Represents the outcome of an answer check. Each variant carries the data needed to provide feedback to the user. */
 export type AnswerCheckResult =
   | { kind: 'precise' }
   | { kind: 'imprecise' }
@@ -15,12 +17,14 @@ export type AnswerCheckResult =
   | { kind: 'isReadingButWantMeaning' }
   | { kind: 'incorrect' };
 
+/** A possible meaning match for a subject. Tracks whether the user's answer maps to a primary, secondary, or blacklisted meaning, and whether it was accepted. */
 export type MeaningCandidate = {
   meaning: string;
   type?: 'primary' | 'secondary' | 'auxiliary_whitelist' | 'blacklist' | string;
   acceptedAnswer?: boolean;
 };
 
+/** A possible reading match for a subject. Indicates the reading text, whether it is a primary/alternate reading, the reading type (onyomi/kunyomi/nanori), and whether it was accepted. */
 export type ReadingCandidate = {
   reading: string;
   primary?: boolean;
