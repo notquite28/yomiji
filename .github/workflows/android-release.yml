@@ -28,6 +28,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 6
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm typecheck
