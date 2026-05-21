@@ -18,7 +18,12 @@ export function ReviewForecastChart({
   const visible = hours.slice(0, 25);
   const currentHour = new Date().getHours();
   const maxCount = Math.max(1, ...visible.map((h) => h.count));
-  const nowIso = new Date().toISOString().slice(0, 13) + ':00:00';
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hour = String(now.getHours()).padStart(2, '0');
+  const nowIso = `${year}-${month}-${day}T${hour}:00:00`;
   const totalUpcoming = visible.reduce((sum, h) => sum + h.count, 0);
 
   return (

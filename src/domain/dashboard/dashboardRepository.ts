@@ -54,7 +54,7 @@ export async function getReviewForecast(db: AppDatabase, hours = 48): Promise<Re
   const now = new Date();
   const rows = await db.getAllAsync<{ bucket: string; value: number }>(
     `SELECT
-       strftime('%Y-%m-%dT%H:00:00', available_at) AS bucket,
+       strftime('%Y-%m-%dT%H:00:00', available_at, 'localtime') AS bucket,
        COUNT(*) AS value
      FROM assignments
      WHERE srs_stage BETWEEN 1 AND 8
@@ -71,7 +71,11 @@ export async function getReviewForecast(db: AppDatabase, hours = 48): Promise<Re
   const result: ReviewForecastHour[] = [];
   for (let i = 0; i <= hours; i++) {
     const hourDate = new Date(now.getTime() + i * 3600_000);
-    const key = hourDate.toISOString().slice(0, 13) + ':00:00';
+    const year = String(hourDate.getFullYear());
+    const month = String(hourDate.getMonth() + 1).padStart(2, '0');
+    const day = String(hourDate.getDate()).padStart(2, '0');
+    const hour = String(hourDate.getHours()).padStart(2, '0');
+    const key = `${year}-${month}-${day}T${hour}:00:00`;
     result.push({ hour: key, count: byHour.get(key) ?? 0 });
   }
   return result;
