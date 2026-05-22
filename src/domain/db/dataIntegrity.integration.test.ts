@@ -220,6 +220,23 @@ describe('putStudyMaterials filtering', () => {
     expect(materials).toHaveLength(1);
     expect(materials[0]!.subject_id).toBe(500);
   });
+
+  it('updates existing study material when remote id changes for the same subject', async () => {
+    const vocab = makeVocabulary({ id: 500 });
+    await putSubjects(db, [vocab]);
+
+    const initialMaterial = makeStudyMaterial(500, { id: 800, subject_id: 500, meaning_synonyms: ['old'] });
+    const updatedMaterial = makeStudyMaterial(500, { id: 801, subject_id: 500, meaning_synonyms: ['new'] });
+
+    await putStudyMaterials(db, [initialMaterial]);
+    await putStudyMaterials(db, [updatedMaterial]);
+
+    const materials = await db.getAllAsync<{ id: number; subject_id: number; payload: string }>('SELECT id, subject_id, payload FROM study_materials');
+    expect(materials).toHaveLength(1);
+    expect(materials[0]!.id).toBe(801);
+    expect(materials[0]!.subject_id).toBe(500);
+    expect(JSON.parse(materials[0]!.payload).data.meaning_synonyms).toEqual(['new']);
+  });
 });
 
 // ── resetLocalData ────────────────────────────────────────────────────────────

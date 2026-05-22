@@ -206,18 +206,36 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
         continue;
       }
 
-      await db.runAsync(
-        `INSERT INTO study_materials (id, subject_id, payload, updated_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           subject_id = excluded.subject_id,
-           payload = excluded.payload,
-           updated_at = excluded.updated_at`,
-        studyMaterial.id,
+      const existing = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM study_materials WHERE subject_id = ?',
         studyMaterial.data.subject_id,
-        JSON.stringify(studyMaterial),
-        studyMaterial.data_updated_at ?? null,
       );
+
+      if (existing) {
+        await db.runAsync(
+          `UPDATE study_materials
+           SET id = ?, payload = ?, updated_at = ?
+           WHERE subject_id = ?`,
+          studyMaterial.id,
+          JSON.stringify(studyMaterial),
+          studyMaterial.data_updated_at ?? null,
+          studyMaterial.data.subject_id,
+        );
+      } else {
+        await db.runAsync(
+          `INSERT INTO study_materials (id, subject_id, payload, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             subject_id = excluded.subject_id,
+             payload = excluded.payload,
+             updated_at = excluded.updated_at`,
+          studyMaterial.id,
+          studyMaterial.data.subject_id,
+          JSON.stringify(studyMaterial),
+          studyMaterial.data_updated_at ?? null,
+        );
+      }
+
       saved += 1;
       reportSaveProgress(saved, studyMaterials.length, onProgress);
     }
