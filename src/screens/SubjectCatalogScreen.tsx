@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LiquidGlassButton } from '../components/LiquidGlassButton';
 import { openAppDatabase } from '../domain/db/database';
 import { SubjectListRow, getSubjectsByLevel } from '../domain/db/subjectRepository';
 import { RootStackParamList } from '../navigation/types';
@@ -43,14 +44,14 @@ export function SubjectCatalogScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
-      <Pressable
+      <LiquidGlassButton
+        label="Back"
         onPress={() => navigation.goBack()}
-        className="self-start rounded-full px-[13px] py-[9px] mx-5 mt-3 bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
-        accessibilityRole="button"
         accessibilityLabel="Go back"
-      >
-        <Text className="text-text dark:text-text-dark font-black">Back</Text>
-      </Pressable>
+        className="self-start mx-5 mt-3"
+        style={{ paddingHorizontal: 13, paddingVertical: 9 }}
+        contentClassName="font-black"
+      />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 28, gap: 18 }}>
         <Text className="text-4xl font-black tracking-tighter text-text dark:text-text-dark">
           Level {level}

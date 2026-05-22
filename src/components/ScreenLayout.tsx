@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView as RNScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TooltipPressable } from './TooltipPressable';
+import { LiquidGlassButton } from './LiquidGlassButton';
 
 export function ScreenLayout({
   children,
@@ -134,32 +134,27 @@ export function SessionHeader({
 }) {
   return (
     <View className="flex-row items-center justify-between">
-      <Pressable
+      <LiquidGlassButton
+        label="Back"
         onPress={onBack}
-        className="rounded-full px-3.5 py-2.5 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
-        style={({ pressed }) => {
-          if (pressed) return { opacity: 0.58 };
-          if (dimmed) return { opacity: 0.35 };
-          return undefined;
-        }}
-        accessibilityRole="button"
+        disabled={dimmed}
         accessibilityLabel="Go back"
-      >
-        <Text className="text-text dark:text-text-dark font-black">Back</Text>
-      </Pressable>
+        style={{ paddingHorizontal: 14, paddingVertical: 10, minHeight: 38, justifyContent: 'center' }}
+        contentClassName="font-black"
+      />
       <Text className="text-text-muted dark:text-text-muted-dark font-black">
         {progress}
       </Text>
       {onSettings ? (
-        <TooltipPressable
+        <LiquidGlassButton
           tooltip="Quick settings"
           accessibilityHint="Wrap up, end session, or change answer mode"
           onPress={onSettings}
           accessibilityLabel="Quick settings"
-          className="rounded-full w-[38px] h-[38px] items-center justify-center bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
+          style={{ width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }}
         >
           <Text className="text-text dark:text-text-dark text-lg">⚙</Text>
-        </TooltipPressable>
+        </LiquidGlassButton>
       ) : (
         <View className="w-[38px]" />
       )}

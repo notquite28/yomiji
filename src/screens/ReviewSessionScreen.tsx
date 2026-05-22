@@ -3,7 +3,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { AnswerCheckResult, checkAnswer, TaskType } from '../domain/answers/answerChecker';
+import { checkAnswer, TaskType } from '../domain/answers/answerChecker';
+import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { playVocabularyAudio, stopVocabularyAudio } from '../domain/audio/vocabularyAudio';
 import { openAppDatabase } from '../domain/db/database';
@@ -27,6 +28,7 @@ import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/AppThemeProvider';
+import { withAlpha } from '../theme/colorUtils';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewSession'>;
@@ -35,6 +37,8 @@ type Feedback = {
   item: ReviewItem;
   taskType: TaskType;
   subjectFinished: boolean;
+  message: string;
+  detail: string;
 };
 
 type PracticeSource = NonNullable<RootStackParamList['ReviewSession']>['practiceSource'];
@@ -72,7 +76,7 @@ function emptyStateLabel(source: PracticeSource) {
 }
 
 export function ReviewSessionScreen({ navigation, route }: Props) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const [queueItems, setQueueItems] = useState<StudyQueueItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -322,6 +326,10 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       item: currentItem,
       taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
+      message: feedbackTitle(result),
+      detail: correct
+        ? 'Nice work — continue to the next prompt.'
+        : correctAnswerText(currentItem, answeredTaskType),
     });
     maybeAutoplayAudio(currentItem, answeredTaskType, correct);
     setRevision((r) => r + 1);
@@ -340,6 +348,10 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       item: currentItem,
       taskType: answeredTaskType,
       subjectFinished: markResult.subjectFinished,
+      message: correct ? 'Correct' : 'Incorrect',
+      detail: correct
+        ? 'Nice work — continue to the next prompt.'
+        : correctAnswerText(currentItem, answeredTaskType),
     });
     maybeAutoplayAudio(currentItem, answeredTaskType, correct);
     setAnkiRevealed(false);
@@ -396,6 +408,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       ...feedback,
       correct: true,
       subjectFinished: result.subjectFinished,
+      message: 'Marked correct',
+      detail: 'Nice work — continue to the next prompt.',
     });
     setRevision((r) => r + 1);
   };
@@ -442,6 +456,8 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         ...feedback,
         correct: true,
         subjectFinished: result.subjectFinished,
+        message: 'Synonym added',
+        detail: 'Your answer was saved as a synonym and marked correct.',
       });
 
       const item = session.currentItem ?? feedback.item;
@@ -529,6 +545,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     .map((r) => r.reading)
     .join(', ') ?? '';
   const showsReadingInAnki = Boolean(acceptedReadings);
+  const feedbackColor = feedback ? (feedback.correct ? colors.success : colors.danger) : null;
 
   return (
     <ScreenLayout
@@ -632,6 +649,23 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           onSubmitEditing={submit}
         />
       )}
+
+      {feedback && feedbackColor ? (
+        <View
+          className="rounded-2xl border p-[14px] gap-1"
+          style={{
+            borderColor: feedbackColor,
+            backgroundColor: withAlpha(feedbackColor, isDark ? 0.16 : 0.08),
+          }}
+        >
+          <Text className="text-xl font-black" style={{ color: feedbackColor }}>
+            {feedback.message}
+          </Text>
+          <Text className="text-base font-bold text-text dark:text-text-dark">
+            {feedback.detail}
+          </Text>
+        </View>
+      ) : null}
 
       {error ? (
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>

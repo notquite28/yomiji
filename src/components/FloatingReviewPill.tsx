@@ -1,12 +1,12 @@
-import { BlurTargetView, BlurView } from 'expo-blur';
+import { LiquidGlassView, isLiquidGlassSupported } from '@callstack/liquid-glass';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 
 import { TooltipPressable } from './TooltipPressable';
 import { useKeyboardHeight } from '../hooks/useKeyboardHeight';
 import { useAppTheme } from '../theme/AppThemeProvider';
+import { compositeAlpha, readableOnColor, withAlpha } from '../theme/colorUtils';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -70,17 +70,15 @@ export function FloatingReviewPill({
 }: Props) {
   const { colors, isDark } = useAppTheme();
   const keyboardHeight = useKeyboardHeight();
-  const blurTargetRef = useRef<View>(null);
 
-  const cardBg = isDark ? 'rgba(13, 11, 18, 0.76)' : 'rgba(255, 255, 255, 0.38)';
-  const borderColor = feedback
-    ? feedback.correct
-      ? colors.success
-      : colors.danger
-    : isDark
-      ? 'rgba(255,255,255,0.12)'
-      : 'rgba(255,255,255,0.28)';
-  const baseColor = isDark ? '#05040a' : '#fff8ee';
+  const accentColor = feedback ? (feedback.correct ? colors.success : colors.danger) : subjectColor;
+  const tintColor = withAlpha(accentColor, feedback ? (isDark ? 0.22 : 0.12) : (isDark ? 0.14 : 0.08));
+  const glassBg = isDark ? 'rgba(32, 30, 38, 0.34)' : 'rgba(255, 255, 255, 0.78)';
+  const glassBorder = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(32,26,36,0.22)';
+  const fallbackBg = isDark ? 'rgba(32, 30, 38, 0.72)' : 'rgba(255, 255, 255, 0.88)';
+  const fallbackBorder = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(32,26,36,0.28)';
+  const pillBg = isLiquidGlassSupported ? glassBg : fallbackBg;
+  const effectivePillBg = compositeAlpha(pillBg, colors.background);
 
   if (!visible) {
     return null;
@@ -112,76 +110,42 @@ export function FloatingReviewPill({
       style={{ paddingBottom: bottomPadding }}
     >
       <AnimatedView layout={pillMotion()}>
-        <AnimatedView
-          className="overflow-hidden rounded-full"
-          layout={pillMotion()}
-          style={{
-            backgroundColor: cardBg,
-            borderWidth: 1,
-            borderColor,
-          }}
-        >
-          <BlurTargetView ref={blurTargetRef} style={StyleSheet.absoluteFill}>
-            <View style={StyleSheet.absoluteFill} collapsable={false}>
-              <View
-                className="absolute inset-0"
-                style={{ backgroundColor: baseColor }}
-              />
-              <View
-                className="absolute h-[80px] w-[180px] rounded-full"
-                style={{
-                  backgroundColor: subjectColor,
-                  opacity: isDark ? 0.3 : 0.45,
-                  top: -10,
-                  left: '50%',
-                  marginLeft: -90,
-                }}
-              />
-              <View
-                className="absolute left-2 top-1.5 h-[24px] w-[24px] rounded-full"
-                style={{ backgroundColor: subjectColor, opacity: isDark ? 0.15 : 0.22 }}
-              />
-            </View>
-          </BlurTargetView>
-
-          <BlurView
-            blurTarget={blurTargetRef}
-            intensity={60}
-            blurReductionFactor={2}
-            tint={isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
-            blurMethod={
-              Platform.OS === 'android' && (Platform.Version as number) >= 31
-                ? 'dimezisBlurViewSdk31Plus'
-                : undefined
-            }
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-
-          {feedback && (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  backgroundColor: feedback.correct ? colors.success : colors.danger,
-                  opacity: 0.08,
-                  borderRadius: 9999,
-                },
-              ]}
-              pointerEvents="none"
-            />
-          )}
-
-          <AnimatedView
-            className="flex-row items-center justify-between px-5 py-2.5"
-            layout={controlMotion()}
+        <AnimatedView layout={pillMotion()}>
+          <LiquidGlassView
+            interactive
+            effect={isDark ? 'regular' : 'clear'}
+            colorScheme={isDark ? 'dark' : 'light'}
+            tintColor={tintColor}
+            style={[
+              styles.pillGlass,
+              {
+                backgroundColor: glassBg,
+                borderWidth: 1,
+                borderColor: glassBorder,
+                shadowColor: '#000',
+                shadowOpacity: isDark ? 0.18 : 0.12,
+                shadowRadius: 14,
+                shadowOffset: { width: 0, height: 7 },
+                elevation: 4,
+              },
+              !isLiquidGlassSupported && {
+                backgroundColor: fallbackBg,
+                borderWidth: 1,
+                borderColor: fallbackBorder,
+              },
+            ]}
           >
+            <AnimatedView
+              className="flex-row items-center justify-between px-5 py-2.5"
+              layout={controlMotion()}
+            >
             {isVocabulary && feedback && (
               <AnimatedIconButton
                 icon="play"
                 label={isOffline ? 'Audio unavailable offline' : 'Play audio'}
                 onPress={onPlayAudio}
                 disabled={disabled || isOffline}
+                effectivePillBg={effectivePillBg}
               />
             )}
 
@@ -192,12 +156,14 @@ export function FloatingReviewPill({
                   label="Try again later"
                   onPress={onAskAgainLater}
                   disabled={disabled}
+                  effectivePillBg={effectivePillBg}
                 />
                 <AnimatedIconButton
                   icon="shield-checkmark"
                   label="My answer was correct"
                   onPress={onOverrideCorrect}
                   disabled={disabled}
+                  effectivePillBg={effectivePillBg}
                 />
                 {canAddSynonym && (
                   <AnimatedIconButton
@@ -205,13 +171,14 @@ export function FloatingReviewPill({
                     label="Add as synonym"
                     onPress={onAddSynonym}
                     disabled={disabled}
+                    effectivePillBg={effectivePillBg}
                   />
                 )}
               </>
             )}
 
             {canWrapUp && !wrappingUp && !feedback && (
-              <AnimatedIconButton icon="timer-outline" label="Wrap up" onPress={onWrapUp} disabled={disabled} />
+              <AnimatedIconButton icon="timer-outline" label="Wrap up" onPress={onWrapUp} disabled={disabled} effectivePillBg={effectivePillBg} />
             )}
 
             {showAnkiMarks ? (
@@ -222,6 +189,7 @@ export function FloatingReviewPill({
                   onPress={() => onAnkiMark(false)}
                   bgColor={colors.danger}
                   disabled={disabled}
+                  effectivePillBg={effectivePillBg}
                 />
                 <AnimatedIconButton
                   icon="checkmark"
@@ -229,6 +197,7 @@ export function FloatingReviewPill({
                   onPress={() => onAnkiMark(true)}
                   bgColor={colors.success}
                   disabled={disabled}
+                  effectivePillBg={effectivePillBg}
                 />
               </>
             ) : (
@@ -237,11 +206,14 @@ export function FloatingReviewPill({
                 label={primaryLabel}
                 onPress={feedback ? onContinue : onSubmit}
                 disabled={disabled || (!feedback && !ankiMode && answerEmpty)}
-                bgColor={subjectColor}
+                bgColor={accentColor}
                 size="lg"
+                effectivePillBg={effectivePillBg}
+                iconColor={feedback ? readableOnColor(effectivePillBg) : undefined}
               />
             )}
-          </AnimatedView>
+            </AnimatedView>
+          </LiquidGlassView>
         </AnimatedView>
       </AnimatedView>
     </AnimatedView>
@@ -255,6 +227,8 @@ function IconButton({
   disabled,
   bgColor,
   size = 'md',
+  effectivePillBg,
+  iconColor: iconColorOverride,
 }: {
   icon: IoniconsName;
   label: string;
@@ -262,12 +236,20 @@ function IconButton({
   disabled?: boolean;
   bgColor?: string;
   size?: 'md' | 'lg';
+  effectivePillBg?: string;
+  iconColor?: string;
 }) {
   const { colors, isDark } = useAppTheme();
 
   const hasBgColor = !!bgColor;
-  const frostedBg = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.28)';
-  const frostedBorder = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.42)';
+  const frostedBg = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(32,26,36,0.18)';
+  const frostedBorder = isDark ? 'rgba(255,255,255,0.32)' : 'rgba(32,26,36,0.30)';
+  const disabledColoredBg = bgColor ? withAlpha(bgColor, isDark ? 0.45 : 0.40) : undefined;
+  const disabledColoredBorder = bgColor ? withAlpha(bgColor, isDark ? 0.55 : 0.55) : undefined;
+  const resolvedBg = disabled ? (disabledColoredBg ?? bgColor) : bgColor;
+  const iconColor = iconColorOverride ?? (hasBgColor
+    ? readableOnColor(resolvedBg, effectivePillBg)
+    : colors.text);
 
   return (
     <TooltipPressable
@@ -277,16 +259,19 @@ function IconButton({
       className={`rounded-full items-center justify-center ${size === 'lg' ? 'w-12 h-12' : 'w-10 h-10'}`}
       style={({ pressed }) => [
         hasBgColor
-          ? { backgroundColor: bgColor }
+          ? disabled
+            ? { backgroundColor: disabledColoredBg, borderWidth: 1, borderColor: disabledColoredBorder }
+            : { backgroundColor: bgColor }
           : { backgroundColor: frostedBg, borderWidth: 1, borderColor: frostedBorder },
-        (pressed || disabled) ? { opacity: 0.5 } : undefined,
+        pressed ? { opacity: 0.5 } : undefined,
+        disabled && !hasBgColor ? { opacity: 0.5 } : undefined,
       ]}
       accessibilityLabel={label}
     >
       <Ionicons
         name={icon}
         size={size === 'lg' ? 22 : 18}
-        color={hasBgColor ? '#fff' : colors.text}
+        color={iconColor}
       />
     </TooltipPressable>
   );
@@ -299,6 +284,8 @@ function AnimatedIconButton({
   disabled,
   bgColor,
   size = 'md',
+  effectivePillBg,
+  iconColor,
 }: {
   icon: IoniconsName;
   label: string;
@@ -306,6 +293,8 @@ function AnimatedIconButton({
   disabled?: boolean;
   bgColor?: string;
   size?: 'md' | 'lg';
+  effectivePillBg?: string;
+  iconColor?: string;
 }) {
   return (
     <AnimatedView
@@ -321,7 +310,17 @@ function AnimatedIconButton({
         disabled={disabled}
         bgColor={bgColor}
         size={size}
+        effectivePillBg={effectivePillBg}
+        iconColor={iconColor}
       />
     </AnimatedView>
   );
 }
+
+
+const styles = StyleSheet.create({
+  pillGlass: {
+    borderRadius: 9999,
+    overflow: 'hidden',
+  },
+});

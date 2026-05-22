@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LiquidGlassButton } from './LiquidGlassButton';
 import { useSettingsStore } from '../domain/settings/settingsStore';
 import { useAppTheme } from '../theme/AppThemeProvider';
 
@@ -91,14 +92,13 @@ export function ReviewQuickSettings({
             Quick Settings
           </Text>
           <View className="w-[88px] items-end">
-            <Pressable
+            <LiquidGlassButton
+              label="Done"
               onPress={onClose}
-              className="min-h-[38px] rounded-full px-4 items-center justify-center bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
-              accessibilityRole="button"
               accessibilityLabel="Close quick settings"
-            >
-              <Text className="text-text dark:text-text-dark font-black">Done</Text>
-            </Pressable>
+              style={{ minHeight: 38, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' }}
+              contentClassName="font-black"
+            />
           </View>
         </View>
 

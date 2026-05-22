@@ -1,8 +1,8 @@
-import { BlurTargetView, BlurView } from 'expo-blur';
+import { LiquidGlassView, isLiquidGlassSupported } from '@callstack/liquid-glass';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { WaniKaniClient } from '../domain/api/WaniKaniClient';
@@ -26,12 +26,14 @@ import { describeSyncError, logSyncError } from '../domain/db/errorLog';
 import { isSyncAuthError, runIncrementalSync, SyncProgress } from '../domain/sync/syncService';
 import { useSyncStore } from '../domain/sync/syncStore';
 import { RecentItemList, LeechItemList } from '../components/DashboardItemList';
+import { LiquidGlassButton } from '../components/LiquidGlassButton';
 import { LevelProgressChart } from '../components/LevelProgressChart';
 import { ReviewForecastChart } from '../components/ReviewForecastChart';
 import { SrsBar } from '../components/SrsBar';
 import { TooltipPressable } from '../components/TooltipPressable';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/AppThemeProvider';
+import { withAlpha } from '../theme/colorUtils';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'> & {
   apiToken: string;
@@ -86,30 +88,46 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
     }).start();
   }, [entrance, reduceMotion]);
 
-  const refreshSummary = useCallback(async () => {
-    try {
-      const db = await openAppDatabase();
-      const [s, f, lp, rm, al, allL, bc, ec] = await Promise.all([
-        getDashboardSummary(db),
-        getReviewForecast(db, 24),
-        getCurrentLevelProgress(db),
-        getRecentMistakes(db, 5),
-        getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
-        getLeechedItems(db, { limit: 5 }),
-        getBurnedItemCount(db),
-        getExcludedItemCount(db),
-      ]);
-      setSummary(s);
-      setForecast(f);
-      setLevelProgress(lp);
-      setRecentMistakes(rm);
-      setApprenticeLeeches(al);
-      setAllLeeches(allL);
-      setBurnedCount(bc);
-      setExcludedCount(ec);
-    } finally {
-      setHasLoadedSummary(true);
+  const refreshSummaryInFlight = useRef<Promise<void> | null>(null);
+  const refreshSummary = useCallback(() => {
+    if (refreshSummaryInFlight.current) {
+      return refreshSummaryInFlight.current;
     }
+
+    const promise = (async () => {
+      try {
+        const db = await openAppDatabase();
+
+        // Avoid overlapping refreshes (focus, sync checkpoint, pull-to-refresh).
+        // Within a single refresh, fetch dashboard reads in parallel to keep the
+        // UI snappy without fully serializing the dashboard.
+        const [s, f, lp, rm, al, allL, bc, ec] = await Promise.all([
+          getDashboardSummary(db),
+          getReviewForecast(db, 24),
+          getCurrentLevelProgress(db),
+          getRecentMistakes(db, 5),
+          getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
+          getLeechedItems(db, { limit: 5 }),
+          getBurnedItemCount(db),
+          getExcludedItemCount(db),
+        ]);
+
+        setSummary(s);
+        setForecast(f);
+        setLevelProgress(lp);
+        setRecentMistakes(rm);
+        setApprenticeLeeches(al);
+        setAllLeeches(allL);
+        setBurnedCount(bc);
+        setExcludedCount(ec);
+      } finally {
+        setHasLoadedSummary(true);
+        refreshSummaryInFlight.current = null;
+      }
+    })();
+
+    refreshSummaryInFlight.current = promise;
+    return promise;
   }, []);
 
   useFocusEffect(
@@ -250,24 +268,22 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
             </View>
           </View>
           <View className="flex-row gap-2">
-            <TooltipPressable
+            <LiquidGlassButton
               tooltip="Search subjects"
               accessibilityHint="Search by Japanese, meaning, or reading"
               onPress={() => navigation.navigate('SubjectSearch')}
-              className="rounded-full w-[42px] h-[42px] items-center justify-center bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
-              style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
+              style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}
             >
               <SearchIcon color={colors.text} />
-            </TooltipPressable>
-            <TooltipPressable
+            </LiquidGlassButton>
+            <LiquidGlassButton
               tooltip="Settings"
               accessibilityHint="Open app settings"
               onPress={() => navigation.navigate('Settings')}
-              className="rounded-full w-[42px] h-[42px] items-center justify-center bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
-              style={({ pressed }) => pressed ? { opacity: 0.7, transform: [{ scale: 0.99 }] } : undefined}
+              style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}
             >
               <SettingsIcon color={colors.text} />
-            </TooltipPressable>
+            </LiquidGlassButton>
           </View>
         </Animated.View>
 
@@ -496,8 +512,10 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
 }
 
 const styles = StyleSheet.create({
-  blurBackground: {
-    ...StyleSheet.absoluteFillObject,
+  studyActionGlass: {
+    borderRadius: 26,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
   },
 });
 
@@ -521,57 +539,27 @@ function StudyAction({
   const { colors, isDark } = useAppTheme();
   const isDisabled = disabled || value <= 0;
   const iconColor = isDisabled ? colors.mutedText : color;
-  const blurTargetRef = useRef<View | null>(null);
 
-  const cardBg = isDark ? 'rgba(13, 11, 18, 0.76)' : 'rgba(255, 255, 255, 0.38)';
-  const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.28)';
-  const tint = isDark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight';
-  const baseColor = isDark ? '#05040a' : '#fff8ee';
-  const highlightSheen = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.15)';
-  const highlightRim = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.38)';
+  const tintColor = withAlpha(color, isDisabled ? (isDark ? 0.08 : 0.04) : (isDark ? 0.16 : 0.08));
+  const fallbackBg = isDark ? 'rgba(32, 30, 38, 0.72)' : 'rgba(255, 255, 255, 0.82)';
+  const fallbackBorder = isDark ? 'rgba(255,255,255,0.16)' : 'rgba(32,26,36,0.10)';
   const labelColor = isDark ? '#d8cce0' : '#6f6574';
   const hintColor = isDark ? '#9e8eab' : '#8a7d92';
   const numberColor = isDisabled ? hintColor : color;
 
   return (
     <View
-      className="overflow-hidden rounded-[26px]"
       style={{
         flexGrow: isCompact ? 0 : 1,
         flexShrink: isCompact ? 0 : 1,
         flexBasis: isCompact ? 'auto' : 0,
         alignSelf: isCompact ? 'stretch' : undefined,
         width: isCompact ? '100%' : undefined,
+        minWidth: 0,
         minHeight: isCompact ? 150 : 172,
-        backgroundColor: cardBg,
-        borderWidth: 1,
-        borderColor,
-        shadowColor: '#000',
-        shadowOpacity: isDark ? 0.16 : 0.05,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 4,
         opacity: isDisabled ? 0.52 : 1,
       }}
     >
-      <BlurTargetView ref={blurTargetRef} style={styles.blurBackground}>
-        <View style={StyleSheet.absoluteFill} collapsable={false}>
-          <View className="absolute inset-0" style={{ backgroundColor: baseColor }} />
-          <View className="absolute -right-10 -bottom-12 h-[130px] w-[130px] rounded-full" style={{ backgroundColor: color, opacity: isDark ? 0.3 : 0.45 }} />
-          <View className="absolute left-6 top-[22px] h-[38px] w-[38px] rounded-full" style={{ backgroundColor: color, opacity: isDark ? 0.15 : 0.22 }} />
-        </View>
-      </BlurTargetView>
-      <BlurView
-        blurTarget={blurTargetRef}
-        intensity={60}
-        blurReductionFactor={2}
-        tint={tint}
-        blurMethod={Platform.OS === 'android' && (Platform.Version as number) >= 31 ? 'dimezisBlurViewSdk31Plus' : undefined}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <View pointerEvents="none" className="absolute left-2.5 right-2.5 top-2.5 h-[38px] rounded-full opacity-50" style={{ backgroundColor: highlightSheen }} />
-      <View pointerEvents="none" className="absolute bottom-0 left-4 right-4 h-[1px] opacity-70" style={{ backgroundColor: highlightRim }} />
       <Pressable
         disabled={isDisabled}
         onPress={onPress}
@@ -579,9 +567,31 @@ function StudyAction({
         accessibilityHint={hint}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled }}
-        className="flex-1 p-[18px]"
-        style={({ pressed }) => pressed && !isDisabled ? { opacity: 0.92, transform: [{ scale: 0.99 }] } : undefined}
+        style={({ pressed }) => [
+          { flex: 1, minHeight: isCompact ? 150 : 172 },
+          pressed && !isDisabled ? { opacity: 0.92, transform: [{ scale: 0.99 }] } : undefined,
+        ]}
       >
+        <LiquidGlassView
+        interactive={!isDisabled}
+        effect={isDark ? 'regular' : 'clear'}
+        colorScheme={isDark ? 'dark' : 'light'}
+        tintColor={tintColor}
+        style={[
+          styles.studyActionGlass,
+          {
+            flex: 1,
+            width: '100%',
+            minHeight: isCompact ? 150 : 172,
+          },
+          !isLiquidGlassSupported && {
+            backgroundColor: fallbackBg,
+            borderWidth: 1,
+            borderColor: fallbackBorder,
+          },
+        ]}
+      >
+        <View className="flex-1 p-[18px]">
         <View pointerEvents="none" importantForAccessibility="no" className="absolute left-[18px] bottom-[18px] w-[28px] h-[3px] rounded-full" style={{ backgroundColor: numberColor, opacity: 0.7 }} />
         <Text
           className="absolute top-[22px] left-[18px] text-[11px] leading-[14px] font-black tracking-ultra2 uppercase"
@@ -603,6 +613,8 @@ function StudyAction({
           </Text>
           <Text className="text-[13px] font-bold tracking-normal" style={{ color: hintColor }}>{hint}</Text>
         </View>
+        </View>
+        </LiquidGlassView>
       </Pressable>
     </View>
   );

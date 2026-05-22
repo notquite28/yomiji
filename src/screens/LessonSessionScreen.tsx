@@ -24,6 +24,7 @@ import {
 } from '../domain/study/reviewSession';
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
+import { LessonActionPill } from '../components/LessonActionPill';
 import { useConfirmLeave } from '../hooks/useConfirmLeave';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
@@ -328,6 +329,16 @@ export function LessonSessionScreen({ navigation, route }: Props) {
       keyboardShouldPersistTaps
       keyboardAvoiding
       scrollViewRef={scrollViewRef}
+      footer={
+        <LessonActionPill
+          subjectColor={subjectColor}
+          feedback={feedback ? { correct: feedback.correct } : null}
+          isContinuing={isContinuing}
+          answerEmpty={!answer.trim()}
+          onSubmit={submitQuizAnswer}
+          onContinue={continueQuiz}
+        />
+      }
       overlay={
         <ConfirmLeaveBanner
           visible={confirmLeave}
@@ -400,23 +411,6 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>
       ) : null}
 
-      <Pressable
-        disabled={isContinuing || (!feedback && !answer.trim())}
-        onPress={feedback ? continueQuiz : submitQuizAnswer}
-        className="min-h-[54px] items-center justify-center rounded-lg px-[18px]"
-        style={({ pressed }) => [
-          { backgroundColor: subjectColor },
-          (pressed || isContinuing || (!feedback && !answer.trim())) && { opacity: 0.58 },
-        ]}
-      >
-        <Text className="text-white text-[16px] font-black">
-          {feedback
-            ? isContinuing
-              ? 'Saving...'
-              : 'Continue'
-            : 'Submit Answer'}
-        </Text>
-      </Pressable>
     </ScreenLayout>
   );
 }

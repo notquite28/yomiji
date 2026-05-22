@@ -9,6 +9,7 @@ import { openAppDatabase } from '../domain/db/database';
 import { findBySubjectId } from '../domain/db/studyMaterialRepository';
 import { getSubjectById, getSubjectsByIds } from '../domain/db/subjectRepository';
 import { queueStudyMaterialUpdate } from '../domain/study/studyRepository';
+import { LiquidGlassButton } from '../components/LiquidGlassButton';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
@@ -143,14 +144,13 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
             </Text>
           ) : null}
           {!isLoading ? (
-            <Pressable
+            <LiquidGlassButton
+              label="Back"
               onPress={() => navigation.goBack()}
-              className="rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
-              accessibilityRole="button"
               accessibilityLabel="Go back"
-            >
-              <Text className="text-text dark:text-text-dark font-black">Back</Text>
-            </Pressable>
+              style={{ paddingHorizontal: 13, paddingVertical: 9 }}
+              contentClassName="font-black"
+            />
           ) : null}
         </View>
       </SafeAreaView>
@@ -163,14 +163,14 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-[#f7f4ef] dark:bg-[#0c0b0f]">
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28, gap: 14 }}>
-        <Pressable
+        <LiquidGlassButton
+          label="Back"
           onPress={() => navigation.goBack()}
-          className="self-start rounded-full px-[13px] py-[9px] bg-[#f2eee8] dark:bg-[#201e26] border border-[rgba(32,26,36,0.06)] dark:border-[rgba(255,255,255,0.08)]"
-          accessibilityRole="button"
           accessibilityLabel="Go back"
-        >
-          <Text className="text-text dark:text-text-dark font-black">Back</Text>
-        </Pressable>
+          className="self-start"
+          style={{ paddingHorizontal: 13, paddingVertical: 9 }}
+          contentClassName="font-black"
+        />
 
         <SubjectHeroCard
           kicker={subject.type.toUpperCase()}
