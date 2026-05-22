@@ -629,8 +629,11 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       ) : (
         <TextInput
           value={answer}
-          onChangeText={changeAnswer}
-          editable={!feedback}
+          onChangeText={(text) => {
+            if (!feedback) {
+              changeAnswer(text);
+            }
+          }}
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect={false}
@@ -643,10 +646,11 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           onFocus={() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
           }}
-          returnKeyType="done"
+          returnKeyType="next"
+          submitBehavior="submit"
           accessibilityLabel={displayTaskType === 'meaning' ? 'Review meaning answer' : 'Review reading answer'}
           accessibilityHint="Enter your answer for the current review prompt."
-          onSubmitEditing={submit}
+          onSubmitEditing={feedback ? continueSession : submit}
         />
       )}
 

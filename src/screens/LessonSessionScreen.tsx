@@ -370,8 +370,11 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
       <TextInput
         value={answer}
-        onChangeText={changeAnswer}
-        editable={!feedback}
+        onChangeText={(text) => {
+          if (!feedback) {
+            changeAnswer(text);
+          }
+        }}
         autoCapitalize="none"
         autoComplete="off"
         autoCorrect={false}
@@ -384,10 +387,11 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         onFocus={() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }}
-        returnKeyType="done"
+        returnKeyType="next"
+        submitBehavior="submit"
         accessibilityLabel={displayTaskType === 'meaning' ? 'Lesson meaning answer' : 'Lesson reading answer'}
         accessibilityHint="Enter your answer for the current lesson quiz prompt."
-        onSubmitEditing={submitQuizAnswer}
+        onSubmitEditing={feedback ? continueQuiz : submitQuizAnswer}
       />
 
       {feedback ? (
