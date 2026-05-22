@@ -17,6 +17,7 @@ ios/Pods/
 ios/build/
 *.xcuserstate
 *.apk
+docs/
 .pi-lens/
 .pi/
 .sem/
