@@ -162,7 +162,10 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 		setIsLoggingOut(true);
 		try {
 			const db = await openAppDatabase();
-			await deleteApiToken();
+			let tokenDeleteError: string | null = null;
+			await deleteApiToken().catch((caught) => {
+				tokenDeleteError = caught instanceof Error ? caught.message : String(caught);
+			});
 			try {
 				await resetLocalData(db);
 			} catch (caught) {
@@ -171,6 +174,12 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 				setError(`Token removed, but cache clear failed: ${message}`);
 			}
 			await clearReviewNotifications();
+			if (tokenDeleteError) {
+				Alert.alert(
+					"Stored token could not be removed",
+					`You're signed out in this session, but the token may still be stored on this device. Restarting the app may sign you back in. Try logging out again.\n\n${tokenDeleteError}`,
+				);
+			}
 			onLoggedOut();
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : String(caught));

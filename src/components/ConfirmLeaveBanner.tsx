@@ -1,4 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
+import { LiquidGlassButton } from './LiquidGlassButton';
+
 
 type Props = {
   /** Shown when the banner is visible and the user needs to confirm. */
@@ -33,12 +35,19 @@ export function ConfirmLeaveBanner({
   }
 
   return (
-    <Pressable
-      className="absolute inset-0 justify-end p-5 pb-9 bg-[rgba(0,0,0,0.45)]"
-      onPress={onCancel}
-      accessibilityElementsHidden
+    <View
+      className="absolute inset-0 justify-end px-5 pb-9 bg-[rgba(0,0,0,0.45)]"
+      accessibilityViewIsModal
     >
-      <View className="bg-surface-elevated dark:bg-surface-elevated-dark rounded-lg border border-border dark:border-border-dark p-5 gap-3">
+      <Pressable
+        className="absolute inset-0"
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss confirmation"
+      />
+
+      <View className="bg-surface-elevated dark:bg-surface-elevated-dark rounded-2xl border border-border dark:border-border-dark p-5 gap-3 shadow-lg">
+
         <Text className="text-[17px] font-black text-text dark:text-text-dark">
           {title}
         </Text>
@@ -46,34 +55,31 @@ export function ConfirmLeaveBanner({
           {message}
         </Text>
         <View className="flex-row gap-3 mt-1">
-          <Pressable
+          <LiquidGlassButton
+            label={cancelLabel}
             onPress={onCancel}
-            className="flex-1 rounded py-3.5 items-center justify-center bg-surface dark:bg-surface-dark border border-border dark:border-border-dark"
-            style={({ pressed }) =>
-              pressed ? { opacity: 0.58 } : undefined
-            }
-            accessibilityRole="button"
+            className="flex-1"
+            style={{ minHeight: 48, justifyContent: 'center' }}
+            contentClassName="text-base font-black text-center"
             accessibilityLabel={cancelLabel}
-          >
-            <Text className="text-base font-black text-text dark:text-text-dark">
-              {cancelLabel}
-            </Text>
-          </Pressable>
+          />
+
           <Pressable
             onPress={onConfirm}
-            className="flex-1 rounded py-3.5 items-center justify-center bg-danger dark:bg-danger-dark"
+            className="flex-1 min-h-[48px] rounded-full items-center justify-center bg-danger dark:bg-danger-dark"
             style={({ pressed }) =>
-              pressed ? { opacity: 0.58 } : undefined
+              pressed ? { opacity: 0.72, transform: [{ scale: 0.99 }] } : undefined
             }
             accessibilityRole="button"
             accessibilityLabel={confirmLabel}
           >
-            <Text className="text-base font-black text-white">
+            <Text className="text-base font-black text-white text-center">
               {confirmLabel}
             </Text>
           </Pressable>
+
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }

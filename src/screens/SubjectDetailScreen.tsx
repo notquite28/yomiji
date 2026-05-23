@@ -18,6 +18,8 @@ import { useAppTheme } from '../theme/AppThemeProvider';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SubjectDetail'>;
+const emptyStudyMaterial = { meaningSynonyms: [], meaningNote: '', readingNote: '' };
+
 
 export function SubjectDetailScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
@@ -44,6 +46,13 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
   const loadSubject = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
+    setSubject(null);
+    setComponentSubjects(new Map());
+    setAmalgamationSubjects(new Map());
+    setStats(null);
+    setStudyMaterial(emptyStudyMaterial);
+    setSaveMessage(null);
+
     try {
     const db = await openAppDatabase();
     const s = await getSubjectById(db, subjectId);
@@ -53,15 +62,12 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
     }
     setSubject(s);
 
-    if ((s.componentSubjectIds ?? []).length > 0) {
-      const comps = await getSubjectsByIds(db, s.componentSubjectIds ?? []);
-      setComponentSubjects(comps);
-    }
+    const componentIds = s.componentSubjectIds ?? [];
+    setComponentSubjects(componentIds.length > 0 ? await getSubjectsByIds(db, componentIds) : new Map());
 
-    if ((s.amalgamationSubjectIds ?? []).length > 0) {
-      const amals = await getSubjectsByIds(db, (s.amalgamationSubjectIds ?? []).slice(0, 10));
-      setAmalgamationSubjects(amals);
-    }
+    const amalgamationIds = s.amalgamationSubjectIds ?? [];
+    setAmalgamationSubjects(amalgamationIds.length > 0 ? await getSubjectsByIds(db, amalgamationIds.slice(0, 10)) : new Map());
+
 
     const row = await db.getFirstAsync<{ level: number | null; srs_stage: number | null; percentage_correct: number | null }>(
       `SELECT s.level, a.srs_stage, rs.percentage_correct
@@ -83,6 +89,8 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
         meaningNote: parsed.data.meaning_note ?? '',
         readingNote: parsed.data.reading_note ?? '',
       });
+    } else {
+      setStudyMaterial(emptyStudyMaterial);
     }
     } catch (caught) {
       setSubject(null);

@@ -92,8 +92,8 @@ android {
         applicationId 'app.yomiji'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "0.4.4"
+        versionCode 19
+        versionName "0.4.5"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +104,32 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            def keystoreFile = System.getenv('KEYSTORE_FILE')
+            def keystorePassword = System.getenv('KEYSTORE_PASSWORD')
+            def keyAliasValue = System.getenv('KEY_ALIAS')
+            def keyPasswordValue = System.getenv('KEY_PASSWORD')
+            if (keystoreFile && keystorePassword && keyAliasValue && keyPasswordValue) {
+                storeFile file(keystoreFile)
+                storePassword keystorePassword
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
+            }
+        }
+
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            } else if ((System.getenv('CI_RELEASE_BUILD') ?: 'false').toBoolean()) {
+                throw new GradleException('Release signing env vars are required for CI release builds')
+            } else {
+                signingConfig signingConfigs.debug
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

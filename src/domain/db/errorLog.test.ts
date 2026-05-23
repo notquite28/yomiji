@@ -106,6 +106,15 @@ describe('classifySyncError', () => {
     expectCategory(null, 'unknown');
     expectCategory(undefined, 'unknown');
   });
+
+  test('classifies wrapped SyncError-like values by category', () => {
+    const error = new Error('Too Many Requests');
+    error.name = 'SyncError';
+    Object.assign(error, { category: 'rate-limit', isRetryable: true });
+
+    expectCategory(error, 'rate-limit');
+  });
+
 });
 
 describe('describeSyncError', () => {
@@ -174,6 +183,18 @@ describe('describeSyncError', () => {
     const info = describeSyncError(new WaniKaniApiError(401, 'Account has been hibernated'));
     expect(info.category).toBe('hibernating');
     expect(info.message).toContain('wanikani.com');
+    expect(info.isRetryable).toBe(false);
+  });
+
+  test('returns friendly message for wrapped SyncError-like values', () => {
+    const error = new Error('Too Many Requests');
+    error.name = 'SyncError';
+    Object.assign(error, { category: 'rate-limit', isRetryable: false });
+
+    const info = describeSyncError(error);
+
+    expect(info.category).toBe('rate-limit');
+    expect(info.message).toBe('Too many requests.');
     expect(info.isRetryable).toBe(false);
   });
 });

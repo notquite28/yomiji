@@ -52,15 +52,23 @@ export function AppNavigator() {
 	const lastForegroundCheckAt = useRef(0);
 	const lastPendingFlushAt = useRef(0);
 	const activeLifecycleSyncCount = useRef(0);
+	const clearAuthState = useCallback(() => {
+		setApiToken(null);
+		void deleteApiToken().catch((caught) => {
+			const message = caught instanceof Error ? caught.message : String(caught);
+			useSyncStore
+				.getState()
+				.setSyncError(`Signed out, but the stored token could not be removed from this device: ${message}`);
+		});
+	}, []);
 
-	const handleSyncError = useCallback(async (caught: unknown) => {
+	const handleSyncError = useCallback((caught: unknown) => {
 		if (isSyncAuthError(caught)) {
-			await deleteApiToken();
-			setApiToken(null);
+			clearAuthState();
 			return;
 		}
 		useSyncStore.getState().setSyncError(describeSyncError(caught).message);
-	}, []);
+	}, [clearAuthState]);
 
 	const beginLifecycleSync = useCallback(() => {
 		activeLifecycleSyncCount.current += 1;
@@ -279,9 +287,7 @@ export function AppNavigator() {
 							<DashboardScreen
 								{...props}
 								apiToken={apiToken}
-								onAuthError={() => {
-									deleteApiToken().then(() => setApiToken(null));
-								}}
+								onAuthError={clearAuthState}
 							/>
 						)}
 					</Stack.Screen>
@@ -297,9 +303,7 @@ export function AppNavigator() {
 						{(props) => (
 							<DiagnosticsScreen
 								{...props}
-								onForceLogout={() => {
-									deleteApiToken().then(() => setApiToken(null));
-								}}
+								onForceLogout={clearAuthState}
 							/>
 						)}
 					</Stack.Screen>

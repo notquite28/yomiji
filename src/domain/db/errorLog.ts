@@ -26,27 +26,33 @@ const URL_TOKEN_PATTERN = /([?&]api_key=)[^&\s]+/gi;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_CONTEXT_LENGTH = 2000;
 
+type SyncErrorLike = Error & {
+  category: SyncErrorCategory;
+  isRetryable?: boolean;
+};
+
 export function describeSyncError(error: unknown): SyncErrorInfo {
   const category = classifySyncError(error);
   const raw = error instanceof Error ? error.message : String(error);
+  const retryableOverride = isSyncErrorLike(error) ? error.isRetryable : undefined;
   switch (category) {
     case 'offline':
-      return { category, message: 'No internet connection. Check your network and try again.', isRetryable: true };
+      return { category, message: 'No internet connection. Check your network and try again.', isRetryable: retryableOverride ?? true };
     case 'timeout':
-      return { category, message: 'Request timed out. Try again later.', isRetryable: true };
+      return { category, message: 'Request timed out. Try again later.', isRetryable: retryableOverride ?? true };
     case 'auth':
-      return { category, message: 'Session expired or token invalid. Please log in again.', isRetryable: false };
+      return { category, message: 'Session expired or token invalid. Please log in again.', isRetryable: retryableOverride ?? false };
     case 'rate-limit': {
       const retryMs = error instanceof WaniKaniApiError ? error.retryAfterMs : undefined;
       const suffix = retryMs ? ` Try again in ${Math.ceil(retryMs / 1000)} seconds.` : '';
-      return { category, message: `Too many requests.${suffix}`, isRetryable: true };
+      return { category, message: `Too many requests.${suffix}`, isRetryable: retryableOverride ?? true };
     }
     case 'server':
-      return { category, message: 'WaniKani server error. Try again later.', isRetryable: true };
+      return { category, message: 'WaniKani server error. Try again later.', isRetryable: retryableOverride ?? true };
     case 'hibernating':
-      return { category, message: 'Your WaniKani account is hibernating. Reactivate it at wanikani.com to continue.', isRetryable: false };
+      return { category, message: 'Your WaniKani account is hibernating. Reactivate it at wanikani.com to continue.', isRetryable: retryableOverride ?? false };
     default:
-      return { category, message: sanitize(raw), isRetryable: true };
+      return { category, message: sanitize(raw), isRetryable: retryableOverride ?? true };
   }
 }
 
@@ -54,6 +60,24 @@ export function sanitize(text: string): string {
   let result = text.replace(TOKEN_PATTERN, 'Token token=[REDACTED]');
   result = result.replace(URL_TOKEN_PATTERN, '$1[REDACTED]');
   return result.slice(0, MAX_MESSAGE_LENGTH);
+}
+
+function isSyncErrorLike(error: unknown): error is SyncErrorLike {
+  if (!(error instanceof Error) || error.name !== 'SyncError') {
+    return false;
+  }
+  const category = (error as Error & { category?: unknown }).category;
+  return typeof category === 'string' && isSyncErrorCategory(category);
+}
+
+function isSyncErrorCategory(value: string): value is SyncErrorCategory {
+  return value === 'offline' ||
+    value === 'timeout' ||
+    value === 'auth' ||
+    value === 'rate-limit' ||
+    value === 'server' ||
+    value === 'hibernating' ||
+    value === 'unknown';
 }
 
 export function classifySyncError(error: unknown): SyncErrorCategory {
@@ -66,6 +90,10 @@ export function classifySyncError(error: unknown): SyncErrorCategory {
     if (error.status === 429) return 'rate-limit';
     if (error.status >= 500) return 'server';
     return 'unknown';
+  }
+
+  if (isSyncErrorLike(error)) {
+    return error.category;
   }
 
   if (error instanceof Error) {

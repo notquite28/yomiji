@@ -17,8 +17,9 @@ export type SubjectDetailsContentProps = {
   useKatakanaForOnyomi?: boolean;
   showAllReadings?: boolean;
   onNavigateToSubject?: (subjectId: number) => void;
-  onEditMeaningNote?: (value: string) => void;
-  onEditReadingNote?: (value: string) => void;
+  onEditMeaningNote?: (value: string) => Promise<void> | void;
+  onEditReadingNote?: (value: string) => Promise<void> | void;
+
 };
 
 export function SubjectDetailsContent({
@@ -243,10 +244,23 @@ export function SubjectDetailsContent({
 function DetailNoteField({ label, value, onSave }: {
   label: string;
   value: string;
-  onSave?: (value: string) => void;
+  onSave?: (value: string) => Promise<void> | void;
 }) {
+
   const [editing, setEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState(value);
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const saveEdit = async () => {
+    if (!onSave || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(editValue);
+      setEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (!onSave) {
     if (!value) return null;
@@ -281,19 +295,24 @@ function DetailNoteField({ label, value, onSave }: {
         onChangeText={setEditValue}
         autoFocus
         multiline
+        editable={!isSaving}
+
       />
       <View className="flex-row gap-2">
         <Pressable
-          onPress={() => setEditing(false)}
+          onPress={() => { if (!isSaving) setEditing(false); }}
           className="px-3 py-1.5 rounded-[10px] border border-border dark:border-border-dark"
+          disabled={isSaving}
+
         >
           <Text className="text-[13px] font-bold text-text dark:text-text-dark">Cancel</Text>
         </Pressable>
         <Pressable
-          onPress={() => { onSave(editValue); setEditing(false); }}
+          onPress={saveEdit}
           className="px-3 py-1.5 rounded-[10px] bg-kanji"
+          disabled={isSaving}
         >
-          <Text className="text-[13px] font-bold text-white">Save</Text>
+          <Text className="text-[13px] font-bold text-white">{isSaving ? 'Saving…' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>

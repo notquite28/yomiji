@@ -1,6 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+
 
 import { openAppDatabase } from '../domain/db/database';
 import { useSettingsStore } from '../domain/settings/settingsStore';
@@ -25,7 +26,7 @@ export function LessonPickerScreen({ navigation }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const settings = useSettingsStore();
+
 
   useEffect(() => {
     let isMounted = true;
@@ -119,6 +120,7 @@ export function LessonPickerScreen({ navigation }: Props) {
 
   return (
     <ScreenLayout scrollable keyboardShouldPersistTaps>
+
       <SessionHeader onBack={() => navigation.goBack()} progress="Lesson Picker" />
 
       <View className="flex-row items-baseline justify-between mt-1">
@@ -130,18 +132,16 @@ export function LessonPickerScreen({ navigation }: Props) {
         </Text>
       </View>
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        {groups.map((group) => (
-          <View key={group.level} className="mt-[18px]">
-            <Text className="text-lg font-black text-text dark:text-text-dark mb-[10px]">
-              Level {group.level}
-            </Text>
-            {renderTypeSection('Radicals', group.radicals, colors, selectedIds, toggleItem)}
-            {renderTypeSection('Kanji', group.kanji, colors, selectedIds, toggleItem)}
-            {renderTypeSection('Vocabulary', group.vocabulary, colors, selectedIds, toggleItem)}
-          </View>
-        ))}
-      </ScrollView>
+      {groups.map((group) => (
+        <View key={group.level} className="mt-[18px]">
+          <Text className="text-lg font-black text-text dark:text-text-dark mb-[10px]">
+            Level {group.level}
+          </Text>
+          {renderTypeSection('Radicals', group.radicals, colors, selectedIds, toggleItem)}
+          {renderTypeSection('Kanji', group.kanji, colors, selectedIds, toggleItem)}
+          {renderTypeSection('Vocabulary', group.vocabulary, colors, selectedIds, toggleItem)}
+        </View>
+      ))}
 
       <View className="pt-[14px]">
         <Pressable
