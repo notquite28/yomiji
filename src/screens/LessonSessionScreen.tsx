@@ -332,7 +332,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
       footer={
         <LessonActionPill
           subjectColor={subjectColor}
-          feedback={feedback ? { correct: feedback.correct } : null}
+          feedback={feedback ? { correct: feedback.correct, message: feedback.message, detail: feedback.detail } : null}
           isContinuing={isContinuing}
           answerEmpty={!answer.trim()}
           onSubmit={submitQuizAnswer}
@@ -393,23 +393,6 @@ export function LessonSessionScreen({ navigation, route }: Props) {
         accessibilityHint="Enter your answer for the current lesson quiz prompt."
         onSubmitEditing={feedback ? continueQuiz : submitQuizAnswer}
       />
-
-      {feedback ? (
-        <View
-          className="rounded-2xl border bg-surface-elevated dark:bg-surface-elevated-dark p-[16px] gap-1.5"
-          style={{ borderColor: feedback.correct ? colors.success : colors.danger }}
-        >
-          <Text
-            className="text-lg font-black"
-            style={{ color: feedback.correct ? colors.success : colors.danger }}
-          >
-            {feedback.message}
-          </Text>
-          <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark">
-            {feedback.detail}
-          </Text>
-        </View>
-      ) : null}
 
       {error ? (
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>

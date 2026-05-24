@@ -28,7 +28,6 @@ import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { ReviewQuickSettings } from '../components/ReviewQuickSettings';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/AppThemeProvider';
-import { withAlpha } from '../theme/colorUtils';
 import { colorForSubjectType } from '../theme/subjectColors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewSession'>;
@@ -545,8 +544,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     .map((r) => r.reading)
     .join(', ') ?? '';
   const showsReadingInAnki = Boolean(acceptedReadings);
-  const feedbackColor = feedback ? (feedback.correct ? colors.success : colors.danger) : null;
-
   return (
     <ScreenLayout
       scrollable
@@ -557,7 +554,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         <FloatingReviewPill
           subjectColor={subjectColor}
           visible={showPill}
-          feedback={feedback}
+          feedback={feedback ? { correct: feedback.correct, message: feedback.message, detail: feedback.detail } : null}
           isContinuing={isContinuing}
           ankiMode={ankiMode}
           ankiRevealed={ankiRevealed}
@@ -653,23 +650,6 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
           onSubmitEditing={feedback ? continueSession : submit}
         />
       )}
-
-      {feedback && feedbackColor ? (
-        <View
-          className="rounded-2xl border p-[14px] gap-1"
-          style={{
-            borderColor: feedbackColor,
-            backgroundColor: withAlpha(feedbackColor, isDark ? 0.16 : 0.08),
-          }}
-        >
-          <Text className="text-xl font-black" style={{ color: feedbackColor }}>
-            {feedback.message}
-          </Text>
-          <Text className="text-base font-bold text-text dark:text-text-dark">
-            {feedback.detail}
-          </Text>
-        </View>
-      ) : null}
 
       {error ? (
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>

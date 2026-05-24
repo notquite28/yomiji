@@ -1,6 +1,6 @@
 import { LiquidGlassView, isLiquidGlassSupported } from '@callstack/liquid-glass';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 
 import { TooltipPressable } from './TooltipPressable';
@@ -10,7 +10,7 @@ import { compositeAlpha, readableOnColor, withAlpha } from '../theme/colorUtils'
 
 type Props = {
   subjectColor: string;
-  feedback: { correct: boolean } | null;
+  feedback: { correct: boolean; message: string; detail: string } | null;
   isContinuing: boolean;
   answerEmpty: boolean;
   onSubmit: () => void;
@@ -57,6 +57,22 @@ export function LessonActionPill({
       style={{ paddingBottom: bottomPadding }}
     >
       <AnimatedView layout={pillMotion()}>
+        {feedback && (
+          <AnimatedView
+            entering={FadeIn.duration(250).springify().damping(20).stiffness(180)}
+            exiting={FadeOut.duration(180)}
+            style={[
+              styles.glow,
+              {
+                backgroundColor: withAlpha(accentColor, isDark ? 0.35 : 0.22),
+                shadowColor: accentColor,
+                shadowOpacity: isDark ? 0.65 : 0.5,
+                shadowRadius: 28,
+                shadowOffset: { width: 0, height: 0 },
+              },
+            ]}
+          />
+        )}
         <LiquidGlassView
           interactive
           effect={isDark ? 'regular' : 'clear'}
@@ -81,6 +97,27 @@ export function LessonActionPill({
             },
           ]}
         >
+          {feedback && (
+            <AnimatedView
+              entering={FadeInDown.springify().damping(22).stiffness(200).mass(0.8)}
+              exiting={FadeOut.duration(120)}
+              layout={controlMotion()}
+              className="px-5 pt-3 pb-1 gap-0.5 items-center"
+            >
+              <Text className="text-base font-black" style={{ color: accentColor }}>
+                {feedback.message}
+              </Text>
+              <ScrollView
+                className="max-h-20 self-stretch"
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                <Text className="text-sm font-bold text-text-muted dark:text-text-muted-dark text-center">
+                  {feedback.detail}
+                </Text>
+              </ScrollView>
+            </AnimatedView>
+          )}
           <AnimatedView className="flex-row items-center justify-center px-5 py-2.5" layout={controlMotion()}>
             <AnimatedView
               className="flex-1 items-center"
@@ -128,5 +165,14 @@ const styles = StyleSheet.create({
   pillGlass: {
     borderRadius: 9999,
     overflow: 'hidden',
+  },
+  glow: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderRadius: 9999,
+    zIndex: -1,
   },
 });
