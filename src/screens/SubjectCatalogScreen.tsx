@@ -22,20 +22,28 @@ export function SubjectCatalogScreen({ navigation, route }: Props) {
   const level = route.params.level;
   const [groups, setGroups] = useState<GroupedSubjects[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadSubjects = useCallback(async () => {
-    const db = await openAppDatabase();
-    const rows = await getSubjectsByLevel(db, level);
-    const typeOrder = ['radical', 'kanji', 'vocabulary'];
-    const grouped: GroupedSubjects[] = [];
-    for (const st of typeOrder) {
-      const items = rows.filter((r) => r.subjectType === st);
-      if (items.length > 0) {
-        grouped.push({ subjectType: st, items });
+    setIsLoading(true);
+    setError(null);
+    try {
+      const db = await openAppDatabase();
+      const rows = await getSubjectsByLevel(db, level);
+      const typeOrder = ['radical', 'kanji', 'vocabulary'];
+      const grouped: GroupedSubjects[] = [];
+      for (const st of typeOrder) {
+        const items = rows.filter((r) => r.subjectType === st);
+        if (items.length > 0) {
+          grouped.push({ subjectType: st, items });
+        }
       }
+      setGroups(grouped);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setIsLoading(false);
     }
-    setGroups(grouped);
-    setIsLoading(false);
   }, [level]);
 
   useEffect(() => {
@@ -59,6 +67,10 @@ export function SubjectCatalogScreen({ navigation, route }: Props) {
         {isLoading ? (
           <Text className="text-[16px] font-heavy text-text-muted dark:text-text-muted-dark">
             Loading...
+          </Text>
+        ) : error ? (
+          <Text className="text-[16px] font-heavy text-danger dark:text-danger-dark">
+            {error}
           </Text>
         ) : (
           groups.map((group) => (

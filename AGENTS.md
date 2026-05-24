@@ -26,11 +26,12 @@ pnpm exec expo install --check
 - Use pnpm; CI uses pnpm 9, Node 22, and Java 17.
 - There is no lint or formatter script in `package.json`.
 - `pnpm start` uses `expo start --dev-client`; run/install a development build first with `pnpm android` or `pnpm ios`.
+- `docs/` is gitignored. Put tracked agent notes at the repo root or force-add deliberately.
 
 ## Verification
 
 - CI runs `pnpm install --frozen-lockfile`, `pnpm typecheck`, then `pnpm test` before Android release builds.
-- Jest is Node + ts-jest and only matches `**/*.test.ts`; TSX tests are not picked up unless config changes.
+- Jest is Node + ts-jest and matches `**/*.{test,spec}.{ts,tsx}`; `expo-sqlite` is mocked.
 - Focused integration examples:
 
 ```sh
@@ -50,8 +51,8 @@ pnpm test -- src/domain/study/pendingWrites.integration.test.ts
 
 - TypeScript is strict with `noUncheckedIndexedAccess` and `noFallthroughCasesInSwitch`; fix types rather than loosening config.
 - Preserve offline-first behavior: cached data must keep working, local writes must queue, and network/auth/rate-limit errors should stay explicit and sanitized.
-- Sync is single-flight in `syncService.ts` via module-scoped promises; keep new refresh paths deduped and preserve pending-write flushing.
-- Error handling convention: clear stored auth token on WaniKani 401/403, log sanitized sync errors, and only swallow best-effort failures such as notification scheduling/audio teardown.
+- Sync is single-flight in `syncService.ts` via module-scoped promises; pending writes flush before remote fetches, and full refresh must clear/re-fetch after any active sync rather than silently becoming an incremental sync.
+- Error handling convention: clear stored auth token on WaniKani 401/403, log sanitized sync errors, and only swallow failures in explicit best-effort paths such as lifecycle notification scheduling or audio teardown.
 - Styling is NativeWind-first (`className`, `dark:` variants). Keep inline/theme styles for dynamic values React Native cannot express statically: subject colors, Switch colors, charts, shadows, placeholder/selection colors.
 - `AppThemeProvider` supplies navigation colors and dynamic theme values; Tailwind scans only `App.tsx` and `src/**/*.{ts,tsx}`.
 

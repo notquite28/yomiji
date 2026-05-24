@@ -10,6 +10,15 @@ function jsonResponse(body: unknown): Response {
   } as Response;
 }
 
+function textResponse(status: number, body: string): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ Date: new Date().toUTCString() }),
+    text: async () => body,
+  } as Response;
+}
+
 function subject(id: number): CollectionResponse<SubjectData>['data'][number] {
   return {
     id,
@@ -60,5 +69,15 @@ describe('WaniKaniClient collection pagination', () => {
     expect(fetcher.mock.calls[1]![0]).toBe('https://api.wanikani.com/v2/subjects?page_after_id=1');
     expect(progress).toHaveBeenNthCalledWith(1, { collection: 'subjects', loaded: 1, total: 2 });
     expect(progress).toHaveBeenNthCalledWith(2, { collection: 'subjects', loaded: 2, total: 2 });
+  });
+
+  it('keeps HTTP status when an error response is not JSON', async () => {
+    const fetcher = jest.fn().mockResolvedValueOnce(textResponse(503, '<html>unavailable</html>'));
+    const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+
+    await expect(client.getUser()).rejects.toMatchObject({
+      status: 503,
+      message: 'WaniKani request failed with HTTP 503',
+    });
   });
 });

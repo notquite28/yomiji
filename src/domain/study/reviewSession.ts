@@ -415,6 +415,8 @@ export class ReviewSession {
       return { subjectFinished: false, correct: true };
     }
 
+    const correctedTaskCount = this._settings.ankiMode && canAskReading(task, this._settings) ? 2 : 1;
+
     if (this._settings.ankiMode) {
       task.meaningWrong = false;
       if (task.meaningWrongCount > 0) {
@@ -442,7 +444,7 @@ export class ReviewSession {
       task.answeredReading = true;
     }
 
-    this._tasksAnsweredCorrectly += 1;
+    this._tasksAnsweredCorrectly += correctedTaskCount;
     task.returnDelay = 0;
 
     return this.finalizeIfFinished(task);

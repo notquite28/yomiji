@@ -61,11 +61,17 @@ export function runIncrementalSync(options: SyncOptions) {
     return activeSync;
   }
 
-  activeSync = runSync(options).finally(() => {
-    activeSync = null;
-  });
-
+  activeSync = trackActiveSync(runSync(options));
   return activeSync;
+}
+
+function trackActiveSync(sync: Promise<void>) {
+  const tracked = sync.finally(() => {
+    if (activeSync === tracked) {
+      activeSync = null;
+    }
+  });
+  return tracked;
 }
 
 export function runPendingSync(options: SyncOptions) {
@@ -238,8 +244,19 @@ export function isSyncAuthError(error: unknown): boolean {
 }
 
 export async function runFullRefresh(options: SyncOptions): Promise<void> {
-  await clearRemoteCache(options.db);
-  await runSync(options);
+  const pendingSync = activeSync;
+  activeSync = trackActiveSync((async () => {
+    if (pendingSync) {
+      await pendingSync;
+    }
+    if (activePendingSync) {
+      await activePendingSync;
+    }
+    await clearRemoteCache(options.db);
+    await runSync(options);
+  })());
+
+  return activeSync;
 }
 
 async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient) {

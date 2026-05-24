@@ -117,7 +117,7 @@ export function SubjectSearchScreen({ navigation }: Props) {
           </Text>
         ) : searched && results.length === 0 ? (
           <Text className="text-base font-bold text-text-muted dark:text-text-muted-dark pt-6 text-center">
-            No results found for &ldquo;{query}&rdquo;. Try another spelling, or sync from the dashboard if local data is empty.
+            No results found for "{query}". Try another spelling, or sync from the dashboard if local data is empty.
           </Text>
         ) : (
           results.map((item) => {

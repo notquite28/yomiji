@@ -103,12 +103,12 @@ export function ReviewQuickSettings({
         </View>
 
         <ScrollView
-          contentContainerStyle={{ flex: 1, paddingHorizontal: 20, gap: 20 }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, gap: 20 }}
           showsVerticalScrollIndicator={false}
         >
           <View className="gap-0.5">
             <Text className="text-[13px] font-black uppercase tracking-ultra text-text-muted dark:text-text-muted-dark pb-2">
-              Answers &amp; Marking
+              Answers & Marking
             </Text>
             <ToggleRow
               label="Exact match"

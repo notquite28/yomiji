@@ -151,10 +151,20 @@ export function SettingsScreen({ navigation, onLoggedOut }: Props) {
 				}
 			}
 
-		updateSetting(key, value);
-			await rescheduleReviewNotifications();
+			const previousValue = useSettingsStore.getState()[key];
+			updateSetting(key, value);
+			try {
+				await rescheduleReviewNotifications();
+			} catch (caught) {
+				updateSetting(key, previousValue);
+				await rescheduleReviewNotifications().catch(() => {});
+				Alert.alert(
+					"Notification Update Failed",
+					`Your notification setting was not changed because scheduling failed. ${caught instanceof Error ? caught.message : String(caught)}`,
+				);
+			}
 		},
-		[],
+		[updateSetting],
 	);
 
 	const performLogout = async () => {

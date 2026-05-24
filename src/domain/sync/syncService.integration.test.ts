@@ -414,6 +414,52 @@ describe('runFullRefresh', () => {
     const reviewCall = mockApi.calls.find((c) => c.method === 'createReview');
     expect(reviewCall).toBeDefined();
   });
+
+  it('runs full refresh after an active incremental sync finishes', async () => {
+    await putSubjects(db, [makeVocabulary({ id: 100, characters: '古い' })]);
+
+    let releaseIncrementalUser!: () => void;
+    const incrementalUserStarted = new Promise<void>((resolve) => {
+      const waitForRelease = new Promise<void>((release) => {
+        releaseIncrementalUser = release;
+      });
+      const incrementalApi = createMockApi({
+        getUser: async () => {
+          resolve();
+          await waitForRelease;
+          return makeUser({ username: 'incremental' });
+        },
+        getSubjects: async () => collectionResult('2024-06-02T01:00:00.000Z'),
+        getAssignments: async () => collectionResult('2024-06-02T02:00:00.000Z'),
+        getStudyMaterials: async () => collectionResult('2024-06-02T03:00:00.000Z'),
+        getLevelProgressions: async () => collectionResult('2024-06-02T04:00:00.000Z'),
+        getVoiceActors: async () => collectionResult('2024-06-02T05:00:00.000Z'),
+        getReviewStatistics: async () => collectionResult('2024-06-02T06:00:00.000Z'),
+      });
+      void runIncrementalSync({ db, client: incrementalApi as unknown as WaniKaniClient });
+    });
+
+    await incrementalUserStarted;
+
+    const refreshedSubject = makeVocabulary({ id: 200, characters: '新しい' });
+    const refreshApi = createMockApi({
+      getUser: async () => makeUser({ username: 'full-refresh' }),
+      getSubjects: async () => collectionResult('2024-06-03T01:00:00.000Z', [refreshedSubject]),
+      getAssignments: async () => collectionResult('2024-06-03T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2024-06-03T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2024-06-03T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-03T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-03T06:00:00.000Z'),
+    });
+
+    const refreshPromise = runFullRefresh({ db, client: refreshApi as unknown as WaniKaniClient });
+    releaseIncrementalUser();
+    await refreshPromise;
+
+    expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 100')).toBeNull();
+    const newSubject = await db.getFirstAsync<{ japanese: string }>('SELECT japanese FROM subjects WHERE id = 200');
+    expect(newSubject?.japanese).toBe('新しい');
+  });
 });
 
 // ── Clear Remote Cache ───────────────────────────────────────────────────────

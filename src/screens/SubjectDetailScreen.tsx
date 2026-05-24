@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { StudyMaterialPayload } from '../domain/api/types';
@@ -34,8 +34,6 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
     meaningNote: '',
     readingNote: '',
   });
-  const [editingField, setEditingField] = useState<'meaningNote' | 'readingNote' | 'synonym' | null>(null);
-  const [editValue, setEditValue] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -128,7 +126,6 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
       } else {
         setStudyMaterial((prev) => ({ ...prev, readingNote: value }));
       }
-      setEditingField(null);
       setSaveMessage('Study material saved. It will sync with WaniKani on the next write flush.');
     } catch (caught) {
       setSaveMessage(`Could not save study material: ${caught instanceof Error ? caught.message : String(caught)}`);
@@ -216,6 +213,7 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           useKatakanaForOnyomi={useKatakana}
           showAllReadings={showAllReadings}
           onNavigateToSubject={(id) => navigation.push('SubjectDetail', { subjectId: id })}
+          onEditMeaningSynonyms={(value) => handleSave('synonym', value.join(', '))}
           onEditMeaningNote={(value) => handleSave('meaningNote', value)}
           onEditReadingNote={(value) => handleSave('readingNote', value)}
         />
@@ -229,42 +227,6 @@ export function SubjectDetailScreen({ navigation, route }: Props) {
           </Text>
         ) : null}
 
-        {editingField === 'synonym' ? (
-          <View className="gap-1.5">
-            <Text className="text-[13px] font-black uppercase tracking-ultra text-text-muted dark:text-text-muted-dark">
-              Edit Synonyms
-            </Text>
-            <View className="rounded-md p-[14px] bg-surface-elevated dark:bg-surface-elevated-dark border border-border dark:border-border-dark gap-1">
-              <TextInput
-                className="min-h-[44px] rounded-[12px] border border-border dark:border-border-dark bg-surface-elevated dark:bg-surface-elevated-dark text-text dark:text-text-dark px-3 text-[14px] font-bold"
-                value={editValue}
-                onChangeText={setEditValue}
-                placeholder="comma, separated, synonyms"
-                placeholderTextColor={colors.mutedText}
-                autoFocus
-              />
-              <View className="flex-row gap-2 mt-1.5">
-                <Pressable
-                  className="px-[14px] py-2 rounded-[10px] border border-border dark:border-border-dark"
-                  onPress={() => setEditingField(null)}
-                >
-                  <Text className="text-[13px] font-bold text-text dark:text-text-dark">Cancel</Text>
-                </Pressable>
-                <Pressable
-                  className="px-[14px] py-2 rounded-[10px] bg-kanji"
-                  onPress={() => handleSave('synonym', editValue)}
-                  disabled={isSaving}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: isSaving, busy: isSaving }}
-                >
-                  <Text className="text-[13px] font-bold text-white">
-                    {isSaving ? 'Saving...' : 'Save'}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

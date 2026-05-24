@@ -235,6 +235,24 @@ describe('pending study material round-trip', () => {
     // Pending row should be deleted
     expect(await countPending(db, 'pending_study_materials')).toBe(0);
   });
+
+  it('preserves the remote study material id for existing materials', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+    await putStudyMaterials(db, [makeStudyMaterial(subjectId, { id: 700, meaning_synonyms: ['old'] })]);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['old', 'new'],
+    });
+
+    const row = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const payload = JSON.parse(row!.payload) as { id?: number; meaningSynonyms: string[] };
+    expect(payload.id).toBe(700);
+    expect(payload.meaningSynonyms).toEqual(['old', 'new']);
+  });
 });
 
 // ── 422 Error Handling ───────────────────────────────────────────────────────

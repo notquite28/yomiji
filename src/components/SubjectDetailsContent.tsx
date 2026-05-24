@@ -17,6 +17,7 @@ export type SubjectDetailsContentProps = {
   useKatakanaForOnyomi?: boolean;
   showAllReadings?: boolean;
   onNavigateToSubject?: (subjectId: number) => void;
+  onEditMeaningSynonyms?: (value: string[]) => Promise<void> | void;
   onEditMeaningNote?: (value: string) => Promise<void> | void;
   onEditReadingNote?: (value: string) => Promise<void> | void;
 
@@ -34,6 +35,7 @@ export function SubjectDetailsContent({
   useKatakanaForOnyomi = false,
   showAllReadings = false,
   onNavigateToSubject,
+  onEditMeaningSynonyms,
   onEditMeaningNote,
   onEditReadingNote,
 }: SubjectDetailsContentProps) {
@@ -69,11 +71,10 @@ export function SubjectDetailsContent({
           {secondaryMeanings.join(', ')}
         </Text>
       ) : null}
-      {studyMaterial.meaningSynonyms.length > 0 ? (
-        <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">
-          Synonyms: {studyMaterial.meaningSynonyms.join(', ')}
-        </Text>
-      ) : null}
+      <DetailSynonymField
+        value={studyMaterial.meaningSynonyms}
+        onSave={onEditMeaningSynonyms}
+      />
     </DetailSection>
   );
 
@@ -129,11 +130,6 @@ export function SubjectDetailsContent({
           Hint: {subject.meaningHint}
         </Text>
       ) : null}
-      <DetailNoteField
-        label="Meaning Note"
-        value={studyMaterial.meaningNote}
-        onSave={onEditMeaningNote}
-      />
     </DetailSection>
   ) : null;
 
@@ -145,11 +141,27 @@ export function SubjectDetailsContent({
           Hint: {subject.readingHint}
         </Text>
       ) : null}
-      <DetailNoteField
-        label="Reading Note"
-        value={studyMaterial.readingNote}
-        onSave={onEditReadingNote}
-      />
+    </DetailSection>
+  ) : null;
+
+  const hasMeaningNoteField = Boolean(onEditMeaningNote || studyMaterial.meaningNote) && meaningShown;
+  const hasReadingNoteField = Boolean(onEditReadingNote || studyMaterial.readingNote) && readingShown;
+  const notesSection = hasMeaningNoteField || hasReadingNoteField ? (
+    <DetailSection key="studyMaterialNotes" title="Study Material Notes">
+      {hasMeaningNoteField ? (
+        <DetailNoteField
+          label="Meaning Note"
+          value={studyMaterial.meaningNote}
+          onSave={onEditMeaningNote}
+        />
+      ) : null}
+      {hasReadingNoteField ? (
+        <DetailNoteField
+          label="Reading Note"
+          value={studyMaterial.readingNote}
+          onSave={onEditReadingNote}
+        />
+      ) : null}
     </DetailSection>
   ) : null;
 
@@ -206,6 +218,8 @@ export function SubjectDetailsContent({
     if (meaningMnemonicSection) orderedSections.push({ node: meaningMnemonicSection, visible: meaningShown, key: 'meaningMnemonic' });
     if (readingMnemonicSection) orderedSections.push({ node: readingMnemonicSection, visible: readingShown, key: 'readingMnemonic' });
   }
+
+  if (notesSection) orderedSections.push({ node: notesSection, visible: true, key: 'studyMaterialNotes' });
 
   const visibleSections: React.ReactNode[] = [];
   const hiddenQueue: React.ReactNode[] = [];
@@ -313,6 +327,84 @@ function DetailNoteField({ label, value, onSave }: {
           disabled={isSaving}
         >
           <Text className="text-[13px] font-bold text-white">{isSaving ? 'Saving…' : 'Save'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function DetailSynonymField({ value, onSave }: {
+  value: string[];
+  onSave?: (value: string[]) => Promise<void> | void;
+}) {
+  const { colors } = useAppTheme();
+
+  const [editing, setEditing] = React.useState(false);
+  const [editValue, setEditValue] = React.useState(value.join(', '));
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const saveEdit = async () => {
+    if (!onSave || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(editValue.split(',').map((s) => s.trim()).filter(Boolean));
+      setEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!onSave) {
+    if (value.length === 0) return null;
+    return (
+      <Text className="text-[14px] font-bold text-text-muted dark:text-text-muted-dark">
+        Synonyms: {value.join(', ')}
+      </Text>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <View className="mt-2 gap-1">
+        <Text className="text-sm font-heavy text-text-muted dark:text-text-muted-dark">Synonyms</Text>
+        {value.length > 0 ? (
+          <Text className="text-[14px] font-bold text-text dark:text-text-dark">{value.join(', ')}</Text>
+        ) : null}
+        <Pressable onPress={() => { setEditing(true); setEditValue(value.join(', ')); }}>
+          <Text className="text-sm font-bold text-text-muted dark:text-text-muted-dark">
+            {value.length > 0 ? 'Edit' : 'Add Synonyms'}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <View className="mt-2 gap-1.5">
+      <Text className="text-sm font-heavy text-text-muted dark:text-text-muted-dark">Synonyms</Text>
+      <TextInput
+        className="min-h-[44px] rounded-[12px] border border-border dark:border-border-dark bg-surface-elevated dark:bg-surface-elevated-dark text-text dark:text-text-dark px-3 text-[14px] font-bold"
+        value={editValue}
+        onChangeText={setEditValue}
+        placeholder="comma, separated, synonyms"
+        placeholderTextColor={colors.mutedText}
+        autoFocus
+        editable={!isSaving}
+      />
+      <View className="flex-row gap-2">
+        <Pressable
+          onPress={() => { if (!isSaving) setEditing(false); }}
+          className="px-3 py-1.5 rounded-[10px] border border-border dark:border-border-dark"
+          disabled={isSaving}
+        >
+          <Text className="text-[13px] font-bold text-text dark:text-text-dark">Cancel</Text>
+        </Pressable>
+        <Pressable
+          onPress={saveEdit}
+          className="px-3 py-1.5 rounded-[10px] bg-kanji"
+          disabled={isSaving}
+        >
+          <Text className="text-[13px] font-bold text-white">{isSaving ? 'Saving...' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>

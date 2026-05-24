@@ -226,13 +226,20 @@ export class WaniKaniClient {
       this.updateRateLimit(response.headers.get('date'), Date.now() - startedAt);
 
       const text = await response.text();
-      const payload = text ? JSON.parse(text) : null;
+      let payload: unknown = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (error) {
+        if (response.status >= 200 && response.status < 300) {
+          throw error;
+        }
+      }
 
       if (response.status >= 200 && response.status < 300) {
         return payload as T;
       }
 
-      const errorPayload = payload as ErrorResponse | null;
+      const errorPayload = isErrorResponse(payload) ? payload : null;
       const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : undefined;
       const retryAfterMs = retryAfter ? Number(retryAfter) * 1000 : undefined;
       throw new WaniKaniApiError(
@@ -283,4 +290,8 @@ export class WaniKaniClient {
   private minuteKey(date: Date) {
     return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes());
   }
+}
+
+function isErrorResponse(payload: unknown): payload is ErrorResponse {
+  return typeof payload === 'object' && payload !== null && 'error' in payload;
 }

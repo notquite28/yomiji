@@ -582,6 +582,46 @@ describe('ReviewSession', () => {
       expect(completed.answeredMeaning).toBe(true);
       expect(completed.answeredReading).toBe(true);
     });
+
+    it('reclassifies a wrong answer as correct in success-rate stats', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(
+        items,
+        makeSettings({ groupMeaningReading: true }),
+      );
+
+      session.nextTask();
+      if (session.currentTaskType !== 'meaning') {
+        session.markAnswer(true);
+        session.nextTask();
+      }
+
+      session.markAnswer(false);
+      expect(session.tasksAnswered).toBe(1);
+      expect(session.tasksAnsweredCorrectly).toBe(0);
+
+      session.overrideCorrect();
+
+      expect(session.tasksAnswered).toBe(1);
+      expect(session.tasksAnsweredCorrectly).toBe(1);
+      expect(session.successRateText).toBe('100%');
+    });
+
+    it('reclassifies both sides of a wrong anki answer in success-rate stats', () => {
+      const items = [makeItem(1)];
+      const session = new ReviewSession(items, makeSettings({ ankiMode: true }));
+
+      session.nextTask();
+      session.markAnswer(false);
+      expect(session.tasksAnswered).toBe(2);
+      expect(session.tasksAnsweredCorrectly).toBe(0);
+
+      session.overrideCorrect();
+
+      expect(session.tasksAnswered).toBe(2);
+      expect(session.tasksAnsweredCorrectly).toBe(2);
+      expect(session.successRateText).toBe('100%');
+    });
   });
 
   describe('success rate', () => {

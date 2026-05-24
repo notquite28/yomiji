@@ -449,7 +449,9 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
     setError(null);
 
     try {
-      const result = session.addSynonym(answer.trim());
+      const item = feedback.item;
+      const synonym = answer.trim();
+      const result = session.addSynonym(synonym);
       setLastMarkResult(result);
       setFeedback({
         ...feedback,
@@ -459,11 +461,10 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
         detail: 'Your answer was saved as a synonym and marked correct.',
       });
 
-      const item = session.currentItem ?? feedback.item;
       const db = await openAppDatabase();
       await queueStudyMaterialUpdate(db, {
         subjectId: item.subjectId,
-        meaningSynonyms: item.studyMaterials?.meaningSynonyms ?? [answer.trim()],
+        meaningSynonyms: item.studyMaterials?.meaningSynonyms ?? [synonym],
       });
 
       setRevision((r) => r + 1);

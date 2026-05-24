@@ -3,7 +3,7 @@ import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChe
 import { calculateLeechScore } from '../dashboard/dashboardRepository';
 import { clearAssignmentAvailableAt, markAssignmentStarted } from '../db/assignmentRepository';
 import { AppDatabase } from '../db/database';
-import { upsertWithSynonyms } from '../db/studyMaterialRepository';
+import { findBySubjectId, upsertWithSynonyms } from '../db/studyMaterialRepository';
 import {
   normalizeSubjectType,
   parseSubjectPayload,
@@ -377,15 +377,28 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
   const createdAt = new Date().toISOString();
   await db.execAsync('BEGIN TRANSACTION;');
   try {
+    const existing = await findBySubjectId(db, payload.subjectId);
+    const remoteId = payload.id && payload.id > 0
+      ? payload.id
+      : existing && existing.id > 0
+        ? existing.id
+        : undefined;
+    const payloadWithoutId = {
+      subjectId: payload.subjectId,
+      meaningNote: payload.meaningNote,
+      readingNote: payload.readingNote,
+      meaningSynonyms: payload.meaningSynonyms,
+    };
+    const queuedPayload = remoteId ? { ...payloadWithoutId, id: remoteId } : payloadWithoutId;
     await db.runAsync(
       `INSERT INTO pending_study_materials (id, subject_id, payload, created_at)
        VALUES (?, ?, ?, ?)`,
-      `study-material:${payload.subjectId}:${Date.now()}`,
-      payload.subjectId,
-      JSON.stringify(payload),
+      `study-material:${queuedPayload.subjectId}:${Date.now()}`,
+      queuedPayload.subjectId,
+      JSON.stringify(queuedPayload),
       createdAt,
     );
-    await upsertWithSynonyms(db, payload);
+    await upsertWithSynonyms(db, queuedPayload);
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
