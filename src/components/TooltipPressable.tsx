@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, Text, Vibration, View } from 'react-native';
 import type { GestureResponderEvent, StyleProp, ViewStyle } from 'react-native';
+import { FullWindowOverlay } from 'react-native-screens';
 
 type ToastEntry = { id: number; text: string };
 let toastListeners: Array<(entry: ToastEntry | null) => void> = [];
@@ -15,11 +16,13 @@ function showToast(text: string) {
 export function ToastHost() {
   const [entry, setEntry] = useState<ToastEntry | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pop = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const listener = (e: ToastEntry | null) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (e) {
+        pop.setValue(0);
         setEntry(e);
         timerRef.current = setTimeout(() => setEntry(null), 1800);
       } else {
@@ -31,23 +34,68 @@ export function ToastHost() {
       toastListeners = toastListeners.filter((fn) => fn !== listener);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+  }, [pop]);
 
-  return entry ? (
-    <View className="absolute bottom-10 left-0 right-0 items-center" pointerEvents="box-none">
-      <Pressable
-        className="rounded px-4 py-2.5 bg-text dark:bg-surface-elevated-dark max-w-[300px]"
-        onPress={() => {
-          if (timerRef.current) clearTimeout(timerRef.current);
-          setEntry(null);
+  useEffect(() => {
+    if (!entry) return;
+    Animated.spring(pop, {
+      toValue: 1,
+      damping: 13,
+      stiffness: 280,
+      mass: 0.7,
+      overshootClamping: false,
+      useNativeDriver: true,
+    }).start();
+  }, [entry, pop]);
+
+  const dismiss = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setEntry(null);
+  };
+
+  const content = entry ? (
+    <View
+      className="absolute bottom-10 left-0 right-0 items-center"
+      pointerEvents="box-none"
+      style={{ zIndex: 2147483647, elevation: 2147483647 }}
+    >
+      <Animated.View
+        style={{
+          opacity: pop,
+          transform: [
+            {
+              translateY: pop.interpolate({
+                inputRange: [0, 1],
+                outputRange: [10, 0],
+                easing: Easing.out(Easing.cubic),
+              }),
+            },
+            {
+              scale: pop.interpolate({
+                inputRange: [0, 0.72, 1],
+                outputRange: [0.88, 1.06, 1],
+              }),
+            },
+          ],
         }}
       >
-        <Text className="text-white text-[14px] font-bold text-center">
-          {entry.text}
-        </Text>
-      </Pressable>
+        <Pressable
+          className="rounded-2xl px-4 py-2.5 bg-text dark:bg-surface-elevated-dark max-w-[300px] shadow-lg"
+          onPress={dismiss}
+        >
+          <Text className="text-white text-[14px] font-bold text-center">
+            {entry.text}
+          </Text>
+        </Pressable>
+      </Animated.View>
     </View>
   ) : null;
+
+  if (Platform.OS === 'ios') {
+    return <FullWindowOverlay>{content}</FullWindowOverlay>;
+  }
+
+  return content;
 }
 
 export function TooltipPressable({
@@ -73,6 +121,7 @@ export function TooltipPressable({
 }) {
   const handleLongPress = useCallback(
     (e: GestureResponderEvent) => {
+      Vibration.vibrate(10);
       showToast(tooltip);
       onLongPressProp?.(e);
     },
