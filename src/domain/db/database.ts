@@ -6,6 +6,7 @@ import {
   LevelProgressionData,
   ReviewStatisticData,
   StudyMaterialData,
+  StudyMaterialPayload,
   SubjectData,
   VoiceActorData,
   WaniKaniUserData,
@@ -189,6 +190,22 @@ export async function putAssignments(db: AppDatabase, assignments: Array<ApiReso
   }
 }
 
+function applyPendingStudyMaterialOverlay(
+  resource: ApiResource<StudyMaterialData>,
+  pending: StudyMaterialPayload | null,
+): ApiResource<StudyMaterialData> {
+  if (!pending) return resource;
+  return {
+    ...resource,
+    data: {
+      ...resource.data,
+      ...(pending.meaningSynonyms !== undefined ? { meaning_synonyms: pending.meaningSynonyms } : {}),
+      ...(pending.meaningNote !== undefined ? { meaning_note: pending.meaningNote } : {}),
+      ...(pending.readingNote !== undefined ? { reading_note: pending.readingNote } : {}),
+    },
+  };
+}
+
 export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<ApiResource<StudyMaterialData>>, onProgress?: SaveProgressCallback) {
   const subjectRows = await db.getAllAsync<{ id: number }>('SELECT id FROM subjects');
   const subjectIds = new Set(subjectRows.map((subject) => subject.id));
@@ -202,6 +219,21 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
         continue;
       }
 
+      const pending = await db.getFirstAsync<{ payload: string }>(
+        'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
+        studyMaterial.data.subject_id,
+      );
+      const pendingPayload = pending ? JSON.parse(pending.payload) as StudyMaterialPayload : null;
+      if (pendingPayload && (!pendingPayload.id || pendingPayload.id <= 0)) {
+        pendingPayload.id = studyMaterial.id;
+        await db.runAsync(
+          'UPDATE pending_study_materials SET payload = ? WHERE subject_id = ?',
+          JSON.stringify(pendingPayload),
+          studyMaterial.data.subject_id,
+        );
+      }
+      const materialToStore = applyPendingStudyMaterialOverlay(studyMaterial, pendingPayload);
+
       const existing = await db.getFirstAsync<{ id: number }>(
         'SELECT id FROM study_materials WHERE subject_id = ?',
         studyMaterial.data.subject_id,
@@ -213,8 +245,8 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
            SET id = ?, payload = ?, updated_at = ?
            WHERE subject_id = ?`,
           studyMaterial.id,
-          JSON.stringify(studyMaterial),
-          studyMaterial.data_updated_at ?? null,
+          JSON.stringify(materialToStore),
+          materialToStore.data_updated_at ?? null,
           studyMaterial.data.subject_id,
         );
       } else {
@@ -226,9 +258,9 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
              payload = excluded.payload,
              updated_at = excluded.updated_at`,
           studyMaterial.id,
-          studyMaterial.data.subject_id,
-          JSON.stringify(studyMaterial),
-          studyMaterial.data_updated_at ?? null,
+          materialToStore.data.subject_id,
+          JSON.stringify(materialToStore),
+          materialToStore.data_updated_at ?? null,
         );
       }
 

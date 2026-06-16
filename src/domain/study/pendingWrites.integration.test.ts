@@ -339,6 +339,30 @@ describe('pending study material round-trip', () => {
     expect(payload.meaningSynonyms).toEqual(['old', 'new']);
   });
 
+  it('preserves explicit null note clears in pending and local payloads', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+    await putStudyMaterials(db, [makeStudyMaterial(subjectId, { id: 700, meaning_note: 'old note' })]);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningNote: null,
+    });
+
+    const pending = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const pendingPayload = JSON.parse(pending!.payload) as { meaningNote?: string | null };
+    expect(pendingPayload).toHaveProperty('meaningNote', null);
+
+    const material = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const localPayload = JSON.parse(material!.payload) as { data: { meaning_note?: string | null } };
+    expect(localPayload.data.meaning_note).toBeNull();
+  });
+
   it('coalesces two offline edits for the same subject into one pending row', async () => {
     const { subjectId } = await seedReviewTarget(db);
 
@@ -364,38 +388,30 @@ describe('pending study material round-trip', () => {
     expect(parsed.data.reading_note).toBe('new reading');
   });
 
-  it('sends the current local study material instead of stale pending JSON', async () => {
+  it('sends only durable pending fields and a positive remote id', async () => {
     const { subjectId } = await seedReviewTarget(db);
+    await putStudyMaterials(db, [
+      makeStudyMaterial(subjectId, {
+        id: 700,
+        meaning_synonyms: ['keep'],
+        reading_note: 'keep reading',
+      }),
+    ]);
 
     await queueStudyMaterialUpdate(db, {
       subjectId,
-      meaningSynonyms: ['queued'],
+      meaningNote: 'new note',
     });
-    const current = makeStudyMaterial(subjectId, {
-      id: 800,
-      meaning_synonyms: ['current'],
-      meaning_note: 'current note',
-      reading_note: 'current reading',
-    });
-    await db.runAsync(
-      'UPDATE study_materials SET id = ?, payload = ? WHERE subject_id = ?',
-      current.id!,
-      JSON.stringify(current),
-      subjectId,
-    );
 
     const mockApi = createMockApi();
     await runPendingSync({ db, client: mockApi as unknown as WaniKaniClient });
 
     const smCall = mockApi.calls.find((c) => c.method === 'upsertStudyMaterial');
     expect(smCall).toBeDefined();
-    expect(smCall!.args[0]).toMatchObject({
-      id: 800,
-      subjectId,
-      meaningSynonyms: ['current'],
-      meaningNote: 'current note',
-      readingNote: 'current reading',
-    });
+    const payload = smCall!.args[0] as Record<string, unknown>;
+    expect(payload).toEqual({ subjectId, id: 700, meaningNote: 'new note' });
+    expect(Object.prototype.hasOwnProperty.call(payload, 'readingNote')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(payload, 'meaningSynonyms')).toBe(false);
   });
 
   it('persists returned remote study material id over a local negative id', async () => {

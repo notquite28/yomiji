@@ -292,6 +292,10 @@ export class WaniKaniClient {
     return url;
   }
 
+  private serverEpochMsToLocalMs(serverEpochMs: number) {
+    return serverEpochMs - this.estimatedClockSkewMs;
+  }
+
   private updateRateLimit(headers: Headers, roundTripMs: number) {
     const limit = Number(headers.get('RateLimit-Limit'));
     if (Number.isFinite(limit) && limit > 0) {
@@ -303,34 +307,30 @@ export class WaniKaniClient {
       this.rateLimitRemaining = remaining;
     }
 
+    const dateHeader = headers.get('date');
+    if (dateHeader) {
+      const serverDate = new Date(dateHeader);
+      if (!Number.isNaN(serverDate.getTime())) {
+        if (this.lastRequestServerDate && this.minuteKey(this.lastRequestServerDate) !== this.minuteKey(serverDate)) {
+          this.requestsInLastInterval = 0;
+        }
+
+        this.requestsInLastInterval += 1;
+        this.lastRequestServerDate = serverDate;
+        this.estimatedClockSkewMs = serverDate.getTime() + roundTripMs / 2 - Date.now();
+      }
+    }
+
     const resetSeconds = Number(headers.get('RateLimit-Reset'));
     if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
-      this.rateLimitResetAtMs = resetSeconds * 1000;
+      this.rateLimitResetAtMs = this.serverEpochMsToLocalMs(resetSeconds * 1000);
     }
-
-    const dateHeader = headers.get('date');
-    if (!dateHeader) {
-      return;
-    }
-
-    const serverDate = new Date(dateHeader);
-    if (Number.isNaN(serverDate.getTime())) {
-      return;
-    }
-
-    if (this.lastRequestServerDate && this.minuteKey(this.lastRequestServerDate) !== this.minuteKey(serverDate)) {
-      this.requestsInLastInterval = 0;
-    }
-
-    this.requestsInLastInterval += 1;
-    this.lastRequestServerDate = serverDate;
-    this.estimatedClockSkewMs = serverDate.getTime() + roundTripMs / 2 - Date.now();
   }
 
   private retryAfterMsFromHeaders(headers: Headers): number | undefined {
     const resetSeconds = Number(headers.get('RateLimit-Reset'));
     if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
-      return Math.max(0, resetSeconds * 1000 - Date.now());
+      return Math.max(0, this.serverEpochMsToLocalMs(resetSeconds * 1000) - Date.now());
     }
 
     const retryAfter = headers.get('Retry-After');
@@ -345,7 +345,7 @@ export class WaniKaniClient {
 
     const retryAfterDate = Date.parse(retryAfter);
     if (!Number.isNaN(retryAfterDate)) {
-      return Math.max(0, retryAfterDate - Date.now());
+      return Math.max(0, this.serverEpochMsToLocalMs(retryAfterDate) - Date.now());
     }
 
     return undefined;

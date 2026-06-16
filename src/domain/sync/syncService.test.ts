@@ -28,7 +28,7 @@ import {
 import { runIncrementalSync, runPendingSync } from './syncService';
 
 type PendingProgressRow = { id: string; kind: string; payload: string };
-type PendingStudyMaterialRow = { id: string; subject_id: number };
+type PendingStudyMaterialRow = { id: string; subject_id: number; payload: string };
 
 class FakePendingDb {
   pendingProgress: PendingProgressRow[] = [];
@@ -194,7 +194,7 @@ describe('runIncrementalSync', () => {
   it('reserves two requests for queued study material creates before downloads', async () => {
     (getSyncCursors as jest.Mock).mockResolvedValue({});
     const db = new FakePendingDb();
-    db.pendingStudyMaterials = [{ id: 'create', subject_id: 1 }];
+    db.pendingStudyMaterials = [{ id: 'create', subject_id: 1, payload: JSON.stringify({ subjectId: 1, meaningSynonyms: ['leafy'] }) }];
     db.localStudyMaterials.set(1, {
       id: -1,
       payload: JSON.stringify({ data: { subject_id: 1, meaning_synonyms: ['leafy'], meaning_note: '', reading_note: '' } }),
@@ -238,8 +238,8 @@ describe('runPendingSync', () => {
     const updatePayload: StudyMaterialPayload = { id: 22, subjectId: 2, meaningSynonyms: [], meaningNote: 'remember this', readingNote: '' };
     const db = new FakePendingDb();
     db.pendingStudyMaterials = [
-      { id: 'create', subject_id: 1 },
-      { id: 'update', subject_id: 2 },
+      { id: 'create', subject_id: 1, payload: JSON.stringify(createPayload) },
+      { id: 'update', subject_id: 2, payload: JSON.stringify(updatePayload) },
     ];
     db.localStudyMaterials.set(1, {
       id: -1,

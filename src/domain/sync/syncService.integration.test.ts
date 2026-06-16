@@ -122,6 +122,45 @@ describe('runIncrementalSync', () => {
     expect(stats[0]!.percentage_correct).toBe(91);
   });
 
+  it('keeps pending study material overlays when request reserve defers pending sends', async () => {
+    const subjectId = 301;
+    const vocab = makeVocabulary({ id: subjectId });
+    await putSubjects(db, [vocab]);
+    await queueStudyMaterialUpdate(db, { subjectId, meaningNote: 'local note' });
+
+    const remoteStudyMaterial = makeStudyMaterial(subjectId, {
+      id: 901,
+      meaning_note: 'remote note',
+      reading_note: 'remote reading',
+      meaning_synonyms: ['remote'],
+    });
+    const mockApi = createMockApi({
+      requestsRemainingInInterval: 21,
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('2024-06-01T01:00:00.000Z'),
+      getAssignments: async () => collectionResult('2024-06-01T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2024-06-01T03:00:00.000Z', [remoteStudyMaterial]),
+      getLevelProgressions: async () => collectionResult('2024-06-01T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-01T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-01T06:00:00.000Z'),
+    });
+
+    await runIncrementalSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const pending = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_study_materials');
+    expect(pending?.count).toBe(1);
+    const material = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const parsed = JSON.parse(material!.payload) as {
+      data: { meaning_note: string; reading_note: string; meaning_synonyms: string[] };
+    };
+    expect(parsed.data.meaning_note).toBe('local note');
+    expect(parsed.data.reading_note).toBe('remote reading');
+    expect(parsed.data.meaning_synonyms).toEqual(['remote']);
+  });
+
   it('writes cursor freshness rows for empty collections with no updated cursor', async () => {
     const mockApi = createMockApi({
       getUser: async () => makeUser(),
@@ -456,6 +495,37 @@ describe('runFullRefresh', () => {
     expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 700')).toBeNull();
     expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 701')).toBeTruthy();
     expect(await db.getFirstAsync('SELECT id FROM assignments WHERE id = 702')).toBeTruthy();
+  });
+
+  it('postpones full refresh before clearing cache when study material creates exceed budget', async () => {
+    const oldVocab = makeVocabulary({ id: 800 });
+    await putSubjects(db, [oldVocab]);
+    await queueStudyMaterialUpdate(db, {
+      subjectId: 800,
+      meaningNote: 'local note',
+    });
+
+    const mockApi = createMockApi({
+      requestsRemainingInInterval: 1,
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('2024-06-02T01:00:00.000Z'),
+      getAssignments: async () => collectionResult('2024-06-02T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2024-06-02T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2024-06-02T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-02T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-02T06:00:00.000Z'),
+    });
+
+    await expect(runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient })).rejects.toMatchObject({
+      name: 'SyncError',
+      category: 'rate-limit',
+      isRetryable: true,
+    });
+
+    expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 800')).toBeTruthy();
+    const pending = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_study_materials');
+    expect(pending?.count).toBe(1);
+    expect(mockApi.calls.find((call) => call.method === 'getUser')).toBeUndefined();
   });
 
   it('dedupes concurrent full refreshes', async () => {

@@ -113,6 +113,56 @@ describe('WaniKaniClient rate limits', () => {
 
     expect(client.requestsRemainingInInterval).toBe(0);
   });
+
+  it('uses server Date skew for RateLimit-Reset budgeting', async () => {
+    const serverNowMs = Date.UTC(2024, 0, 1, 0, 0, 0);
+    const localNowMs = serverNowMs + 60_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(localNowMs);
+    try {
+      const fetcher = jest.fn().mockResolvedValueOnce(jsonResponseWithHeaders(200, {
+        id: 1,
+        object: 'user',
+        data: { username: 'tester', level: 1 },
+      }, {
+        Date: new Date(serverNowMs).toUTCString(),
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': String(Math.ceil((serverNowMs + 30_000) / 1000)),
+      }));
+      const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+
+      await client.getUser();
+
+      expect(client.rateLimitResetMs).toBeGreaterThan(29_000);
+      expect(client.rateLimitResetMs).toBeLessThanOrEqual(31_000);
+      expect(client.requestsRemainingInInterval).toBe(0);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('uses server Date skew for 429 RateLimit-Reset retry delay', async () => {
+    expect.assertions(3);
+    const serverNowMs = Date.UTC(2024, 0, 1, 0, 0, 0);
+    const localNowMs = serverNowMs + 60_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(localNowMs);
+    try {
+      const fetcher = jest.fn().mockResolvedValueOnce(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
+        Date: new Date(serverNowMs).toUTCString(),
+        'RateLimit-Remaining': '0',
+        'RateLimit-Reset': String(Math.ceil((serverNowMs + 30_000) / 1000)),
+      }));
+      const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+
+      await client.getUser().catch((error: unknown) => {
+        expect(error).toBeInstanceOf(WaniKaniApiError);
+        const retryAfterMs = (error as WaniKaniApiError).retryAfterMs;
+        expect(retryAfterMs).toBeGreaterThan(29_000);
+        expect(retryAfterMs).toBeLessThanOrEqual(31_000);
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });
 
 describe('WaniKaniClient study material upsert', () => {

@@ -1,5 +1,5 @@
 import { WaniKaniApiError, WaniKaniClient } from '../api/WaniKaniClient';
-import { LessonStartPayload, ReviewProgressPayload, StudyMaterialData, StudyMaterialPayload } from '../api/types';
+import { LessonStartPayload, ReviewProgressPayload, StudyMaterialPayload } from '../api/types';
 import {
   AppDatabase,
   clearRemoteCache,
@@ -254,6 +254,9 @@ export async function runFullRefresh(options: SyncOptions): Promise<void> {
   let tracked: Promise<void>;
   tracked = (async () => {
     await runPendingOnly(options, 'standalone');
+    if (await hasPendingWrites(options.db)) {
+      throw new SyncError('Full refresh postponed until queued writes are synced.', 'rate-limit', true);
+    }
     await clearRemoteCache(options.db);
     await runDownloadSync(options);
   })().finally(() => {
@@ -313,8 +316,8 @@ async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient
     return 0;
   }
 
-  const rows = await db.getAllAsync<{ id: string; subject_id: number }>(
-    'SELECT id, subject_id FROM pending_study_materials ORDER BY created_at ASC LIMIT ?',
+  const rows = await db.getAllAsync<{ id: string; subject_id: number; payload: string }>(
+    'SELECT id, subject_id, payload FROM pending_study_materials ORDER BY created_at ASC LIMIT ?',
     limit,
   );
 
@@ -322,29 +325,27 @@ async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient
   let remainingBudget = limit;
   for (const row of rows) {
     try {
-      const local = await findBySubjectId(db, row.subject_id);
-      if (!local) {
-        await logSyncError(db, new Error(`Missing local study material for subject ${row.subject_id}`), 'pending_study_materials: orphan discarded').catch(() => {});
-        await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
-        continue;
+      const pendingPayload = JSON.parse(row.payload) as StudyMaterialPayload;
+      const local = pendingPayload.id && pendingPayload.id > 0 ? null : await findBySubjectId(db, row.subject_id);
+      const localId = local && local.id > 0 ? local.id : undefined;
+      const remoteId = pendingPayload.id && pendingPayload.id > 0 ? pendingPayload.id : localId;
+      const payload: StudyMaterialPayload = { ...pendingPayload, subjectId: row.subject_id };
+      if (remoteId) {
+        payload.id = remoteId;
       }
 
-      const requestCost = local.id > 0 ? 1 : 2;
+      const requestCost = payload.id && payload.id > 0 ? 1 : 2;
       if (requestCost > remainingBudget) {
         break;
       }
 
-      const parsed = JSON.parse(local.payload) as { data: Partial<StudyMaterialData> };
-      const payload: StudyMaterialPayload = {
-        subjectId: row.subject_id,
-        meaningNote: parsed.data.meaning_note ?? '',
-        readingNote: parsed.data.reading_note ?? '',
-        meaningSynonyms: parsed.data.meaning_synonyms ?? [],
-      };
-      if (local.id > 0) {
-        payload.id = local.id;
+      if (localId && localId !== pendingPayload.id) {
+        await db.runAsync(
+          'UPDATE pending_study_materials SET payload = ? WHERE id = ?',
+          JSON.stringify(payload),
+          row.id,
+        );
       }
-
       const resource = await client.upsertStudyMaterial(payload);
       await db.execAsync('BEGIN TRANSACTION;');
       try {

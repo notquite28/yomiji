@@ -344,6 +344,13 @@ export async function queueLessonStart(db: AppDatabase, assignmentId: number) {
   }
 }
 
+function firstDefined<T>(...values: Array<T | undefined>): T | undefined {
+  for (const value of values) {
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMaterialPayload) {
   const createdAt = new Date().toISOString();
   await db.execAsync('BEGIN TRANSACTION;');
@@ -354,33 +361,26 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
     );
     const pendingPayload = existingPending ? JSON.parse(existingPending.payload) as StudyMaterialPayload : undefined;
     const existing = await findBySubjectId(db, payload.subjectId);
-    const localPayload = existing
-      ? JSON.parse(existing.payload) as { data?: Partial<StudyMaterialData> }
-      : undefined;
-    const localData = localPayload?.data;
     const localId = existing && existing.id > 0 ? existing.id : undefined;
     const payloadId = payload.id && payload.id > 0 ? payload.id : undefined;
     const pendingId = pendingPayload?.id && pendingPayload.id > 0 ? pendingPayload.id : undefined;
+    const remoteId = payloadId ?? pendingId ?? localId;
 
-    const queuedPayload: StudyMaterialPayload = {
-      subjectId: payload.subjectId,
-      meaningSynonyms: payload.meaningSynonyms
-        ?? pendingPayload?.meaningSynonyms
-        ?? localData?.meaning_synonyms
-        ?? [],
-      meaningNote: payload.meaningNote
-        ?? pendingPayload?.meaningNote
-        ?? localData?.meaning_note
-        ?? '',
-      readingNote: payload.readingNote
-        ?? pendingPayload?.readingNote
-        ?? localData?.reading_note
-        ?? '',
-    };
-    const remoteId = payloadId ?? localId ?? pendingId;
-    if (remoteId) {
-      queuedPayload.id = remoteId;
+    const queuedPayload: StudyMaterialPayload = { subjectId: payload.subjectId };
+    const meaningSynonyms = firstDefined(payload.meaningSynonyms, pendingPayload?.meaningSynonyms);
+    const meaningNote = firstDefined(payload.meaningNote, pendingPayload?.meaningNote);
+    const readingNote = firstDefined(payload.readingNote, pendingPayload?.readingNote);
+    const hasEditableField = meaningSynonyms !== undefined || meaningNote !== undefined || readingNote !== undefined;
+
+    if (!hasEditableField && (!existingPending || !remoteId)) {
+      await db.execAsync('COMMIT;');
+      return;
     }
+
+    if (meaningSynonyms !== undefined) queuedPayload.meaningSynonyms = meaningSynonyms;
+    if (meaningNote !== undefined) queuedPayload.meaningNote = meaningNote;
+    if (readingNote !== undefined) queuedPayload.readingNote = readingNote;
+    if (remoteId) queuedPayload.id = remoteId;
 
     await db.runAsync(
       `INSERT INTO pending_study_materials (id, subject_id, payload, created_at, attempts, last_error)
@@ -395,7 +395,9 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
       JSON.stringify(queuedPayload),
       createdAt,
     );
-    await upsertWithSynonyms(db, queuedPayload);
+    if (hasEditableField) {
+      await upsertWithSynonyms(db, payload);
+    }
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
