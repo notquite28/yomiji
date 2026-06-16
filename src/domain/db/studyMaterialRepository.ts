@@ -1,10 +1,29 @@
-import { StudyMaterialPayload } from '../api/types';
+import { ApiResource, StudyMaterialData, StudyMaterialPayload } from '../api/types';
 import { AppDatabase } from './database';
 
 export async function findBySubjectId(db: AppDatabase, subjectId: number): Promise<{ id: number; payload: string } | null> {
   return db.getFirstAsync<{ id: number; payload: string }>(
     'SELECT id, payload FROM study_materials WHERE subject_id = ?',
     subjectId,
+  );
+}
+
+export async function putStudyMaterialResource(db: AppDatabase, resource: ApiResource<StudyMaterialData>): Promise<void> {
+  if (!resource.id || resource.id <= 0) {
+    return;
+  }
+
+  await db.runAsync(
+    `INSERT INTO study_materials (id, subject_id, payload, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(subject_id) DO UPDATE SET
+       id = excluded.id,
+       payload = excluded.payload,
+       updated_at = excluded.updated_at`,
+    resource.id,
+    resource.data.subject_id,
+    JSON.stringify(resource),
+    resource.data_updated_at ?? new Date().toISOString(),
   );
 }
 

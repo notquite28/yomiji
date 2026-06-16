@@ -128,7 +128,7 @@ describe('pending review round-trip', () => {
     expect(progress!.last_mistake_at).toBeTruthy();
   });
 
-  it('does not record subject_progress for correct review', async () => {
+  it('records subject_progress without last mistake for correct review', async () => {
     const { assignmentId, subjectId } = await seedReviewTarget(db);
 
     await queueReviewResult(db, {
@@ -137,11 +137,96 @@ describe('pending review round-trip', () => {
       incorrectReadingAnswers: 0,
     });
 
-    const progress = await db.getFirstAsync<{ subject_id: number }>(
-      'SELECT subject_id FROM subject_progress WHERE subject_id = ?',
+    const progress = await db.getFirstAsync<{ subject_id: number; last_mistake_at: string | null }>(
+      'SELECT subject_id, last_mistake_at FROM subject_progress WHERE subject_id = ?',
       subjectId,
     );
-    expect(progress).toBeNull();
+    expect(progress?.subject_id).toBe(subjectId);
+    expect(progress?.last_mistake_at).toBe('');
+  });
+});
+
+describe('local review SRS optimism', () => {
+  let db: AppDatabase;
+
+  beforeEach(async () => {
+    resetIdCounter();
+    db = await setupDb();
+  });
+
+  afterEach(async () => {
+    await db.closeAsync();
+  });
+
+  async function assignmentState(assignmentId: number) {
+    return db.getFirstAsync<{ srs_stage: number; available_at: string | null }>(
+      'SELECT srs_stage, available_at FROM assignments WHERE id = ?',
+      assignmentId,
+    );
+  }
+
+  it('advances a correct review and clears availability', async () => {
+    const { assignmentId } = await seedReviewTarget(db);
+    await db.runAsync('UPDATE assignments SET srs_stage = 4, available_at = ? WHERE id = ?', '2024-01-01T00:00:00.000Z', assignmentId);
+
+    await queueReviewResult(db, { assignmentId, incorrectMeaningAnswers: 0, incorrectReadingAnswers: 0 });
+
+    await expect(assignmentState(assignmentId)).resolves.toMatchObject({ srs_stage: 5, available_at: null });
+  });
+
+  it('regresses an incorrect review and writes last mistake', async () => {
+    const { assignmentId, subjectId } = await seedReviewTarget(db);
+    await db.runAsync('UPDATE assignments SET srs_stage = 4, available_at = ? WHERE id = ?', '2024-01-01T00:00:00.000Z', assignmentId);
+
+    await queueReviewResult(db, { assignmentId, incorrectMeaningAnswers: 1, incorrectReadingAnswers: 0 });
+
+    await expect(assignmentState(assignmentId)).resolves.toMatchObject({ srs_stage: 3, available_at: null });
+    const progress = await db.getFirstAsync<{ srs_stage: number; last_mistake_at: string | null }>(
+      'SELECT srs_stage, last_mistake_at FROM subject_progress WHERE subject_id = ?',
+      subjectId,
+    );
+    expect(progress?.srs_stage).toBe(3);
+    expect(progress?.last_mistake_at).toBeTruthy();
+  });
+
+  it('preserves recent mistake timestamp when a later review is correct', async () => {
+    const { assignmentId, subjectId } = await seedReviewTarget(db);
+    const lastMistakeAt = '2026-05-11T12:00:00.000Z';
+    await db.runAsync(
+      'INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at) VALUES (?, ?, ?, ?, ?)',
+      subjectId,
+      1,
+      3,
+      'vocabulary',
+      lastMistakeAt,
+    );
+    await db.runAsync('UPDATE assignments SET srs_stage = 3, available_at = ? WHERE id = ?', '2026-05-11T13:00:00.000Z', assignmentId);
+
+    await queueReviewResult(db, { assignmentId, incorrectMeaningAnswers: 0, incorrectReadingAnswers: 0 });
+
+    const progress = await db.getFirstAsync<{ srs_stage: number; last_mistake_at: string | null }>(
+      'SELECT srs_stage, last_mistake_at FROM subject_progress WHERE subject_id = ?',
+      subjectId,
+    );
+    expect(progress).toMatchObject({ srs_stage: 4, last_mistake_at: lastMistakeAt });
+  });
+
+  it('keeps incorrect stage one reviews at stage one', async () => {
+    const { assignmentId } = await seedReviewTarget(db);
+    await db.runAsync('UPDATE assignments SET srs_stage = 1 WHERE id = ?', assignmentId);
+
+    await queueReviewResult(db, { assignmentId, incorrectMeaningAnswers: 0, incorrectReadingAnswers: 1 });
+
+    await expect(assignmentState(assignmentId)).resolves.toMatchObject({ srs_stage: 1 });
+  });
+
+  it('keeps correct stage nine reviews at stage nine', async () => {
+    const { assignmentId } = await seedReviewTarget(db);
+    await db.runAsync('UPDATE assignments SET srs_stage = 9 WHERE id = ?', assignmentId);
+
+    await queueReviewResult(db, { assignmentId, incorrectMeaningAnswers: 0, incorrectReadingAnswers: 0 });
+
+    await expect(assignmentState(assignmentId)).resolves.toMatchObject({ srs_stage: 9 });
   });
 });
 
@@ -252,6 +337,86 @@ describe('pending study material round-trip', () => {
     const payload = JSON.parse(row!.payload) as { id?: number; meaningSynonyms: string[] };
     expect(payload.id).toBe(700);
     expect(payload.meaningSynonyms).toEqual(['old', 'new']);
+  });
+
+  it('coalesces two offline edits for the same subject into one pending row', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['first'],
+      meaningNote: 'old note',
+    });
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['second'],
+      readingNote: 'new reading',
+    });
+
+    expect(await countPending(db, 'pending_study_materials')).toBe(1);
+    const material = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const parsed = JSON.parse(material!.payload) as { data: { meaning_synonyms: string[]; meaning_note: string; reading_note: string } };
+    expect(parsed.data.meaning_synonyms).toEqual(['second']);
+    expect(parsed.data.meaning_note).toBe('old note');
+    expect(parsed.data.reading_note).toBe('new reading');
+  });
+
+  it('sends the current local study material instead of stale pending JSON', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['queued'],
+    });
+    const current = makeStudyMaterial(subjectId, {
+      id: 800,
+      meaning_synonyms: ['current'],
+      meaning_note: 'current note',
+      reading_note: 'current reading',
+    });
+    await db.runAsync(
+      'UPDATE study_materials SET id = ?, payload = ? WHERE subject_id = ?',
+      current.id!,
+      JSON.stringify(current),
+      subjectId,
+    );
+
+    const mockApi = createMockApi();
+    await runPendingSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const smCall = mockApi.calls.find((c) => c.method === 'upsertStudyMaterial');
+    expect(smCall).toBeDefined();
+    expect(smCall!.args[0]).toMatchObject({
+      id: 800,
+      subjectId,
+      meaningSynonyms: ['current'],
+      meaningNote: 'current note',
+      readingNote: 'current reading',
+    });
+  });
+
+  it('persists returned remote study material id over a local negative id', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['new'],
+    });
+
+    const mockApi = createMockApi({
+      upsertStudyMaterial: async () => makeStudyMaterial(subjectId, { id: 123, meaning_synonyms: ['new'] }),
+    });
+    await runPendingSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const material = await db.getFirstAsync<{ id: number }>(
+      'SELECT id FROM study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    expect(material?.id).toBe(123);
+    expect(await countPending(db, 'pending_study_materials')).toBe(0);
   });
 });
 

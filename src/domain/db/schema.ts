@@ -134,4 +134,27 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      DELETE FROM pending_study_materials
+      WHERE rowid NOT IN (
+        SELECT keep_rowid
+        FROM (
+          SELECT (
+            SELECT p2.rowid
+            FROM pending_study_materials p2
+            WHERE p2.subject_id = p1.subject_id
+            ORDER BY p2.created_at DESC, p2.rowid DESC
+            LIMIT 1
+          ) AS keep_rowid
+          FROM pending_study_materials p1
+          GROUP BY p1.subject_id
+        )
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS pending_study_materials_subject_idx
+        ON pending_study_materials(subject_id);
+    `,
+  },
 ];

@@ -46,6 +46,9 @@ export class WaniKaniClient {
   private estimatedClockSkewMs = 0;
   private lastRequestServerDate?: Date;
   private requestsInLastInterval = 0;
+  private rateLimitLimit = RATE_LIMIT_PER_SERVER_MINUTE;
+  private rateLimitRemaining?: number;
+  private rateLimitResetAtMs?: number;
 
   constructor(private readonly apiToken: string, fetcher: typeof fetch = fetch) {
     this.fetcher = fetcher;
@@ -53,12 +56,22 @@ export class WaniKaniClient {
 
   get requestsRemainingInInterval() {
     if (this.rateLimitResetMs <= 0) {
-      return RATE_LIMIT_PER_SERVER_MINUTE;
+      this.rateLimitRemaining = undefined;
+      return this.rateLimitLimit;
     }
-    return RATE_LIMIT_PER_SERVER_MINUTE - this.requestsInLastInterval;
+    return this.rateLimitRemaining ?? Math.max(0, this.rateLimitLimit - this.requestsInLastInterval);
   }
 
   get rateLimitResetMs() {
+    const resetAtMs = this.rateLimitResetAtMs;
+    if (resetAtMs !== undefined) {
+      const remainingMs = resetAtMs - Date.now();
+      if (remainingMs > 0) {
+        return remainingMs;
+      }
+      return 0;
+    }
+
     if (!this.lastRequestServerDate) {
       return 0;
     }
@@ -111,6 +124,11 @@ export class WaniKaniClient {
     }, onPage);
   }
 
+  async getStudyMaterialBySubjectId(subjectId: number) {
+    const result = await this.getStudyMaterialsForSubject(subjectId);
+    return result.items[0] ?? null;
+  }
+
   async getLevelProgressions(updatedAfter?: string, onPage?: CollectionPageProgressCallback) {
     return this.getCollection<LevelProgressionData>('/level_progressions', {
       updated_after: updatedAfter,
@@ -160,7 +178,7 @@ export class WaniKaniClient {
     });
   }
 
-  async upsertStudyMaterial(payload: StudyMaterialPayload) {
+  async upsertStudyMaterial(payload: StudyMaterialPayload): Promise<ApiResource<StudyMaterialData> | null> {
     const studyMaterial: Record<string, unknown> = {};
 
     if (payload.meaningNote !== undefined) {
@@ -173,18 +191,24 @@ export class WaniKaniClient {
       studyMaterial.meaning_synonyms = payload.meaningSynonyms;
     }
 
-    let path = '/study_materials';
-    let method = 'POST';
-
-    if (payload.id) {
-      path = `/study_materials/${payload.id}`;
-      method = 'PUT';
-    } else {
-      studyMaterial.subject_id = payload.subjectId;
+    if (payload.id && payload.id > 0) {
+      return this.request<ApiResource<StudyMaterialData> | null>(`/study_materials/${payload.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ study_material: studyMaterial }),
+      });
     }
 
-    return this.request(path, {
-      method,
+    const remote = await this.getStudyMaterialBySubjectId(payload.subjectId);
+    if (remote?.id && remote.id > 0) {
+      return this.request<ApiResource<StudyMaterialData> | null>(`/study_materials/${remote.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ study_material: studyMaterial }),
+      });
+    }
+
+    studyMaterial.subject_id = payload.subjectId;
+    return this.request<ApiResource<StudyMaterialData> | null>('/study_materials', {
+      method: 'POST',
       body: JSON.stringify({ study_material: studyMaterial }),
     });
   }
@@ -192,7 +216,7 @@ export class WaniKaniClient {
   private async getCollection<TData>(path: string, query: Record<string, string | undefined>, onPage?: CollectionPageProgressCallback) {
     const items: Array<ApiResource<TData>> = [];
     let totalCount: number | undefined;
-    let dataUpdatedAt = '';
+    let dataUpdatedAt = query.updated_after ?? '';
     let nextUrl: string | undefined = this.buildUrl(path, query).toString();
 
     while (nextUrl) {
@@ -211,7 +235,8 @@ export class WaniKaniClient {
     const startedAt = Date.now();
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : this.buildUrl(pathOrUrl).toString();
     const headers = new Headers(init.headers);
-    headers.set('Authorization', `Token token=${this.apiToken}`);
+    headers.set('Authorization', `Bearer ${this.apiToken}`);
+    headers.set('Wanikani-Revision', '20170710');
     headers.set('Accept', 'application/json');
 
     if (init.body) {
@@ -223,7 +248,7 @@ export class WaniKaniClient {
 
     try {
       const response = await this.fetcher(url, { ...init, headers, signal: controller.signal });
-      this.updateRateLimit(response.headers.get('date'), Date.now() - startedAt);
+      this.updateRateLimit(response.headers, Date.now() - startedAt);
 
       const text = await response.text();
       let payload: unknown = null;
@@ -240,8 +265,7 @@ export class WaniKaniClient {
       }
 
       const errorPayload = isErrorResponse(payload) ? payload : null;
-      const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : undefined;
-      const retryAfterMs = retryAfter ? Number(retryAfter) * 1000 : undefined;
+      const retryAfterMs = response.status === 429 ? this.retryAfterMsFromHeaders(response.headers) : undefined;
       throw new WaniKaniApiError(
         response.status,
         errorPayload?.error ?? `WaniKani request failed with HTTP ${response.status}`,
@@ -268,7 +292,23 @@ export class WaniKaniClient {
     return url;
   }
 
-  private updateRateLimit(dateHeader: string | null, roundTripMs: number) {
+  private updateRateLimit(headers: Headers, roundTripMs: number) {
+    const limit = Number(headers.get('RateLimit-Limit'));
+    if (Number.isFinite(limit) && limit > 0) {
+      this.rateLimitLimit = limit;
+    }
+
+    const remaining = Number(headers.get('RateLimit-Remaining'));
+    if (Number.isFinite(remaining) && remaining >= 0) {
+      this.rateLimitRemaining = remaining;
+    }
+
+    const resetSeconds = Number(headers.get('RateLimit-Reset'));
+    if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+      this.rateLimitResetAtMs = resetSeconds * 1000;
+    }
+
+    const dateHeader = headers.get('date');
     if (!dateHeader) {
       return;
     }
@@ -285,6 +325,30 @@ export class WaniKaniClient {
     this.requestsInLastInterval += 1;
     this.lastRequestServerDate = serverDate;
     this.estimatedClockSkewMs = serverDate.getTime() + roundTripMs / 2 - Date.now();
+  }
+
+  private retryAfterMsFromHeaders(headers: Headers): number | undefined {
+    const resetSeconds = Number(headers.get('RateLimit-Reset'));
+    if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+      return Math.max(0, resetSeconds * 1000 - Date.now());
+    }
+
+    const retryAfter = headers.get('Retry-After');
+    if (!retryAfter) {
+      return undefined;
+    }
+
+    const retryAfterSeconds = Number(retryAfter);
+    if (Number.isFinite(retryAfterSeconds)) {
+      return Math.max(0, retryAfterSeconds * 1000);
+    }
+
+    const retryAfterDate = Date.parse(retryAfter);
+    if (!Number.isNaN(retryAfterDate)) {
+      return Math.max(0, retryAfterDate - Date.now());
+    }
+
+    return undefined;
   }
 
   private minuteKey(date: Date) {

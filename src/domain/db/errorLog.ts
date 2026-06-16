@@ -22,6 +22,8 @@ export type SyncErrorInfo = {
 const HIBERNATION_PATTERNS = ['hibernat', 'inactive subscription', 'account has been hibernated'];
 
 const TOKEN_PATTERN = /Token token=[a-f0-9\-]{8,}/gi;
+const AUTH_BEARER_PATTERN = /(Authorization:\s*Bearer\s+)[^\s,;]+/gi;
+const BEARER_PATTERN = /(^|[^A-Za-z0-9_-])Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
 const URL_TOKEN_PATTERN = /([?&]api_key=)[^&\s]+/gi;
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_CONTEXT_LENGTH = 2000;
@@ -58,6 +60,8 @@ export function describeSyncError(error: unknown): SyncErrorInfo {
 
 export function sanitize(text: string): string {
   let result = text.replace(TOKEN_PATTERN, 'Token token=[REDACTED]');
+  result = result.replace(AUTH_BEARER_PATTERN, '$1[REDACTED]');
+  result = result.replace(BEARER_PATTERN, '$1Bearer [REDACTED]');
   result = result.replace(URL_TOKEN_PATTERN, '$1[REDACTED]');
   return result.slice(0, MAX_MESSAGE_LENGTH);
 }

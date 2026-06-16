@@ -28,23 +28,27 @@ import {
 import { runIncrementalSync, runPendingSync } from './syncService';
 
 type PendingProgressRow = { id: string; kind: string; payload: string };
-type PendingStudyMaterialRow = { id: string; payload: string };
+type PendingStudyMaterialRow = { id: string; subject_id: number };
 
 class FakePendingDb {
   pendingProgress: PendingProgressRow[] = [];
   pendingStudyMaterials: PendingStudyMaterialRow[] = [];
+  localStudyMaterials = new Map<number, { id: number; payload: string }>();
   updates: Array<{ table: string; id: string; error: string }> = [];
 
-  async getFirstAsync<T>() {
+  async getFirstAsync<T>(sql?: string, ...args: unknown[]) {
+    if (sql?.includes('FROM study_materials')) {
+      return (this.localStudyMaterials.get(Number(args[0])) ?? null) as T;
+    }
     return { value: this.pendingProgress.length + this.pendingStudyMaterials.length } as T;
   }
 
-  async getAllAsync<T>(sql: string) {
+  async getAllAsync<T>(sql: string, limit?: number) {
     if (sql.includes('FROM pending_progress')) {
-      return [...this.pendingProgress] as T[];
+      return this.pendingProgress.slice(0, limit).map((row) => ({ ...row })) as T[];
     }
     if (sql.includes('FROM pending_study_materials')) {
-      return [...this.pendingStudyMaterials] as T[];
+      return this.pendingStudyMaterials.slice(0, limit).map((row) => ({ ...row })) as T[];
     }
     return [] as T[];
   }
@@ -68,6 +72,8 @@ class FakePendingDb {
       this.updates.push({ table: 'pending_study_materials', error: String(args[0]), id: String(args[1]) });
     }
   }
+
+  async execAsync() {}
 }
 
 function collectionResult<T>(dataUpdatedAt: string, items: Array<ApiResource<T>> = []) {
@@ -85,6 +91,9 @@ function user(): ApiResource<WaniKaniUserData> {
 
 function makeClient(overrides: Partial<Record<keyof WaniKaniClient, jest.Mock>> = {}) {
   return {
+    get requestsRemainingInInterval() {
+      return 60;
+    },
     getUser: jest.fn().mockResolvedValue(user()),
     getSubjects: jest.fn().mockResolvedValue(collectionResult('2024-01-02T00:00:00.000Z')),
     getAssignments: jest.fn().mockResolvedValue(collectionResult<AssignmentData>('2024-01-03T00:00:00.000Z')),
@@ -94,7 +103,7 @@ function makeClient(overrides: Partial<Record<keyof WaniKaniClient, jest.Mock>> 
     getReviewStatistics: jest.fn().mockResolvedValue(collectionResult('2024-01-07T00:00:00.000Z')),
     startAssignment: jest.fn().mockResolvedValue(undefined),
     createReview: jest.fn().mockResolvedValue(undefined),
-    upsertStudyMaterial: jest.fn().mockResolvedValue(undefined),
+    upsertStudyMaterial: jest.fn().mockResolvedValue(null),
     ...overrides,
   } as unknown as WaniKaniClient;
 }
@@ -138,6 +147,67 @@ describe('runIncrementalSync', () => {
     expect(setSyncCursor).toHaveBeenCalledWith(db, 'voice_actors', '2024-01-06T00:00:00.000Z');
     expect(setSyncCursor).toHaveBeenCalledWith(db, 'review_stats', '2024-01-07T00:00:00.000Z');
   });
+
+  it('returns active pending sync instead of overlapping downloads', async () => {
+    const reviewPayload: ReviewProgressPayload = {
+      assignmentId: 202,
+      incorrectMeaningAnswers: 0,
+      incorrectReadingAnswers: 0,
+    };
+    const db = new FakePendingDb();
+    db.pendingProgress = [{ id: 'review', kind: 'review', payload: JSON.stringify(reviewPayload) }];
+    let releaseReview!: () => void;
+    const blockedReview = new Promise<void>((resolve) => { releaseReview = resolve; });
+    const client = makeClient({
+      createReview: jest.fn().mockReturnValue(blockedReview),
+    });
+
+    const pending = runPendingSync({ db: db as never, client });
+    await Promise.resolve();
+    const incremental = runIncrementalSync({ db: db as never, client });
+    releaseReview();
+    await Promise.all([pending, incremental]);
+
+    expect(client.createReview).toHaveBeenCalledTimes(1);
+    expect(client.getUser).not.toHaveBeenCalled();
+  });
+
+  it('skips pending writes when incremental sync needs the reserved download budget', async () => {
+    (getSyncCursors as jest.Mock).mockResolvedValue({});
+    const reviewPayload: ReviewProgressPayload = {
+      assignmentId: 202,
+      incorrectMeaningAnswers: 0,
+      incorrectReadingAnswers: 0,
+    };
+    const db = new FakePendingDb();
+    db.pendingProgress = [{ id: 'review', kind: 'review', payload: JSON.stringify(reviewPayload) }];
+    const client = makeClient();
+    Object.defineProperty(client, 'requestsRemainingInInterval', { get: () => 20 });
+
+    await runIncrementalSync({ db: db as never, client });
+
+    expect(client.createReview).not.toHaveBeenCalled();
+    expect(client.getUser).toHaveBeenCalledTimes(1);
+    expect(db.pendingProgress).toHaveLength(1);
+  });
+
+  it('reserves two requests for queued study material creates before downloads', async () => {
+    (getSyncCursors as jest.Mock).mockResolvedValue({});
+    const db = new FakePendingDb();
+    db.pendingStudyMaterials = [{ id: 'create', subject_id: 1 }];
+    db.localStudyMaterials.set(1, {
+      id: -1,
+      payload: JSON.stringify({ data: { subject_id: 1, meaning_synonyms: ['leafy'], meaning_note: '', reading_note: '' } }),
+    });
+    const client = makeClient();
+    Object.defineProperty(client, 'requestsRemainingInInterval', { get: () => 22 });
+
+    await runIncrementalSync({ db: db as never, client });
+
+    expect(client.upsertStudyMaterial).not.toHaveBeenCalled();
+    expect(client.getUser).toHaveBeenCalledTimes(1);
+    expect(db.pendingStudyMaterials).toHaveLength(1);
+  });
 });
 
 describe('runPendingSync', () => {
@@ -164,13 +234,21 @@ describe('runPendingSync', () => {
   });
 
   it('sends queued study material creates and updates, then deletes successful rows', async () => {
-    const createPayload: StudyMaterialPayload = { subjectId: 1, meaningSynonyms: ['leafy'] };
-    const updatePayload: StudyMaterialPayload = { id: 22, subjectId: 2, meaningNote: 'remember this' };
+    const createPayload: StudyMaterialPayload = { subjectId: 1, meaningSynonyms: ['leafy'], meaningNote: '', readingNote: '' };
+    const updatePayload: StudyMaterialPayload = { id: 22, subjectId: 2, meaningSynonyms: [], meaningNote: 'remember this', readingNote: '' };
     const db = new FakePendingDb();
     db.pendingStudyMaterials = [
-      { id: 'create', payload: JSON.stringify(createPayload) },
-      { id: 'update', payload: JSON.stringify(updatePayload) },
+      { id: 'create', subject_id: 1 },
+      { id: 'update', subject_id: 2 },
     ];
+    db.localStudyMaterials.set(1, {
+      id: -1,
+      payload: JSON.stringify({ data: { subject_id: 1, meaning_synonyms: ['leafy'], meaning_note: '', reading_note: '' } }),
+    });
+    db.localStudyMaterials.set(2, {
+      id: 22,
+      payload: JSON.stringify({ data: { subject_id: 2, meaning_synonyms: [], meaning_note: 'remember this', reading_note: '' } }),
+    });
     const client = makeClient();
 
     await runPendingSync({ db: db as never, client });

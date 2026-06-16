@@ -13,6 +13,14 @@ describe('sanitize', () => {
     expect(result).toBe('Token token=[REDACTED] and Token token=[REDACTED]');
   });
 
+  test('redacts Authorization Bearer patterns', () => {
+    expect(sanitize('Authorization: Bearer abc123.secret-token')).toBe('Authorization: Bearer [REDACTED]');
+  });
+
+  test('redacts bare Bearer patterns', () => {
+    expect(sanitize('request failed with Bearer abc123.secret-token')).toBe('request failed with Bearer [REDACTED]');
+  });
+
   test('redacts api_key query parameters', () => {
     const input = 'https://example.com/api?api_key=secret123&other=value';
     expect(sanitize(input)).toBe('https://example.com/api?api_key=[REDACTED]&other=value');

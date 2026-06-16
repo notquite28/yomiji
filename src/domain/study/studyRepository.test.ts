@@ -268,7 +268,7 @@ describe('recent mistakes', () => {
     expect(recentMistakeCutoff(new Date('2026-05-11T12:00:00.000Z')).toISOString()).toBe('2026-05-10T12:00:00.000Z');
   });
 
-  it('records last mistake time when a queued review had incorrect answers', async () => {
+  it('records local SRS regression and last mistake time when a queued review had incorrect answers', async () => {
     const runAsync = jest.fn().mockResolvedValue(undefined);
     const db = {
       execAsync: jest.fn().mockResolvedValue(undefined),
@@ -289,20 +289,31 @@ describe('recent mistakes', () => {
 
     expect(db.getFirstAsync).toHaveBeenCalledWith(expect.stringContaining('FROM assignments'), 99);
     expect(runAsync).toHaveBeenCalledWith(
+      'UPDATE assignments SET srs_stage = ?, available_at = NULL WHERE id = ?',
+      2,
+      99,
+    );
+    expect(runAsync).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO subject_progress'),
       42,
       7,
-      3,
+      2,
       'kanji',
       expect.any(String),
     );
   });
 
-  it('does not record a recent mistake for fully correct reviews', async () => {
+  it('records local SRS advancement without overwriting mistake time for fully correct reviews', async () => {
+    const runAsync = jest.fn().mockResolvedValue(undefined);
     const db = {
       execAsync: jest.fn().mockResolvedValue(undefined),
-      runAsync: jest.fn().mockResolvedValue(undefined),
-      getFirstAsync: jest.fn().mockResolvedValue(null),
+      runAsync,
+      getFirstAsync: jest.fn().mockResolvedValue({
+        subject_id: 42,
+        level: 7,
+        srs_stage: 8,
+        subject_type: 'kanji',
+      }),
     } as unknown as AppDatabase;
 
     await queueReviewResult(db, {
@@ -311,6 +322,18 @@ describe('recent mistakes', () => {
       incorrectReadingAnswers: 0,
     });
 
-    expect(db.getFirstAsync).not.toHaveBeenCalled();
+    expect(db.getFirstAsync).toHaveBeenCalledWith(expect.stringContaining('FROM assignments'), 99);
+    expect(runAsync).toHaveBeenCalledWith(
+      'UPDATE assignments SET srs_stage = ?, available_at = NULL WHERE id = ?',
+      9,
+      99,
+    );
+    expect(runAsync).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO subject_progress'),
+      42,
+      7,
+      9,
+      'kanji',
+    );
   });
 });

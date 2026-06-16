@@ -1,5 +1,5 @@
 import { WaniKaniApiError, WaniKaniClient } from '../api/WaniKaniClient';
-import { LessonStartPayload, ReviewProgressPayload, StudyMaterialPayload } from '../api/types';
+import { LessonStartPayload, ReviewProgressPayload, StudyMaterialData, StudyMaterialPayload } from '../api/types';
 import {
   AppDatabase,
   clearRemoteCache,
@@ -13,6 +13,7 @@ import {
   putVoiceActors,
   setSyncCursor,
 } from '../db/database';
+import { findBySubjectId, putStudyMaterialResource } from '../db/studyMaterialRepository';
 import { classifySyncError, logSyncError, SyncErrorCategory } from '../db/errorLog';
 
 export type SyncStep =
@@ -54,14 +55,19 @@ export type SyncOptions = {
 };
 
 let activeSync: Promise<void> | null = null;
-let activePendingSync: Promise<void> | null = null;
+let activeFullRefresh: Promise<void> | null = null;
+
+const DOWNLOAD_REQUEST_RESERVE = 21;
 
 export function runIncrementalSync(options: SyncOptions) {
   if (activeSync) {
     return activeSync;
   }
 
-  activeSync = trackActiveSync(runSync(options));
+  activeSync = trackActiveSync((async () => {
+    await runPendingOnly(options, 'before-download');
+    await runDownloadSync(options);
+  })());
   return activeSync;
 }
 
@@ -78,15 +84,9 @@ export function runPendingSync(options: SyncOptions) {
   if (activeSync) {
     return activeSync;
   }
-  if (activePendingSync) {
-    return activePendingSync;
-  }
 
-  activePendingSync = runPendingOnlySync(options).finally(() => {
-    activePendingSync = null;
-  });
-
-  return activePendingSync;
+  activeSync = trackActiveSync(runPendingOnly(options, 'standalone'));
+  return activeSync;
 }
 
 export async function hasPendingWrites(db: AppDatabase) {
@@ -98,16 +98,21 @@ export async function hasPendingWrites(db: AppDatabase) {
   return (row?.value ?? 0) > 0;
 }
 
-async function runPendingOnlySync({ db, client, onProgress }: SyncOptions) {
+async function runPendingOnly({ db, client, onProgress }: SyncOptions, mode: 'standalone' | 'before-download') {
   if (!(await hasPendingWrites(db))) {
     return;
   }
 
+  const reserve = mode === 'before-download' ? DOWNLOAD_REQUEST_RESERVE : 0;
+  const budget = Math.max(0, client.requestsRemainingInInterval - reserve);
+  let remainingBudget = budget;
+
   try {
     onProgress?.({ step: 'pending-progress', label: 'Sending queued lesson and review progress', completed: 0, total: 2 });
-    await sendPendingProgress(db, client);
+    const sentProgress = await sendPendingProgress(db, client, remainingBudget);
+    remainingBudget = Math.max(0, remainingBudget - sentProgress);
     onProgress?.({ step: 'pending-study-materials', label: 'Sending queued study material edits', completed: 1, total: 2 });
-    await sendPendingStudyMaterials(db, client);
+    await sendPendingStudyMaterials(db, client, remainingBudget);
     onProgress?.({ step: 'complete', label: 'Pending progress synced', completed: 2, total: 2 });
   } catch (error) {
     await logSyncError(db, error, 'pending_sync').catch(() => {});
@@ -115,25 +120,16 @@ async function runPendingOnlySync({ db, client, onProgress }: SyncOptions) {
   }
 }
 
-async function runSync({ db, client, onProgress, onCheckpoint }: SyncOptions) {
+async function runDownloadSync({ db, client, onProgress, onCheckpoint }: SyncOptions) {
   const report = (step: SyncStep, label: string, completed: number, total: number) => {
     onProgress?.({ step, label, completed, total });
   };
 
-  const total = 9;
+  const total = 7;
   let completed = 0;
-  let currentStep: SyncStep = 'pending-progress';
+  let currentStep: SyncStep = 'user';
 
   try {
-    report('pending-progress', 'Sending queued lesson and review progress', completed, total);
-    await sendPendingProgress(db, client);
-    completed += 1;
-
-    report('pending-study-materials', 'Sending queued study material edits', completed, total);
-    currentStep = 'pending-study-materials';
-    await sendPendingStudyMaterials(db, client);
-    completed += 1;
-
     const cursors = await getSyncCursors(db);
 
     report('user', 'Refreshing user profile', completed, total);
@@ -244,26 +240,47 @@ export function isSyncAuthError(error: unknown): boolean {
 }
 
 export async function runFullRefresh(options: SyncOptions): Promise<void> {
-  const pendingSync = activeSync;
-  activeSync = trackActiveSync((async () => {
-    if (pendingSync) {
-      await pendingSync;
-    }
-    if (activePendingSync) {
-      await activePendingSync;
-    }
-    await clearRemoteCache(options.db);
-    await runSync(options);
-  })());
+  if (activeFullRefresh) {
+    return activeFullRefresh;
+  }
 
-  return activeSync;
+  if (activeSync) {
+    await activeSync;
+  }
+  if (activeFullRefresh) {
+    return activeFullRefresh;
+  }
+
+  let tracked: Promise<void>;
+  tracked = (async () => {
+    await runPendingOnly(options, 'standalone');
+    await clearRemoteCache(options.db);
+    await runDownloadSync(options);
+  })().finally(() => {
+    if (activeFullRefresh === tracked) {
+      activeFullRefresh = null;
+    }
+    if (activeSync === tracked) {
+      activeSync = null;
+    }
+  });
+
+  activeFullRefresh = tracked;
+  activeSync = tracked;
+  return tracked;
 }
 
-async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient) {
+async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient, limit: number) {
+  if (limit <= 0) {
+    return 0;
+  }
+
   const rows = await db.getAllAsync<{ id: string; kind: string; payload: string }>(
-    'SELECT id, kind, payload FROM pending_progress ORDER BY created_at ASC',
+    'SELECT id, kind, payload FROM pending_progress ORDER BY created_at ASC LIMIT ?',
+    limit,
   );
 
+  let sent = 0;
   for (const row of rows) {
     try {
       if (row.kind === 'lesson-start') {
@@ -272,6 +289,7 @@ async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient) {
         await client.createReview(JSON.parse(row.payload) as ReviewProgressPayload);
       }
       await db.runAsync('DELETE FROM pending_progress WHERE id = ?', row.id);
+      sent += 1;
     } catch (error) {
       if (error instanceof WaniKaniApiError && error.status === 422) {
         await logSyncError(db, error, `pending_progress: discarded stale ${row.kind}`).catch(() => {});
@@ -287,17 +305,60 @@ async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient) {
       throw error;
     }
   }
+  return sent;
 }
 
-async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient) {
-  const rows = await db.getAllAsync<{ id: string; payload: string }>(
-    'SELECT id, payload FROM pending_study_materials ORDER BY created_at ASC',
+async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient, limit: number) {
+  if (limit <= 0) {
+    return 0;
+  }
+
+  const rows = await db.getAllAsync<{ id: string; subject_id: number }>(
+    'SELECT id, subject_id FROM pending_study_materials ORDER BY created_at ASC LIMIT ?',
+    limit,
   );
 
+  let sent = 0;
+  let remainingBudget = limit;
   for (const row of rows) {
     try {
-      await client.upsertStudyMaterial(JSON.parse(row.payload) as StudyMaterialPayload);
-      await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
+      const local = await findBySubjectId(db, row.subject_id);
+      if (!local) {
+        await logSyncError(db, new Error(`Missing local study material for subject ${row.subject_id}`), 'pending_study_materials: orphan discarded').catch(() => {});
+        await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
+        continue;
+      }
+
+      const requestCost = local.id > 0 ? 1 : 2;
+      if (requestCost > remainingBudget) {
+        break;
+      }
+
+      const parsed = JSON.parse(local.payload) as { data: Partial<StudyMaterialData> };
+      const payload: StudyMaterialPayload = {
+        subjectId: row.subject_id,
+        meaningNote: parsed.data.meaning_note ?? '',
+        readingNote: parsed.data.reading_note ?? '',
+        meaningSynonyms: parsed.data.meaning_synonyms ?? [],
+      };
+      if (local.id > 0) {
+        payload.id = local.id;
+      }
+
+      const resource = await client.upsertStudyMaterial(payload);
+      await db.execAsync('BEGIN TRANSACTION;');
+      try {
+        if (resource) {
+          await putStudyMaterialResource(db, resource);
+        }
+        await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
+        await db.execAsync('COMMIT;');
+      } catch (error) {
+        await db.execAsync('ROLLBACK;');
+        throw error;
+      }
+      remainingBudget -= requestCost;
+      sent += 1;
     } catch (error) {
       if (error instanceof WaniKaniApiError && error.status === 422) {
         await logSyncError(db, error, 'pending_study_materials: discarded stale').catch(() => {});
@@ -313,4 +374,5 @@ async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient
       throw error;
     }
   }
+  return sent;
 }

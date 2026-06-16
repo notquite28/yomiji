@@ -68,3 +68,68 @@ export async function markAssignmentStarted(db: AppDatabase, assignmentId: numbe
     assignmentId,
   );
 }
+
+export async function applyLocalReviewResult(
+  db: AppDatabase,
+  assignmentId: number,
+  incorrectMeaningAnswers: number,
+  incorrectReadingAnswers: number,
+  reviewedAt: string,
+): Promise<void> {
+  const row = await db.getFirstAsync<{
+    subject_id: number;
+    level: number | null;
+    srs_stage: number;
+    subject_type: string | null;
+  }>(
+    `SELECT subject_id, level, srs_stage, subject_type
+     FROM assignments
+     WHERE id = ?`,
+    assignmentId,
+  );
+
+  if (!row) {
+    return;
+  }
+
+  const hasMistake = incorrectMeaningAnswers > 0 || incorrectReadingAnswers > 0;
+  const nextStage = hasMistake
+    ? Math.max(1, row.srs_stage - 1)
+    : Math.min(9, row.srs_stage + 1);
+
+  await db.runAsync(
+    'UPDATE assignments SET srs_stage = ?, available_at = NULL WHERE id = ?',
+    nextStage,
+    assignmentId,
+  );
+
+  if (hasMistake) {
+    await db.runAsync(
+      `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(subject_id) DO UPDATE SET
+         level = excluded.level,
+         srs_stage = excluded.srs_stage,
+         subject_type = excluded.subject_type,
+         last_mistake_at = excluded.last_mistake_at`,
+      row.subject_id,
+      row.level,
+      nextStage,
+      row.subject_type,
+      reviewedAt,
+    );
+  } else {
+    await db.runAsync(
+      `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
+       VALUES (?, ?, ?, ?, '')
+       ON CONFLICT(subject_id) DO UPDATE SET
+         level = excluded.level,
+         srs_stage = excluded.srs_stage,
+         subject_type = excluded.subject_type`,
+      row.subject_id,
+      row.level,
+      nextStage,
+      row.subject_type,
+    );
+  }
+}

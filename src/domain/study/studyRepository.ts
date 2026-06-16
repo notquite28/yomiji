@@ -1,7 +1,7 @@
 import { AssignmentData, StudyMaterialData } from '../api/types';
 import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChecker';
 import { calculateLeechScore } from '../dashboard/dashboardRepository';
-import { clearAssignmentAvailableAt, markAssignmentStarted } from '../db/assignmentRepository';
+import { applyLocalReviewResult, markAssignmentStarted } from '../db/assignmentRepository';
 import { AppDatabase } from '../db/database';
 import { findBySubjectId, upsertWithSynonyms } from '../db/studyMaterialRepository';
 import {
@@ -306,10 +306,13 @@ export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
       }),
       createdAt,
     );
-    if (result.incorrectMeaningAnswers > 0 || result.incorrectReadingAnswers > 0) {
-      await markRecentMistake(db, result.assignmentId, createdAt);
-    }
-    await clearAssignmentAvailableAt(db, result.assignmentId);
+    await applyLocalReviewResult(
+      db,
+      result.assignmentId,
+      result.incorrectMeaningAnswers,
+      result.incorrectReadingAnswers,
+      createdAt,
+    );
     await db.execAsync('COMMIT;');
   } catch (error) {
     await db.execAsync('ROLLBACK;');
@@ -317,38 +320,6 @@ export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
   }
 }
 
-async function markRecentMistake(db: AppDatabase, assignmentId: number, mistakeAt: string) {
-  const row = await db.getFirstAsync<{
-    subject_id: number;
-    level: number | null;
-    srs_stage: number;
-    subject_type: string | null;
-  }>(
-    `SELECT subject_id, level, srs_stage, subject_type
-     FROM assignments
-     WHERE id = ?`,
-    assignmentId,
-  );
-
-  if (!row) {
-    return;
-  }
-
-  await db.runAsync(
-    `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(subject_id) DO UPDATE SET
-       level = excluded.level,
-       srs_stage = excluded.srs_stage,
-       subject_type = excluded.subject_type,
-       last_mistake_at = excluded.last_mistake_at`,
-    row.subject_id,
-    row.level,
-    row.srs_stage,
-    row.subject_type,
-    mistakeAt,
-  );
-}
 
 export function recentMistakeCutoff(now = new Date()) {
   return new Date(now.getTime() - 24 * 3600_000);
@@ -377,23 +348,49 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
   const createdAt = new Date().toISOString();
   await db.execAsync('BEGIN TRANSACTION;');
   try {
+    const existingPending = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
+      payload.subjectId,
+    );
+    const pendingPayload = existingPending ? JSON.parse(existingPending.payload) as StudyMaterialPayload : undefined;
     const existing = await findBySubjectId(db, payload.subjectId);
-    const remoteId = payload.id && payload.id > 0
-      ? payload.id
-      : existing && existing.id > 0
-        ? existing.id
-        : undefined;
-    const payloadWithoutId = {
+    const localPayload = existing
+      ? JSON.parse(existing.payload) as { data?: Partial<StudyMaterialData> }
+      : undefined;
+    const localData = localPayload?.data;
+    const localId = existing && existing.id > 0 ? existing.id : undefined;
+    const payloadId = payload.id && payload.id > 0 ? payload.id : undefined;
+    const pendingId = pendingPayload?.id && pendingPayload.id > 0 ? pendingPayload.id : undefined;
+
+    const queuedPayload: StudyMaterialPayload = {
       subjectId: payload.subjectId,
-      meaningNote: payload.meaningNote,
-      readingNote: payload.readingNote,
-      meaningSynonyms: payload.meaningSynonyms,
+      meaningSynonyms: payload.meaningSynonyms
+        ?? pendingPayload?.meaningSynonyms
+        ?? localData?.meaning_synonyms
+        ?? [],
+      meaningNote: payload.meaningNote
+        ?? pendingPayload?.meaningNote
+        ?? localData?.meaning_note
+        ?? '',
+      readingNote: payload.readingNote
+        ?? pendingPayload?.readingNote
+        ?? localData?.reading_note
+        ?? '',
     };
-    const queuedPayload = remoteId ? { ...payloadWithoutId, id: remoteId } : payloadWithoutId;
+    const remoteId = payloadId ?? localId ?? pendingId;
+    if (remoteId) {
+      queuedPayload.id = remoteId;
+    }
+
     await db.runAsync(
-      `INSERT INTO pending_study_materials (id, subject_id, payload, created_at)
-       VALUES (?, ?, ?, ?)`,
-      `study-material:${queuedPayload.subjectId}:${Date.now()}`,
+      `INSERT INTO pending_study_materials (id, subject_id, payload, created_at, attempts, last_error)
+       VALUES (?, ?, ?, ?, 0, NULL)
+       ON CONFLICT(subject_id) DO UPDATE SET
+         payload = excluded.payload,
+         created_at = excluded.created_at,
+         attempts = 0,
+         last_error = NULL`,
+      `study-material:${queuedPayload.subjectId}`,
       queuedPayload.subjectId,
       JSON.stringify(queuedPayload),
       createdAt,

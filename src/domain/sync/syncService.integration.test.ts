@@ -11,9 +11,9 @@
  * - Progress callbacks fire for each sync step
  * - Checkpoint callbacks fire after each collection save
  */
-import { applyMigrations, clearRemoteCache, getSyncCursors, putAssignments, putSubjects, resetLocalData } from '../../domain/db/database';
+import { applyMigrations, clearRemoteCache, getLastSyncTime, getSyncCursors, putAssignments, putSubjects, resetLocalData } from '../../domain/db/database';
 import { runFullRefresh, runIncrementalSync, runPendingSync, SyncProgress } from '../../domain/sync/syncService';
-import { queueLessonStart, queueReviewResult } from '../../domain/study/studyRepository';
+import { queueLessonStart, queueReviewResult, queueStudyMaterialUpdate } from '../../domain/study/studyRepository';
 import { createMockApi, apiError, type MockApiClient } from '../../test/mockApi';
 import { createTestDb } from '../../test/sqliteShim';
 import {
@@ -120,6 +120,28 @@ describe('runIncrementalSync', () => {
     const stats = await db.getAllAsync<{ id: number; subject_id: number; percentage_correct: number }>('SELECT id, subject_id, percentage_correct FROM review_stats');
     expect(stats).toHaveLength(1);
     expect(stats[0]!.percentage_correct).toBe(91);
+  });
+
+  it('writes cursor freshness rows for empty collections with no updated cursor', async () => {
+    const mockApi = createMockApi({
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('', []),
+      getAssignments: async () => collectionResult('2024-06-01T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2024-06-01T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2024-06-01T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-01T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-01T06:00:00.000Z'),
+    });
+
+    await runIncrementalSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const cursor = await db.getFirstAsync<{ updated_after: string; synced_at: string }>(
+      'SELECT updated_after, synced_at FROM sync_cursors WHERE collection = ?',
+      'subjects',
+    );
+    expect(cursor?.updated_after).toBe('');
+    expect(cursor?.synced_at).toBeTruthy();
+    expect(await getLastSyncTime(db)).toBeGreaterThan(0);
   });
 
   it('advances cursors after each collection fetch', async () => {
@@ -230,8 +252,6 @@ describe('runIncrementalSync', () => {
     await runIncrementalSync({ db, client: mockApi as unknown as WaniKaniClient, onProgress: (p) => progress.push(p) });
 
     const steps = progress.map((p) => p.step);
-    expect(steps).toContain('pending-progress');
-    expect(steps).toContain('pending-study-materials');
     expect(steps).toContain('user');
     expect(steps).toContain('subjects');
     expect(steps).toContain('assignments');
@@ -384,16 +404,13 @@ describe('runFullRefresh', () => {
 
     await putSubjects(db, [vocab]);
     await putAssignments(db, [assignment]);
-
     await queueReviewResult(db, { assignmentId: 600, incorrectMeaningAnswers: 0, incorrectReadingAnswers: 0 });
 
-    // Verify pending write exists
     const beforeCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_progress');
     expect(beforeCount?.count).toBe(1);
 
-    const user = makeUser();
     const mockApi = createMockApi({
-      getUser: async () => user,
+      getUser: async () => makeUser(),
       getSubjects: async () => collectionResult('2024-06-01T01:00:00.000Z'),
       getAssignments: async () => collectionResult('2024-06-01T02:00:00.000Z'),
       getStudyMaterials: async () => collectionResult('2024-06-01T03:00:00.000Z'),
@@ -404,18 +421,69 @@ describe('runFullRefresh', () => {
 
     await runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
 
-    // Pending write should still exist (it was sent as part of the sync within refresh,
-    // but we just verify it survived the clearRemoteCache step)
-    // After full refresh completes, the pending review was sent during the sync phase
     const afterCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_progress');
-    expect(afterCount?.count).toBe(0); // Flushed during sync
-
-    // But the review was sent
-    const reviewCall = mockApi.calls.find((c) => c.method === 'createReview');
-    expect(reviewCall).toBeDefined();
+    expect(afterCount?.count).toBe(0);
+    expect(mockApi.calls.find((c) => c.method === 'createReview')).toBeDefined();
   });
 
-  it('runs full refresh after an active incremental sync finishes', async () => {
+  it('flushes pending study material before clearing remote cache', async () => {
+    const oldVocab = makeVocabulary({ id: 700 });
+    await putSubjects(db, [oldVocab]);
+    await queueStudyMaterialUpdate(db, {
+      subjectId: 700,
+      meaningSynonyms: ['queued'],
+      meaningNote: 'queued note',
+    });
+
+    const newVocab = makeVocabulary({ id: 701 });
+    const newAssignment = makeAssignment(701, { id: 702, subject_id: 701 });
+    const mockApi = createMockApi({
+      upsertStudyMaterial: async () => makeStudyMaterial(700, { id: 703, meaning_synonyms: ['queued'] }),
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('2024-06-02T01:00:00.000Z', [newVocab]),
+      getAssignments: async () => collectionResult('2024-06-02T02:00:00.000Z', [newAssignment]),
+      getStudyMaterials: async () => collectionResult('2024-06-02T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2024-06-02T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-02T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-02T06:00:00.000Z'),
+    });
+
+    await runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
+
+    expect(mockApi.calls.find((call) => call.method === 'upsertStudyMaterial')).toBeDefined();
+    const pending = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_study_materials');
+    expect(pending?.count).toBe(0);
+    expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 700')).toBeNull();
+    expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 701')).toBeTruthy();
+    expect(await db.getFirstAsync('SELECT id FROM assignments WHERE id = 702')).toBeTruthy();
+  });
+
+  it('dedupes concurrent full refreshes', async () => {
+    let releaseUser!: () => void;
+    const blockedUser = new Promise<void>((resolve) => { releaseUser = resolve; });
+    const mockApi = createMockApi({
+      getUser: async () => {
+        await blockedUser;
+        return makeUser();
+      },
+      getSubjects: async () => collectionResult('2024-06-02T01:00:00.000Z'),
+      getAssignments: async () => collectionResult('2024-06-02T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2024-06-02T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2024-06-02T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2024-06-02T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2024-06-02T06:00:00.000Z'),
+    });
+
+    const first = runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
+    const second = runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
+    releaseUser();
+    await Promise.all([first, second]);
+
+    expect(mockApi.calls.filter((call) => call.method === 'getUser')).toHaveLength(1);
+    expect(mockApi.calls.filter((call) => call.method === 'getSubjects')).toHaveLength(1);
+  });
+
+  it('dedupes full refreshes queued behind an active incremental sync', async () => {
     await putSubjects(db, [makeVocabulary({ id: 100, characters: '古い' })]);
 
     let releaseIncrementalUser!: () => void;
@@ -452,13 +520,16 @@ describe('runFullRefresh', () => {
       getReviewStatistics: async () => collectionResult('2024-06-03T06:00:00.000Z'),
     });
 
-    const refreshPromise = runFullRefresh({ db, client: refreshApi as unknown as WaniKaniClient });
+    const firstRefresh = runFullRefresh({ db, client: refreshApi as unknown as WaniKaniClient });
+    const secondRefresh = runFullRefresh({ db, client: refreshApi as unknown as WaniKaniClient });
     releaseIncrementalUser();
-    await refreshPromise;
+    await Promise.all([firstRefresh, secondRefresh]);
 
     expect(await db.getFirstAsync('SELECT id FROM subjects WHERE id = 100')).toBeNull();
     const newSubject = await db.getFirstAsync<{ japanese: string }>('SELECT japanese FROM subjects WHERE id = 200');
     expect(newSubject?.japanese).toBe('新しい');
+    expect(refreshApi.calls.filter((call) => call.method === 'getUser')).toHaveLength(1);
+    expect(refreshApi.calls.filter((call) => call.method === 'getSubjects')).toHaveLength(1);
   });
 });
 

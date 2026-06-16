@@ -67,17 +67,13 @@ export async function getLastSyncTime(db: AppDatabase) {
   return row?.synced_at ? Date.parse(row.synced_at) : 0;
 }
 
-export async function setSyncCursor(db: AppDatabase, collection: string, updatedAfter: string) {
-  if (!updatedAfter) {
-    return;
-  }
-
+export async function setSyncCursor(db: AppDatabase, collection: string, updatedAfter: string | null | undefined) {
   await db.runAsync(
     `INSERT INTO sync_cursors (collection, updated_after, synced_at)
      VALUES (?, ?, ?)
      ON CONFLICT(collection) DO UPDATE SET updated_after = excluded.updated_after, synced_at = excluded.synced_at`,
     collection,
-    updatedAfter,
+    updatedAfter ?? '',
     new Date().toISOString(),
   );
 }

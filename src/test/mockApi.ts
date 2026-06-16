@@ -39,7 +39,8 @@ export type MockApiClient = {
   getReviewStatistics(updatedAfter?: string): Promise<CollectionResult<ReviewStatisticData>>;
   startAssignment(payload: LessonStartPayload): Promise<void>;
   createReview(payload: ReviewProgressPayload): Promise<void>;
-  upsertStudyMaterial(payload: StudyMaterialPayload): Promise<void>;
+  upsertStudyMaterial(payload: StudyMaterialPayload): Promise<ApiResource<StudyMaterialData> | null>;
+  readonly requestsRemainingInInterval: number;
 };
 
 /**
@@ -55,7 +56,8 @@ export function createMockApi(overrides: {
   getReviewStatistics?: (updatedAfter?: string) => Promise<CollectionResult<ReviewStatisticData>>;
   startAssignment?: (payload: LessonStartPayload) => Promise<void>;
   createReview?: (payload: ReviewProgressPayload) => Promise<void>;
-  upsertStudyMaterial?: (payload: StudyMaterialPayload) => Promise<void>;
+  upsertStudyMaterial?: (payload: StudyMaterialPayload) => Promise<ApiResource<StudyMaterialData> | null>;
+  requestsRemainingInInterval?: number;
 } = {}): MockApiClient {
   const calls: MockApiCall[] = [];
   const track = (method: string, ...args: unknown[]) => { calls.push({ method, args }); };
@@ -63,6 +65,10 @@ export function createMockApi(overrides: {
 
   return {
     calls,
+    get requestsRemainingInInterval() {
+      return overrides.requestsRemainingInInterval ?? 60;
+    },
+
 
     async getUser(): Promise<ApiResource<WaniKaniUserData>> {
       track('getUser');
@@ -109,9 +115,9 @@ export function createMockApi(overrides: {
       return overrides.createReview?.(payload);
     },
 
-    async upsertStudyMaterial(payload: StudyMaterialPayload): Promise<void> {
+    async upsertStudyMaterial(payload: StudyMaterialPayload): Promise<ApiResource<StudyMaterialData> | null> {
       track('upsertStudyMaterial', payload);
-      return overrides.upsertStudyMaterial?.(payload);
+      return overrides.upsertStudyMaterial?.(payload) ?? null;
     },
   };
 }
