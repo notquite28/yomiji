@@ -150,6 +150,14 @@ function resetMockState() {
 	useSettingsStore.setState({ ...defaultSettings, _hydrated: true, hydrate, updateSetting });
 }
 
+function futureIso(daysFromNow: number): string {
+	const date = new Date();
+	date.setUTCDate(date.getUTCDate() + daysFromNow);
+	date.setUTCHours(0, 0, 0, 0);
+	return date.toISOString();
+}
+
+
 async function insertAvailableAssignment(
 	db: AppDatabase,
 	subjectId: number,
@@ -225,10 +233,10 @@ describe("rescheduleReviewNotifications", () => {
 			notificationDailyTime: null,
 		});
 
-		// 0 currently available, 3rd future far enough ahead to avoid wall-clock drift.
-		await insertAvailableAssignment(testDb, 1, "2027-05-01T00:00:00Z");
-		await insertAvailableAssignment(testDb, 2, "2027-05-15T00:00:00Z");
-		await insertAvailableAssignment(testDb, 3, "2027-06-01T00:00:00Z");
+		// 0 currently available, 3rd future review is computed from wall-clock time.
+		await insertAvailableAssignment(testDb, 1, futureIso(1));
+		await insertAvailableAssignment(testDb, 2, futureIso(2));
+		await insertAvailableAssignment(testDb, 3, futureIso(3));
 
 		await rescheduleReviewNotifications();
 
