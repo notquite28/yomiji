@@ -90,8 +90,7 @@ describe('schema migrations', () => {
     await applyMigrations(db); // second application
 
     const migrations = await db.getAllAsync<{ version: number }>('SELECT version FROM schema_migrations');
-    expect(migrations).toHaveLength(1); // still just one migration recorded
-    expect(migrations[0]!.version).toBe(1);
+    expect(migrations.map((migration) => migration.version).sort()).toEqual([1, 2]);
 
     await db.closeAsync();
   });

@@ -225,10 +225,10 @@ describe("rescheduleReviewNotifications", () => {
 			notificationDailyTime: null,
 		});
 
-		// 0 currently available, 3rd future at 2026-06-01.
-		await insertAvailableAssignment(testDb, 1, "2026-05-01T00:00:00Z");
-		await insertAvailableAssignment(testDb, 2, "2026-05-15T00:00:00Z");
-		await insertAvailableAssignment(testDb, 3, "2026-06-01T00:00:00Z");
+		// 0 currently available, 3rd future far enough ahead to avoid wall-clock drift.
+		await insertAvailableAssignment(testDb, 1, "2027-05-01T00:00:00Z");
+		await insertAvailableAssignment(testDb, 2, "2027-05-15T00:00:00Z");
+		await insertAvailableAssignment(testDb, 3, "2027-06-01T00:00:00Z");
 
 		await rescheduleReviewNotifications();
 
