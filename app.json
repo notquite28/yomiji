@@ -3,19 +3,19 @@
     "name": "読路 (Yomiji)",
     "slug": "yomiji",
     "scheme": "yomiji",
-    "version": "0.4.10",
+    "version": "0.4.11",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/yomiji.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.yomiji",
-      "buildNumber": "24",
-      "runtimeVersion": "0.4.10"
+      "buildNumber": "25",
+      "runtimeVersion": "0.4.11"
     },
     "android": {
       "package": "app.yomiji",
-      "versionCode": 24,
+      "versionCode": 25,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/yomiji.png",
@@ -25,7 +25,7 @@
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS"
       ],
-      "runtimeVersion": "0.4.10"
+      "runtimeVersion": "0.4.11"
     },
     "plugins": [
       "expo-secure-store",
