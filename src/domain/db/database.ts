@@ -18,6 +18,65 @@ type SaveProgressCallback = (saved: number, total: number) => void;
 
 let databasePromise: Promise<AppDatabase> | null = null;
 
+/**
+ * Serializes write operations on the shared SQLite connection.
+ *
+ * `openAppDatabase` hands every caller (sync engine, screens, notification
+ * service) the same connection. expo-sqlite runs individual statements
+ * serially, but a JS-level transaction built from several awaited statements
+ * yields the event loop between them. Without this lock a second
+ * `BEGIN TRANSACTION` issued mid-flight — e.g. a user answering a review while a
+ * background sync batch is open — either throws "cannot start a transaction
+ * within a transaction" or has its COMMIT/ROLLBACK tear down the outer
+ * transaction, losing sync progress and silently dropping the queued write.
+ *
+ * Every multi-statement write must run through `runInWriteTransaction`, and
+ * every standalone single-statement write through `runExclusive`, so neither a
+ * transaction nor a bare statement ever lands inside another transaction. (A
+ * lone INSERT issued while some other transaction is open on the connection is
+ * captured by that transaction and lost if it later rolls back, so single
+ * statements need the lock too.)
+ *
+ * The lock is deliberately NOT reentrant. It serializes every write so a user
+ * write (e.g. answering a review) never lands inside an open background-sync
+ * transaction, where its COMMIT/ROLLBACK would corrupt the outer transaction or
+ * its row would be lost on the sync's rollback. A user write issued mid-sync
+ * therefore queues behind the active transaction and runs once it commits — it
+ * does not interleave with it. Because the lock is not reentrant, inner helpers
+ * invoked *inside* a locked block must NOT call
+ * `runExclusive`/`runInWriteTransaction` (that would deadlock), and public
+ * wrappers that take the lock must never be called from within another locked
+ * block. Keep the work inside each locked block small — large sync batches hold
+ * the lock for their whole duration and block UI writes until they finish, so
+ * prefer chunking big writes over one long-held transaction.
+ */
+let writeLock: Promise<unknown> = Promise.resolve();
+
+export function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = writeLock.then(task, task);
+  // Keep the chain alive regardless of this task's outcome so one failed write
+  // never wedges every subsequent write.
+  writeLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+export function runInWriteTransaction<T>(db: AppDatabase, task: () => Promise<T>): Promise<T> {
+  return runExclusive(async () => {
+    await db.execAsync('BEGIN TRANSACTION;');
+    try {
+      const result = await task();
+      await db.execAsync('COMMIT;');
+      return result;
+    } catch (error) {
+      await db.execAsync('ROLLBACK;');
+      throw error;
+    }
+  });
+}
+
 export async function openAppDatabase() {
   if (!databasePromise) {
     databasePromise =   SQLite.openDatabaseAsync('yomiji.db').then(async (db) => {
@@ -69,38 +128,41 @@ export async function getLastSyncTime(db: AppDatabase) {
 }
 
 export async function setSyncCursor(db: AppDatabase, collection: string, updatedAfter: string | null | undefined) {
-  await db.runAsync(
-    `INSERT INTO sync_cursors (collection, updated_after, synced_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(collection) DO UPDATE SET updated_after = excluded.updated_after, synced_at = excluded.synced_at`,
-    collection,
-    updatedAfter ?? '',
-    new Date().toISOString(),
+  await runExclusive(() =>
+    db.runAsync(
+      `INSERT INTO sync_cursors (collection, updated_after, synced_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(collection) DO UPDATE SET updated_after = excluded.updated_after, synced_at = excluded.synced_at`,
+      collection,
+      updatedAfter ?? '',
+      new Date().toISOString(),
+    ),
   );
 }
 
 export async function putUser(db: AppDatabase, user: ApiResource<WaniKaniUserData>) {
-  await db.runAsync(
-    `INSERT INTO user (id, username, level, vacation_started_at, payload, updated_at)
-     VALUES (1, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       username = excluded.username,
-       level = excluded.level,
-       vacation_started_at = excluded.vacation_started_at,
-       payload = excluded.payload,
-       updated_at = excluded.updated_at`,
-    user.data.username,
-    user.data.level,
-    user.data.current_vacation_started_at ?? null,
-    JSON.stringify(user),
-    user.data_updated_at ?? new Date().toISOString(),
+  await runExclusive(() =>
+    db.runAsync(
+      `INSERT INTO user (id, username, level, vacation_started_at, payload, updated_at)
+       VALUES (1, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         username = excluded.username,
+         level = excluded.level,
+         vacation_started_at = excluded.vacation_started_at,
+         payload = excluded.payload,
+         updated_at = excluded.updated_at`,
+      user.data.username,
+      user.data.level,
+      user.data.current_vacation_started_at ?? null,
+      JSON.stringify(user),
+      user.data_updated_at ?? new Date().toISOString(),
+    ),
   );
 }
 
 export async function putSubjects(db: AppDatabase, subjects: Array<ApiResource<SubjectData>>, onProgress?: SaveProgressCallback) {
   let saved = 0;
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     for (const subject of subjects) {
       if (!subject.id) {
         saved += 1;
@@ -130,11 +192,7 @@ export async function putSubjects(db: AppDatabase, subjects: Array<ApiResource<S
       saved += 1;
       reportSaveProgress(saved, subjects.length, onProgress);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 export async function putAssignments(db: AppDatabase, assignments: Array<ApiResource<AssignmentData>>, onProgress?: SaveProgressCallback) {
@@ -142,8 +200,7 @@ export async function putAssignments(db: AppDatabase, assignments: Array<ApiReso
   const subjectById = new Map(subjects.map((subject) => [subject.id, subject]));
   let saved = 0;
 
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     for (const assignment of assignments) {
       if (!assignment.id) {
         saved += 1;
@@ -183,11 +240,7 @@ export async function putAssignments(db: AppDatabase, assignments: Array<ApiReso
       saved += 1;
       reportSaveProgress(saved, assignments.length, onProgress);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 function applyPendingStudyMaterialOverlay(
@@ -210,8 +263,7 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
   const subjectRows = await db.getAllAsync<{ id: number }>('SELECT id FROM subjects');
   const subjectIds = new Set(subjectRows.map((subject) => subject.id));
   let saved = 0;
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     for (const studyMaterial of studyMaterials) {
       if (!studyMaterial.id || !subjectIds.has(studyMaterial.data.subject_id)) {
         saved += 1;
@@ -267,11 +319,7 @@ export async function putStudyMaterials(db: AppDatabase, studyMaterials: Array<A
       saved += 1;
       reportSaveProgress(saved, studyMaterials.length, onProgress);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 export async function putLevelProgressions(db: AppDatabase, levels: Array<ApiResource<LevelProgressionData>>, onProgress?: SaveProgressCallback) {
@@ -284,8 +332,7 @@ export async function putVoiceActors(db: AppDatabase, voiceActors: Array<ApiReso
 
 export async function putReviewStats(db: AppDatabase, stats: Array<ApiResource<ReviewStatisticData>>, onProgress?: SaveProgressCallback) {
   let saved = 0;
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     for (const stat of stats) {
       if (!stat.id) {
         saved += 1;
@@ -311,11 +358,7 @@ export async function putReviewStats(db: AppDatabase, stats: Array<ApiResource<R
       saved += 1;
       reportSaveProgress(saved, stats.length, onProgress);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 export async function resetLocalData(db: AppDatabase) {
@@ -335,19 +378,71 @@ export async function resetLocalData(db: AppDatabase) {
     'user',
   ];
 
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     for (const table of tables) {
       await db.execAsync(`DELETE FROM ${table};`);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
+  });
+}
+
+export type SubjectProgressRow = {
+  subject_id: number;
+  level: number | null;
+  srs_stage: number | null;
+  subject_type: string | null;
+  last_mistake_at: string | null;
+};
+
+/**
+ * Reads the full subject_progress table. These rows hold local-only review
+ * history (recent mistakes, leech tracking) that the download sync never
+ * repopulates, so a caller that clears the remote cache must snapshot them
+ * first and restore them afterwards or the history is lost.
+ */
+export async function snapshotSubjectProgress(db: AppDatabase): Promise<SubjectProgressRow[]> {
+  return db.getAllAsync<SubjectProgressRow>(
+    'SELECT subject_id, level, srs_stage, subject_type, last_mistake_at FROM subject_progress',
+  );
+}
+
+/**
+ * Restores a subject_progress snapshot taken before a cache clear. Each row is
+ * only re-inserted when its subject still exists so the subject_id FK into
+ * subjects(id) holds even if the subject was dropped by the refresh.
+ */
+export async function restoreSubjectProgress(db: AppDatabase, rows: SubjectProgressRow[]) {
+  if (rows.length === 0) {
+    return;
   }
+  await runInWriteTransaction(db, async () => {
+    for (const row of rows) {
+      await db.runAsync(
+        `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
+         SELECT ?, ?, ?, ?, ?
+         WHERE EXISTS (SELECT 1 FROM subjects WHERE id = ?)
+         ON CONFLICT(subject_id) DO UPDATE SET
+           level = excluded.level,
+           srs_stage = excluded.srs_stage,
+           subject_type = excluded.subject_type,
+           last_mistake_at = excluded.last_mistake_at`,
+        row.subject_id,
+        row.level,
+        row.srs_stage,
+        row.subject_type,
+        row.last_mistake_at,
+        row.subject_id,
+      );
+    }
+  });
 }
 
 export async function clearRemoteCache(db: AppDatabase) {
+  // Order matters with foreign_keys = ON: delete child tables that reference
+  // subjects before deleting subjects itself. pending_study_materials is left
+  // out entirely — its subject_id FKs into subjects, so its rows must already be
+  // flushed, and it holds local writes that must never be wiped as a side effect
+  // of clearing the remote cache. pending_progress has no such FK and is
+  // likewise preserved.
   const tables = [
     'sync_cursors',
     'assignments',
@@ -362,16 +457,24 @@ export async function clearRemoteCache(db: AppDatabase) {
     'user',
   ];
 
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
+    // Guard inside the transaction so the check and the deletes are serialized
+    // under the same lock: a concurrent queued edit cannot slip in between the
+    // count and the DELETE FROM subjects (which would otherwise rollback on an
+    // FK violation). Callers (full refresh) flush queued writes first; this
+    // assert makes the function safe even if a future caller forgets, instead of
+    // silently destroying unsent study-material edits.
+    const pending = await db.getFirstAsync<{ value: number }>(
+      'SELECT COUNT(*) AS value FROM pending_study_materials',
+    );
+    if ((pending?.value ?? 0) > 0) {
+      throw new Error('clearRemoteCache called with unflushed study-material writes; flush them before clearing the cache.');
+    }
+
     for (const table of tables) {
       await db.execAsync(`DELETE FROM ${table};`);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 async function putSubjectAudioUrls(db: AppDatabase, subject: ApiResource<SubjectData>) {
@@ -408,8 +511,7 @@ async function putSimpleCollection<TData>(
     ? 'level = excluded.level, payload = excluded.payload, updated_at = excluded.updated_at'
     : 'name = excluded.name, payload = excluded.payload, updated_at = excluded.updated_at';
 
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     let saved = 0;
     for (const item of items) {
       if (!item.id) {
@@ -427,11 +529,7 @@ async function putSimpleCollection<TData>(
       saved += 1;
       reportSaveProgress(saved, items.length, onProgress);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 function reportSaveProgress(saved: number, total: number, onProgress?: SaveProgressCallback) {

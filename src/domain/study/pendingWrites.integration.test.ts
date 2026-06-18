@@ -142,7 +142,7 @@ describe('pending review round-trip', () => {
       subjectId,
     );
     expect(progress?.subject_id).toBe(subjectId);
-    expect(progress?.last_mistake_at).toBe('');
+    expect(progress?.last_mistake_at).toBeNull();
   });
 });
 
@@ -414,6 +414,39 @@ describe('pending study material round-trip', () => {
     expect(Object.prototype.hasOwnProperty.call(payload, 'meaningSynonyms')).toBe(false);
   });
 
+  it('keeps a concurrent edit queued when it lands mid-upload', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['first'],
+    });
+
+    // Simulate a second edit landing while the upload is in flight: the upsert
+    // rewrites the same subject-keyed pending row before the post-upload delete
+    // runs. The delete must only remove the payload it actually sent, leaving
+    // the newer edit queued for the next flush instead of erasing it.
+    const mockApi = createMockApi({
+      upsertStudyMaterial: async () => {
+        await queueStudyMaterialUpdate(db, {
+          subjectId,
+          meaningSynonyms: ['first', 'second'],
+        });
+        return null;
+      },
+    });
+
+    await runPendingSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    expect(await countPending(db, 'pending_study_materials')).toBe(1);
+    const row = await db.getFirstAsync<{ payload: string }>(
+      'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const payload = JSON.parse(row!.payload) as { meaningSynonyms: string[] };
+    expect(payload.meaningSynonyms).toEqual(['first', 'second']);
+  });
+
   it('persists returned remote study material id over a local negative id', async () => {
     const { subjectId } = await seedReviewTarget(db);
 
@@ -496,6 +529,36 @@ describe('422 stale write handling', () => {
     // Should be discarded
     expect(await countPending(db, 'pending_study_materials')).toBe(0);
   });
+
+  it('keeps a concurrent study material edit queued when stale upload gets 422', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningSynonyms: ['stale'],
+    });
+
+    const mockApi = createMockApi({
+      upsertStudyMaterial: async () => {
+        await queueStudyMaterialUpdate(db, {
+          subjectId,
+          meaningSynonyms: ['fresh'],
+        });
+        throw new WaniKaniApiError(422, 'Unprocessable Entity');
+      },
+    });
+
+    await runPendingSync({ db, client: mockApi as unknown as WaniKaniClient });
+
+    expect(await countPending(db, 'pending_study_materials')).toBe(1);
+    const row = await db.getFirstAsync<{ attempts: number; payload: string }>(
+      'SELECT attempts, payload FROM pending_study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const payload = JSON.parse(row!.payload) as { meaningSynonyms: string[] };
+    expect(row!.attempts).toBe(0);
+    expect(payload.meaningSynonyms).toEqual(['fresh']);
+  });
 });
 
 // ── Non-422 Error Handling ───────────────────────────────────────────────────
@@ -562,6 +625,38 @@ describe('non-422 error retry behavior', () => {
     expect(await countPending(db, 'pending_study_materials')).toBe(1);
     const row = await db.getFirstAsync<{ attempts: number }>('SELECT attempts FROM pending_study_materials');
     expect(row!.attempts).toBe(1);
+  });
+
+  it('does not charge a concurrent study material edit for an older failed upload', async () => {
+    const { subjectId } = await seedReviewTarget(db);
+
+    await queueStudyMaterialUpdate(db, {
+      subjectId,
+      meaningNote: 'old',
+    });
+
+    const mockApi = createMockApi({
+      upsertStudyMaterial: async () => {
+        await queueStudyMaterialUpdate(db, {
+          subjectId,
+          meaningNote: 'new',
+        });
+        throw new Error('Internal Server Error');
+      },
+    });
+
+    await expect(
+      runPendingSync({ db, client: mockApi as unknown as WaniKaniClient }),
+    ).rejects.toThrow();
+
+    const row = await db.getFirstAsync<{ attempts: number; last_error: string | null; payload: string }>(
+      'SELECT attempts, last_error, payload FROM pending_study_materials WHERE subject_id = ?',
+      subjectId,
+    );
+    const payload = JSON.parse(row!.payload) as { meaningNote: string };
+    expect(row!.attempts).toBe(0);
+    expect(row!.last_error).toBeNull();
+    expect(payload.meaningNote).toBe('new');
   });
 });
 

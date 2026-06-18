@@ -92,16 +92,36 @@ export async function applyLocalReviewResult(
     return;
   }
 
-  const hasMistake = incorrectMeaningAnswers > 0 || incorrectReadingAnswers > 0;
+  const totalIncorrect = incorrectMeaningAnswers + incorrectReadingAnswers;
+  const hasMistake = totalIncorrect > 0;
+  // Mirror WaniKani's SRS stage change: on a miss the stage drops by
+  // ceil(total_incorrect / 2) * penalty, where the penalty factor is 2 once an
+  // item has reached Guru (stage >= 5) and 1 otherwise, floored at stage 1. On
+  // a clean answer the stage advances by one, capped at burned (stage 9).
+  const incorrectAdjustment = Math.ceil(totalIncorrect / 2);
+  const penaltyFactor = row.srs_stage >= 5 ? 2 : 1;
   const nextStage = hasMistake
-    ? Math.max(1, row.srs_stage - 1)
+    ? Math.max(1, row.srs_stage - incorrectAdjustment * penaltyFactor)
     : Math.min(9, row.srs_stage + 1);
 
-  await db.runAsync(
-    'UPDATE assignments SET srs_stage = ?, available_at = NULL WHERE id = ?',
-    nextStage,
-    assignmentId,
-  );
+  // Mark the item as passed locally when it first crosses into Guru so the
+  // dashboard's "passed" count reflects offline reviews before the next sync.
+  const passedNow = !hasMistake && row.srs_stage < 5 && nextStage >= 5;
+
+  if (passedNow) {
+    await db.runAsync(
+      'UPDATE assignments SET srs_stage = ?, available_at = NULL, passed_at = COALESCE(passed_at, ?) WHERE id = ?',
+      nextStage,
+      reviewedAt,
+      assignmentId,
+    );
+  } else {
+    await db.runAsync(
+      'UPDATE assignments SET srs_stage = ?, available_at = NULL WHERE id = ?',
+      nextStage,
+      assignmentId,
+    );
+  }
 
   if (hasMistake) {
     await db.runAsync(
@@ -121,7 +141,7 @@ export async function applyLocalReviewResult(
   } else {
     await db.runAsync(
       `INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at)
-       VALUES (?, ?, ?, ?, '')
+       VALUES (?, ?, ?, ?, NULL)
        ON CONFLICT(subject_id) DO UPDATE SET
          level = excluded.level,
          srs_stage = excluded.srs_stage,

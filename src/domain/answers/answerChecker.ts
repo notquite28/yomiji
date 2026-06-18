@@ -112,6 +112,32 @@ export function checkAnswer(rawAnswer: string, subject: SubjectAnswerData, optio
   return checkMeaningAnswer(answer, subject, options);
 }
 
+/**
+ * How a screen should act on an answer-check result.
+ * - `correct`: the answer counts as right (precise or close-enough); advance the task.
+ * - `incorrect`: the answer is wrong; mark it and apply the SRS penalty.
+ * - `retry`: guidance only (wrong reading type, invalid characters, okurigana
+ *   mismatch, reading typed for a meaning prompt). WaniKani shakes the field and
+ *   lets the user answer again without recording a mistake, so this must NOT be
+ *   marked or sent to the server as incorrect.
+ */
+export type AnswerOutcome = 'correct' | 'incorrect' | 'retry';
+
+export function classifyAnswerResult(result: AnswerCheckResult): AnswerOutcome {
+  switch (result.kind) {
+    case 'precise':
+    case 'imprecise':
+      return 'correct';
+    case 'incorrect':
+      return 'incorrect';
+    case 'otherKanjiReading':
+    case 'mismatchingOkurigana':
+    case 'containsInvalidCharacters':
+    case 'isReadingButWantMeaning':
+      return 'retry';
+  }
+}
+
 function checkReadingAnswer(answer: string, subject: SubjectAnswerData, options: AnswerCheckOptions): AnswerCheckResult {
   const hiraganaText = convertKatakanaToHiragana(answer);
   const invalidRanges = findNonKanaRanges(answer);

@@ -528,6 +528,74 @@ describe('runFullRefresh', () => {
     expect(mockApi.calls.find((call) => call.method === 'getUser')).toBeUndefined();
   });
 
+  it('preserves local subject_progress history across a full refresh', async () => {
+    // Seed a subject and a local-only mistake record. subject_progress is never
+    // repopulated by the download, so a full refresh must carry it across the
+    // cache clear or recent-mistake/leech history is lost.
+    const vocab = makeVocabulary({ id: 900 });
+    await putSubjects(db, [vocab]);
+    const lastMistakeAt = '2026-06-10T08:00:00.000Z';
+    await db.runAsync(
+      'INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at) VALUES (?, ?, ?, ?, ?)',
+      900,
+      5,
+      3,
+      'vocabulary',
+      lastMistakeAt,
+    );
+
+    const refreshedVocab = makeVocabulary({ id: 900, characters: '木' });
+    const mockApi = createMockApi({
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('2026-06-11T01:00:00.000Z', [refreshedVocab]),
+      getAssignments: async () => collectionResult('2026-06-11T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2026-06-11T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2026-06-11T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2026-06-11T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2026-06-11T06:00:00.000Z'),
+    });
+
+    await runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const progress = await db.getFirstAsync<{ subject_id: number; last_mistake_at: string | null }>(
+      'SELECT subject_id, last_mistake_at FROM subject_progress WHERE subject_id = ?',
+      900,
+    );
+    expect(progress?.subject_id).toBe(900);
+    expect(progress?.last_mistake_at).toBe(lastMistakeAt);
+  });
+
+  it('drops preserved subject_progress whose subject is gone after refresh', async () => {
+    // A mistake record for a subject the refresh no longer returns must not be
+    // restored — its subject_id FK into subjects(id) would have nothing to
+    // point at.
+    const vocab = makeVocabulary({ id: 910 });
+    await putSubjects(db, [vocab]);
+    await db.runAsync(
+      'INSERT INTO subject_progress (subject_id, level, srs_stage, subject_type, last_mistake_at) VALUES (?, ?, ?, ?, ?)',
+      910,
+      5,
+      3,
+      'vocabulary',
+      '2026-06-10T08:00:00.000Z',
+    );
+
+    const mockApi = createMockApi({
+      getUser: async () => makeUser(),
+      getSubjects: async () => collectionResult('2026-06-11T01:00:00.000Z', [makeVocabulary({ id: 911 })]),
+      getAssignments: async () => collectionResult('2026-06-11T02:00:00.000Z'),
+      getStudyMaterials: async () => collectionResult('2026-06-11T03:00:00.000Z'),
+      getLevelProgressions: async () => collectionResult('2026-06-11T04:00:00.000Z'),
+      getVoiceActors: async () => collectionResult('2026-06-11T05:00:00.000Z'),
+      getReviewStatistics: async () => collectionResult('2026-06-11T06:00:00.000Z'),
+    });
+
+    await runFullRefresh({ db, client: mockApi as unknown as WaniKaniClient });
+
+    const orphan = await db.getFirstAsync('SELECT subject_id FROM subject_progress WHERE subject_id = ?', 910);
+    expect(orphan).toBeNull();
+  });
+
   it('dedupes concurrent full refreshes', async () => {
     let releaseUser!: () => void;
     const blockedUser = new Promise<void>((resolve) => { releaseUser = resolve; });
@@ -641,6 +709,20 @@ describe('clearRemoteCache', () => {
     // Sync cursors should be cleared
     const cursors = await getSyncCursors(db);
     expect(Object.keys(cursors)).toHaveLength(0);
+  });
+
+  it('refuses to clear the cache while study-material writes are unflushed', async () => {
+    const vocab = makeVocabulary({ id: 500 });
+    await putSubjects(db, [vocab]);
+    await queueStudyMaterialUpdate(db, { subjectId: 500, meaningNote: 'note' });
+
+    await expect(clearRemoteCache(db)).rejects.toThrow(/unflushed study-material writes/);
+
+    // The cache must be left intact when the guard trips.
+    const subjectCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM subjects');
+    expect(subjectCount?.count).toBe(1);
+    const pendingCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM pending_study_materials');
+    expect(pendingCount?.count).toBe(1);
   });
 });
 

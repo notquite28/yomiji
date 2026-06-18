@@ -2,7 +2,7 @@ import { AssignmentData, StudyMaterialData } from '../api/types';
 import { SubjectAnswerData, StudyMaterialAnswerData } from '../answers/answerChecker';
 import { calculateLeechScore } from '../dashboard/dashboardRepository';
 import { applyLocalReviewResult, markAssignmentStarted } from '../db/assignmentRepository';
-import { AppDatabase } from '../db/database';
+import { AppDatabase, runInWriteTransaction } from '../db/database';
 import { findBySubjectId, upsertWithSynonyms } from '../db/studyMaterialRepository';
 import {
   normalizeSubjectType,
@@ -162,7 +162,7 @@ export async function getLeechPracticeQueue(db: AppDatabase, options?: { apprent
         row.meaning_correct + row.reading_correct,
       ),
     }))
-    .filter(({ item }) => hasPrompt(item))
+    .filter((entry): entry is { item: StudyQueueItem; score: number } => hasPrompt(entry.item))
     .filter(({ score }) => threshold <= 0 || score >= threshold)
     .map(({ item }) => item);
 }
@@ -211,8 +211,9 @@ export async function getLessonQueue(db: AppDatabase, settings: AppSettings, lim
   );
 
   let items = rows
-    .map((row) => ({ item: rowToStudyQueueItem(row), row }))
-    .filter(({ item, row }) => hasPrompt(item) && !isLessonFiltered(item, isKanaOnly(row), isHidden(row), settings));
+    .map((row) => rowToLessonEntry(row))
+    .filter((entry): entry is LessonEntry =>
+      entry !== null && hasPrompt(entry.item) && !isLessonFiltered(entry.item, entry.isKanaOnly, entry.isHidden, settings));
 
   if (settings.interleaveLessons) {
     shuffleArray(items);
@@ -243,8 +244,9 @@ export async function getLessonItemsByIds(db: AppDatabase, settings: AppSettings
   );
 
   return rows
-    .map((row) => ({ item: rowToStudyQueueItem(row), row }))
-    .filter(({ item, row }) => hasPrompt(item) && !isLessonFiltered(item, isKanaOnly(row), isHidden(row), settings) && subjectIds.has(item.subjectId))
+    .map((row) => rowToLessonEntry(row))
+    .filter((entry): entry is LessonEntry =>
+      entry !== null && hasPrompt(entry.item) && !isLessonFiltered(entry.item, entry.isKanaOnly, entry.isHidden, settings) && subjectIds.has(entry.item.subjectId))
     .map(({ item }) => item);
 }
 
@@ -292,8 +294,7 @@ export function chunkLessonItems<T>(items: T[], batchSize: number): T[][] {
 
 export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
   const createdAt = new Date().toISOString();
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     await db.runAsync(
       `INSERT INTO pending_progress (id, kind, payload, created_at)
        VALUES (?, 'review', ?, ?)`,
@@ -313,11 +314,7 @@ export async function queueReviewResult(db: AppDatabase, result: ReviewResult) {
       result.incorrectReadingAnswers,
       createdAt,
     );
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 
@@ -327,8 +324,7 @@ export function recentMistakeCutoff(now = new Date()) {
 
 export async function queueLessonStart(db: AppDatabase, assignmentId: number) {
   const startedAt = new Date().toISOString();
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     await db.runAsync(
       `INSERT INTO pending_progress (id, kind, payload, created_at)
        VALUES (?, 'lesson-start', ?, ?)`,
@@ -337,11 +333,7 @@ export async function queueLessonStart(db: AppDatabase, assignmentId: number) {
       startedAt,
     );
     await markAssignmentStarted(db, assignmentId, startedAt);
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
-  }
+  });
 }
 
 function firstDefined<T>(...values: Array<T | undefined>): T | undefined {
@@ -353,8 +345,7 @@ function firstDefined<T>(...values: Array<T | undefined>): T | undefined {
 
 export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMaterialPayload) {
   const createdAt = new Date().toISOString();
-  await db.execAsync('BEGIN TRANSACTION;');
-  try {
+  await runInWriteTransaction(db, async () => {
     const existingPending = await db.getFirstAsync<{ payload: string }>(
       'SELECT payload FROM pending_study_materials WHERE subject_id = ?',
       payload.subjectId,
@@ -373,7 +364,6 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
     const hasEditableField = meaningSynonyms !== undefined || meaningNote !== undefined || readingNote !== undefined;
 
     if (!hasEditableField && (!existingPending || !remoteId)) {
-      await db.execAsync('COMMIT;');
       return;
     }
 
@@ -398,48 +388,92 @@ export async function queueStudyMaterialUpdate(db: AppDatabase, payload: StudyMa
     if (hasEditableField) {
       await upsertWithSynonyms(db, payload);
     }
-    await db.execAsync('COMMIT;');
-  } catch (error) {
-    await db.execAsync('ROLLBACK;');
-    throw error;
+  });
+}
+
+function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem | null {
+  let assignment: AssignmentResource;
+  let studyMaterial: StudyMaterialResource | undefined;
+  try {
+    assignment = JSON.parse(row.assignment_payload) as AssignmentResource;
+    studyMaterial = row.study_material_payload ? (JSON.parse(row.study_material_payload) as StudyMaterialResource) : undefined;
+  } catch {
+    return null;
+  }
+  return buildStudyQueueItem(row, assignment, studyMaterial);
+}
+
+function buildStudyQueueItem(
+  row: StudyQueueRow,
+  assignment: AssignmentResource,
+  studyMaterial: StudyMaterialResource | undefined,
+): StudyQueueItem | null {
+  try {
+    const parsed = parseSubjectPayload(row.subject_id, row.subject_payload);
+    const subjectType = normalizeSubjectType(row.subject_type || assignment.data.subject_type);
+
+    return {
+      assignmentId: row.assignment_id,
+      subjectId: row.subject_id,
+      subjectType,
+      level: row.level ?? undefined,
+      srsStage: row.srs_stage,
+      subject: parsed,
+      studyMaterials: studyMaterial
+        ? {
+            meaningSynonyms: studyMaterial.data.meaning_synonyms ?? [],
+          }
+        : undefined,
+      availableAt: row.available_at ?? undefined,
+    };
+  } catch {
+    // A corrupt/truncated payload should drop just this item, not the whole
+    // queue. The caller filters nulls out.
+    return null;
   }
 }
 
-function rowToStudyQueueItem(row: StudyQueueRow): StudyQueueItem {
-  const assignment = JSON.parse(row.assignment_payload) as AssignmentResource;
-  const studyMaterial = row.study_material_payload ? (JSON.parse(row.study_material_payload) as StudyMaterialResource) : undefined;
-  const parsed = parseSubjectPayload(row.subject_id, row.subject_payload);
-  const subjectType = normalizeSubjectType(row.subject_type || assignment.data.subject_type);
+export type LessonEntry = {
+  item: StudyQueueItem;
+  isKanaOnly: boolean;
+  isHidden: boolean;
+};
+
+/**
+ * Parses a lesson row's subject and study-material payloads exactly once and
+ * derives the kana-only/hidden flags from the same parsed objects, instead of
+ * re-parsing them in separate isKanaOnly/isHidden passes.
+ */
+function rowToLessonEntry(row: StudyQueueRow): LessonEntry | null {
+  let assignment: AssignmentResource;
+  let subjectRaw: { object?: string };
+  let studyMaterial: StudyMaterialResource | undefined;
+  let studyMaterialRaw: { data?: { hidden?: boolean } } | undefined;
+  try {
+    assignment = JSON.parse(row.assignment_payload) as AssignmentResource;
+    subjectRaw = JSON.parse(row.subject_payload) as { object?: string };
+    if (row.study_material_payload) {
+      studyMaterialRaw = JSON.parse(row.study_material_payload) as { data?: { hidden?: boolean } };
+      studyMaterial = studyMaterialRaw as StudyMaterialResource;
+    }
+  } catch {
+    return null;
+  }
+
+  const item = buildStudyQueueItem(row, assignment, studyMaterial);
+  if (!item) {
+    return null;
+  }
 
   return {
-    assignmentId: row.assignment_id,
-    subjectId: row.subject_id,
-    subjectType,
-    level: row.level ?? undefined,
-    srsStage: row.srs_stage,
-    subject: parsed,
-    studyMaterials: studyMaterial
-      ? {
-          meaningSynonyms: studyMaterial.data.meaning_synonyms ?? [],
-        }
-      : undefined,
-    availableAt: row.available_at ?? undefined,
+    item,
+    isKanaOnly: subjectRaw.object === 'kana_vocabulary',
+    isHidden: studyMaterialRaw?.data?.hidden === true,
   };
 }
 
-function hasPrompt(item: StudyQueueItem) {
-  return Boolean(item.subject.japanese || item.subject.characterImageUrl);
-}
-
-function isKanaOnly(row: StudyQueueRow): boolean {
-  const subject = JSON.parse(row.subject_payload) as { object?: string };
-  return subject.object === 'kana_vocabulary';
-}
-
-function isHidden(row: StudyQueueRow): boolean {
-  if (!row.study_material_payload) return false;
-  const studyMaterial = JSON.parse(row.study_material_payload) as { data?: { hidden?: boolean } };
-  return studyMaterial.data?.hidden === true;
+function hasPrompt(item: StudyQueueItem | null): item is StudyQueueItem {
+  return item != null && Boolean(item.subject.japanese || item.subject.characterImageUrl);
 }
 
 function shuffleArray<T>(array: T[]): void {

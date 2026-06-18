@@ -21,16 +21,22 @@ export async function getSubjectById(db: AppDatabase, id: number): Promise<Subje
 export async function getSubjectsByIds(db: AppDatabase, ids: number[]): Promise<Map<number, SubjectAnswerData>> {
   if (ids.length === 0) return new Map();
 
-  const placeholders = ids.map(() => '?').join(',');
-  const rows = await db.getAllAsync<{ id: number; payload: string }>(
-    `SELECT id, payload FROM subjects WHERE id IN (${placeholders})`,
-    ...ids,
-  );
-
   const result = new Map<number, SubjectAnswerData>();
-  for (const row of rows) {
-    const parsed = parseSubjectPayload(row.id, row.payload);
-    if (parsed) result.set(row.id, parsed);
+  // Chunk to stay under SQLite's bound-variable limit (SQLITE_MAX_VARIABLE_NUMBER,
+  // 999 on older builds). High-level vocab can reference large component sets.
+  const CHUNK_SIZE = 500;
+  for (let offset = 0; offset < ids.length; offset += CHUNK_SIZE) {
+    const chunk = ids.slice(offset, offset + CHUNK_SIZE);
+    const placeholders = chunk.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ id: number; payload: string }>(
+      `SELECT id, payload FROM subjects WHERE id IN (${placeholders})`,
+      ...chunk,
+    );
+
+    for (const row of rows) {
+      const parsed = safeParseSubjectPayload(row.id, row.payload);
+      if (parsed) result.set(row.id, parsed);
+    }
   }
   return result;
 }
@@ -98,6 +104,20 @@ export function parseSubjectPayload(id: number, payload: string): SubjectAnswerD
 
 export function parseSubjectResource(payload: string): SubjectResource {
   return JSON.parse(payload) as SubjectResource;
+}
+
+/**
+ * Parses a subject payload, returning null instead of throwing if the stored
+ * JSON is corrupt or truncated. Use this in batch row mappings so one bad row
+ * is skipped rather than failing the entire query (offline-first: cached data
+ * must keep working).
+ */
+export function safeParseSubjectPayload(id: number, payload: string): SubjectAnswerData | null {
+  try {
+    return parseSubjectPayload(id, payload);
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeSubjectType(subjectType: string): string {

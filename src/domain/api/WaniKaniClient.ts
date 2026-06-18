@@ -18,6 +18,24 @@ import {
 const BASE_URL = 'https://api.wanikani.com/v2';
 const RATE_LIMIT_PER_SERVER_MINUTE = 60;
 const REQUEST_TIMEOUT_MS = 45_000;
+// On HTTP 429 the client waits for the authoritative rate-limit window
+// (RateLimit-Reset / Retry-After) to elapse and then retries, rather than
+// failing the whole sync. The wait is NOT clamped: retrying before the window
+// resets would just burn a retry attempt on a guaranteed second 429. Instead,
+// if the server's own reset is further out than MAX_RATE_LIMIT_WAIT_MS we stop
+// retrying and surface the error, so a misbehaving server can't stall a sync
+// indefinitely while we still honor a legitimate long reset by waiting it out.
+const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RATE_LIMIT_WAIT_MS = 60_000;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+export type WaniKaniClientOptions = {
+  // Injectable so tests can skip the real rate-limit backoff wait.
+  sleep?: (ms: number) => Promise<void>;
+};
 
 export type CollectionPageProgress = {
   collection: string;
@@ -43,6 +61,7 @@ export class WaniKaniApiError extends Error {
 
 export class WaniKaniClient {
   private readonly fetcher: typeof fetch;
+  private readonly sleep: (ms: number) => Promise<void>;
   private estimatedClockSkewMs = 0;
   private lastRequestServerDate?: Date;
   private requestsInLastInterval = 0;
@@ -50,8 +69,13 @@ export class WaniKaniClient {
   private rateLimitRemaining?: number;
   private rateLimitResetAtMs?: number;
 
-  constructor(private readonly apiToken: string, fetcher: typeof fetch = fetch) {
+  constructor(
+    private readonly apiToken: string,
+    fetcher: typeof fetch = fetch,
+    options: WaniKaniClientOptions = {},
+  ) {
     this.fetcher = fetcher;
+    this.sleep = options.sleep ?? delay;
   }
 
   get requestsRemainingInInterval() {
@@ -231,7 +255,36 @@ export class WaniKaniClient {
     return { items, dataUpdatedAt, totalCount } satisfies CollectionResult<TData>;
   }
 
-  private async request<T>(pathOrUrl: string, init: RequestInit = {}) {
+  private async request<T>(pathOrUrl: string, init: RequestInit = {}): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.performRequest<T>(pathOrUrl, init);
+      } catch (error) {
+        // Honor WaniKani's 429 + RateLimit-Reset by waiting for the window to
+        // reset and retrying, so a burst mid-sync self-heals instead of failing
+        // the whole sync. Give up after MAX_RATE_LIMIT_RETRIES.
+        if (
+          error instanceof WaniKaniApiError &&
+          error.status === 429 &&
+          attempt < MAX_RATE_LIMIT_RETRIES
+        ) {
+          // Wait for the full authoritative reset rather than a clamped value:
+          // retrying before the window resets only burns an attempt on another
+          // guaranteed 429. If the reset is further out than we are willing to
+          // block, stop retrying and surface the error instead.
+          const waitMs = Math.max(0, error.retryAfterMs ?? this.rateLimitResetMs ?? 0);
+          if (waitMs > MAX_RATE_LIMIT_WAIT_MS) {
+            throw error;
+          }
+          await this.sleep(waitMs > 0 ? waitMs : 1000);
+          continue;
+        }
+        throw error;
+      }
+    }
+  }
+
+  private async performRequest<T>(pathOrUrl: string, init: RequestInit = {}) {
     const startedAt = Date.now();
     const url = pathOrUrl.startsWith('http') ? pathOrUrl : this.buildUrl(pathOrUrl).toString();
     const headers = new Headers(init.headers);

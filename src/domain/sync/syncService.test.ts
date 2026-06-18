@@ -12,6 +12,8 @@ jest.mock('../db/database', () => ({
   putUser: jest.fn(),
   putVoiceActors: jest.fn(),
   setSyncCursor: jest.fn(),
+  runExclusive: jest.fn((task: () => Promise<unknown>) => task()),
+  runInWriteTransaction: jest.fn((_db: unknown, task: () => Promise<unknown>) => task()),
 }));
 
 import {
@@ -148,7 +150,8 @@ describe('runIncrementalSync', () => {
     expect(setSyncCursor).toHaveBeenCalledWith(db, 'review_stats', '2024-01-07T00:00:00.000Z');
   });
 
-  it('returns active pending sync instead of overlapping downloads', async () => {
+  it('runs the download after an in-flight pending-only sync instead of dropping it', async () => {
+    (getSyncCursors as jest.Mock).mockResolvedValue({});
     const reviewPayload: ReviewProgressPayload = {
       assignmentId: 202,
       incorrectMeaningAnswers: 0,
@@ -168,8 +171,11 @@ describe('runIncrementalSync', () => {
     releaseReview();
     await Promise.all([pending, incremental]);
 
+    // The pending-only sync flushes the queued review once; the incremental
+    // sync chains the remote download afterward rather than silently degrading
+    // into the pending-only promise.
     expect(client.createReview).toHaveBeenCalledTimes(1);
-    expect(client.getUser).not.toHaveBeenCalled();
+    expect(client.getUser).toHaveBeenCalledTimes(1);
   });
 
   it('skips pending writes when incremental sync needs the reserved download budget', async () => {

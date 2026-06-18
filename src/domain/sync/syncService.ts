@@ -11,7 +11,11 @@ import {
   putSubjects,
   putUser,
   putVoiceActors,
+  restoreSubjectProgress,
+  runExclusive,
+  runInWriteTransaction,
   setSyncCursor,
+  snapshotSubjectProgress,
 } from '../db/database';
 import { findBySubjectId, putStudyMaterialResource } from '../db/studyMaterialRepository';
 import { classifySyncError, logSyncError, SyncErrorCategory } from '../db/errorLog';
@@ -54,39 +58,128 @@ export type SyncOptions = {
   onCheckpoint?: () => void | Promise<void>;
 };
 
+type SyncKind = 'pending' | 'incremental' | 'full';
+
+type ProgressSubscriber = (progress: SyncProgress) => void;
+type CheckpointSubscriber = () => void | Promise<void>;
+
 let activeSync: Promise<void> | null = null;
+let activeSyncKind: SyncKind | null = null;
 let activeFullRefresh: Promise<void> | null = null;
+// Subscribers for the in-flight sync. A caller that reuses a running sync is
+// added here so its onProgress/onCheckpoint still fire, instead of silently
+// dropping the progress/checkpoint updates it asked for. Each beginSync run
+// captures its own arrays (assigned to these globals while it is the active
+// run) so a superseding sync never fans out to a previous run's subscribers.
+let activeProgressSubs: ProgressSubscriber[] = [];
+let activeCheckpointSubs: CheckpointSubscriber[] = [];
 
 const DOWNLOAD_REQUEST_RESERVE = 21;
 
-export function runIncrementalSync(options: SyncOptions) {
-  if (activeSync) {
-    return activeSync;
+/**
+ * Adds a reusing caller's callbacks to the in-flight sync so progress and
+ * checkpoint updates fan out to every caller, not just the one that started it.
+ */
+function subscribeToActiveSync(options: SyncOptions) {
+  if (options.onProgress) {
+    activeProgressSubs.push(options.onProgress);
   }
-
-  activeSync = trackActiveSync((async () => {
-    await runPendingOnly(options, 'before-download');
-    await runDownloadSync(options);
-  })());
-  return activeSync;
+  if (options.onCheckpoint) {
+    activeCheckpointSubs.push(options.onCheckpoint);
+  }
 }
 
-function trackActiveSync(sync: Promise<void>) {
-  const tracked = sync.finally(() => {
+/**
+ * Registers a sync as the single in-flight sync. The tracking promise is
+ * assigned synchronously (before `run()` yields) so concurrent callers in the
+ * same tick observe it and never start a second clear/download. The `finally`
+ * only clears state if it still points at this run, so a later sync that
+ * supersedes this one is not torn down by this one's completion.
+ *
+ * `run` receives a fan-out copy of the options whose onProgress/onCheckpoint
+ * broadcast to every current subscriber, so callers that join via
+ * `subscribeToActiveSync` still receive updates.
+ */
+function beginSync(kind: SyncKind, options: SyncOptions, run: (fanout: SyncOptions) => Promise<void>): Promise<void> {
+  const progressSubs: ProgressSubscriber[] = options.onProgress ? [options.onProgress] : [];
+  const checkpointSubs: CheckpointSubscriber[] = options.onCheckpoint ? [options.onCheckpoint] : [];
+  const fanout: SyncOptions = {
+    db: options.db,
+    client: options.client,
+    onProgress: (progress) => {
+      for (const sub of progressSubs) {
+        sub(progress);
+      }
+    },
+    onCheckpoint: async () => {
+      for (const sub of checkpointSubs) {
+        await sub();
+      }
+    },
+  };
+
+  const tracked: Promise<void> = run(fanout).finally(() => {
     if (activeSync === tracked) {
       activeSync = null;
+      activeSyncKind = null;
+      activeProgressSubs = [];
+      activeCheckpointSubs = [];
+    }
+    if (activeFullRefresh === tracked) {
+      activeFullRefresh = null;
     }
   });
+  activeSync = tracked;
+  activeSyncKind = kind;
+  activeProgressSubs = progressSubs;
+  activeCheckpointSubs = checkpointSubs;
+  if (kind === 'full') {
+    activeFullRefresh = tracked;
+  }
   return tracked;
 }
 
-export function runPendingSync(options: SyncOptions) {
-  if (activeSync) {
+export function runIncrementalSync(options: SyncOptions): Promise<void> {
+  // A full refresh supersedes an incremental sync; reuse it.
+  if (activeFullRefresh) {
+    subscribeToActiveSync(options);
+    return activeFullRefresh;
+  }
+  // Another incremental sync already covers this request.
+  if (activeSync && activeSyncKind === 'incremental') {
+    subscribeToActiveSync(options);
     return activeSync;
   }
+  // A pending-only sync does NOT include the remote download, so chain the
+  // download after it rather than returning it (which would silently drop the
+  // refresh the caller asked for).
+  const prior = activeSync;
+  return beginSync('incremental', options, async (fanout) => {
+    if (prior) {
+      await prior.catch(() => {});
+    }
+    await runPendingOnly(fanout, 'before-download');
+    await runDownloadSync(fanout);
+  });
+}
 
-  activeSync = trackActiveSync(runPendingOnly(options, 'standalone'));
-  return activeSync;
+export function runPendingSync(options: SyncOptions): Promise<void> {
+  // A pending-only sync in flight is purely a flush, so reuse it.
+  if (activeSync && activeSyncKind === 'pending') {
+    subscribeToActiveSync(options);
+    return activeSync;
+  }
+  // An incremental/full sync flushes pending writes only at its start, so
+  // writes queued after that phase would be stranded if we reused it. Chain a
+  // fresh flush after the active sync instead so late writes (e.g. a review
+  // answered or the app backgrounded mid-sync) are not missed.
+  const prior = activeSync;
+  return beginSync('pending', options, async (fanout) => {
+    if (prior) {
+      await prior.catch(() => {});
+    }
+    await runPendingOnly(fanout, 'standalone');
+  });
 }
 
 export async function hasPendingWrites(db: AppDatabase) {
@@ -240,37 +333,33 @@ export function isSyncAuthError(error: unknown): boolean {
 }
 
 export async function runFullRefresh(options: SyncOptions): Promise<void> {
+  // Coalesce concurrent full-refresh requests.
   if (activeFullRefresh) {
+    subscribeToActiveSync(options);
     return activeFullRefresh;
   }
 
-  if (activeSync) {
-    await activeSync;
-  }
-  if (activeFullRefresh) {
-    return activeFullRefresh;
-  }
-
-  let tracked: Promise<void>;
-  tracked = (async () => {
-    await runPendingOnly(options, 'standalone');
-    if (await hasPendingWrites(options.db)) {
+  // Capture whatever sync is currently in flight and wait for it inside the
+  // tracked body so the cache clear never races a download already writing.
+  const prior = activeSync;
+  return beginSync('full', options, async (fanout) => {
+    if (prior) {
+      await prior.catch(() => {});
+    }
+    await runPendingOnly(fanout, 'standalone');
+    if (await hasPendingWrites(fanout.db)) {
       throw new SyncError('Full refresh postponed until queued writes are synced.', 'rate-limit', true);
     }
-    await clearRemoteCache(options.db);
-    await runDownloadSync(options);
-  })().finally(() => {
-    if (activeFullRefresh === tracked) {
-      activeFullRefresh = null;
-    }
-    if (activeSync === tracked) {
-      activeSync = null;
-    }
+    // subject_progress holds local-only review history (recent mistakes,
+    // leeches) that the download never repopulates. Snapshot it before the
+    // clear and restore it after the re-download so a full refresh does not
+    // erase that history; restore is FK-guarded against subjects dropped by the
+    // refresh.
+    const progressSnapshot = await snapshotSubjectProgress(fanout.db);
+    await clearRemoteCache(fanout.db);
+    await runDownloadSync(fanout);
+    await restoreSubjectProgress(fanout.db, progressSnapshot);
   });
-
-  activeFullRefresh = tracked;
-  activeSync = tracked;
-  return tracked;
 }
 
 async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient, limit: number) {
@@ -291,18 +380,20 @@ async function sendPendingProgress(db: AppDatabase, client: WaniKaniClient, limi
       } else if (row.kind === 'review') {
         await client.createReview(JSON.parse(row.payload) as ReviewProgressPayload);
       }
-      await db.runAsync('DELETE FROM pending_progress WHERE id = ?', row.id);
+      await runExclusive(() => db.runAsync('DELETE FROM pending_progress WHERE id = ?', row.id));
       sent += 1;
     } catch (error) {
       if (error instanceof WaniKaniApiError && error.status === 422) {
         await logSyncError(db, error, `pending_progress: discarded stale ${row.kind}`).catch(() => {});
-        await db.runAsync('DELETE FROM pending_progress WHERE id = ?', row.id);
+        await runExclusive(() => db.runAsync('DELETE FROM pending_progress WHERE id = ?', row.id));
         continue;
       }
-      await db.runAsync(
-        'UPDATE pending_progress SET attempts = attempts + 1, last_error = ? WHERE id = ?',
-        error instanceof Error ? error.message : String(error),
-        row.id,
+      await runExclusive(() =>
+        db.runAsync(
+          'UPDATE pending_progress SET attempts = attempts + 1, last_error = ? WHERE id = ?',
+          error instanceof Error ? error.message : String(error),
+          row.id,
+        ),
       );
       await logSyncError(db, error, `pending_progress: ${row.kind} send failed`).catch(() => {});
       throw error;
@@ -324,6 +415,7 @@ async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient
   let sent = 0;
   let remainingBudget = limit;
   for (const row of rows) {
+    let uploadedPayload: string | null = null;
     try {
       const pendingPayload = JSON.parse(row.payload) as StudyMaterialPayload;
       const local = pendingPayload.id && pendingPayload.id > 0 ? null : await findBySubjectId(db, row.subject_id);
@@ -339,38 +431,71 @@ async function sendPendingStudyMaterials(db: AppDatabase, client: WaniKaniClient
         break;
       }
 
+      // Track the exact payload string we are about to upload. The pending row
+      // is keyed by subject_id (`study-material:<subjectId>`), so a concurrent
+      // queueStudyMaterialUpdate for the same subject overwrites this row's
+      // payload in place. The post-upload DELETE must therefore be conditional
+      // on this string so it only removes the row we actually sent — if a newer
+      // edit landed mid-upload, the DELETE matches nothing and that edit is
+      // preserved for the next flush instead of being silently overwritten.
+      let storedPayload = row.payload;
+      uploadedPayload = storedPayload;
       if (localId && localId !== pendingPayload.id) {
-        await db.runAsync(
-          'UPDATE pending_study_materials SET payload = ? WHERE id = ?',
-          JSON.stringify(payload),
-          row.id,
+        storedPayload = JSON.stringify(payload);
+        uploadedPayload = storedPayload;
+        await runExclusive(() =>
+          db.runAsync(
+            'UPDATE pending_study_materials SET payload = ? WHERE id = ? AND payload = ?',
+            storedPayload,
+            row.id,
+            row.payload,
+          ),
         );
       }
       const resource = await client.upsertStudyMaterial(payload);
-      await db.execAsync('BEGIN TRANSACTION;');
-      try {
+      await runInWriteTransaction(db, async () => {
         if (resource) {
           await putStudyMaterialResource(db, resource);
         }
-        await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
-        await db.execAsync('COMMIT;');
-      } catch (error) {
-        await db.execAsync('ROLLBACK;');
-        throw error;
-      }
+        await db.runAsync(
+          'DELETE FROM pending_study_materials WHERE id = ? AND payload = ?',
+          row.id,
+          storedPayload,
+        );
+      });
       remainingBudget -= requestCost;
       sent += 1;
     } catch (error) {
       if (error instanceof WaniKaniApiError && error.status === 422) {
         await logSyncError(db, error, 'pending_study_materials: discarded stale').catch(() => {});
-        await db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id);
+        if (uploadedPayload) {
+          await runExclusive(() =>
+            db.runAsync(
+              'DELETE FROM pending_study_materials WHERE id = ? AND payload = ?',
+              row.id,
+              uploadedPayload,
+            ),
+          );
+        } else {
+          await runExclusive(() => db.runAsync('DELETE FROM pending_study_materials WHERE id = ?', row.id));
+        }
         continue;
       }
-      await db.runAsync(
-        'UPDATE pending_study_materials SET attempts = attempts + 1, last_error = ? WHERE id = ?',
-        error instanceof Error ? error.message : String(error),
-        row.id,
-      );
+      await runExclusive(() => {
+        if (uploadedPayload) {
+          return db.runAsync(
+            'UPDATE pending_study_materials SET attempts = attempts + 1, last_error = ? WHERE id = ? AND payload = ?',
+            error instanceof Error ? error.message : String(error),
+            row.id,
+            uploadedPayload,
+          );
+        }
+        return db.runAsync(
+          'UPDATE pending_study_materials SET attempts = attempts + 1, last_error = ? WHERE id = ?',
+          error instanceof Error ? error.message : String(error),
+          row.id,
+        );
+      });
       await logSyncError(db, error, 'pending_study_materials: send failed').catch(() => {});
       throw error;
     }

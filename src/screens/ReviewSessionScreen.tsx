@@ -3,7 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { checkAnswer, TaskType } from '../domain/answers/answerChecker';
+import { checkAnswer, classifyAnswerResult, TaskType } from '../domain/answers/answerChecker';
 import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { playVocabularyAudio, stopVocabularyAudio } from '../domain/audio/vocabularyAudio';
@@ -22,6 +22,7 @@ import { getBurnedItemPracticeQueue, getLeechPracticeQueue, getRecentMistakePrac
 import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/ScreenLayout';
 import { FloatingReviewPill } from '../components/FloatingReviewPill';
 import { useConfirmLeave } from '../hooks/useConfirmLeave';
+import { useGuidanceMessage } from '../hooks/useGuidanceMessage';
 import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { SubjectDetailsContent } from '../components/SubjectDetailsContent';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
@@ -91,6 +92,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   const [showAllDetails, setShowAllDetails] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [audioMessage, setAudioMessage] = useState<string | null>(null);
+  const { guidanceMessage, showGuidance, clearGuidance } = useGuidanceMessage();
   const [subjectDetailData, setSubjectDetailData] = useState<{
     componentSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
     amalgamationSubjects: Map<number, import('../domain/answers/answerChecker').SubjectAnswerData>;
@@ -315,9 +317,20 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
       lookupSubject: (subjectId) => subjectLookup.get(subjectId),
       exactMatch: appSettings.exactMatch,
     });
-    const correct = result.kind === 'precise' || result.kind === 'imprecise';
+    const outcome = classifyAnswerResult(result);
 
+    // Guidance results (wrong reading type, invalid characters, okurigana
+    // mismatch, reading typed for a meaning prompt) are not scored: shake the
+    // field, show the hint, and let the user answer again. Scoring them here
+    // would inflate the incorrect counts sent to WaniKani and over-demote items.
+    if (outcome === 'retry') {
+      showGuidance(feedbackTitle(result));
+      return;
+    }
+
+    const correct = outcome === 'correct';
     const answeredTaskType = taskType ?? 'meaning';
+    clearGuidance();
     const markResult = session.markAnswer(correct);
     setLastMarkResult(markResult);
     setFeedback({
@@ -358,6 +371,7 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
   };
 
   const changeAnswer = (text: string) => {
+    clearGuidance();
     setAnswer(taskType === 'reading' ? convertRomajiToKanaInput(text) : text);
   };
 
@@ -658,6 +672,10 @@ export function ReviewSessionScreen({ navigation, route }: Props) {
 
       {audioMessage ? (
         <Text className="text-text-muted dark:text-text-muted-dark font-heavy">{audioMessage}</Text>
+      ) : null}
+
+      {guidanceMessage && !feedback ? (
+        <Text className="text-warning dark:text-warning-dark font-heavy">{guidanceMessage}</Text>
       ) : null}
 
       {session?.wrappingUp ? (

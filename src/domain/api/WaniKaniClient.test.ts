@@ -64,11 +64,15 @@ describe('WaniKaniClient request headers', () => {
 describe('WaniKaniClient rate limits', () => {
   it('uses RateLimit-Reset retry delay for 429 responses', async () => {
     const resetAt = Math.ceil((Date.now() + 30_000) / 1000);
-    const fetcher = jest.fn().mockResolvedValueOnce(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
-      Date: new Date().toUTCString(),
-      'RateLimit-Reset': String(resetAt),
-    }));
-    const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+    const fetcher = jest.fn().mockImplementation(() =>
+      Promise.resolve(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
+        Date: new Date().toUTCString(),
+        'RateLimit-Reset': String(resetAt),
+      })),
+    );
+    const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch, {
+      sleep: () => Promise.resolve(),
+    });
 
     await client.getUser().catch((error: unknown) => {
       expect(error).toBeInstanceOf(WaniKaniApiError);
@@ -80,15 +84,21 @@ describe('WaniKaniClient rate limits', () => {
       expect(retryAfterMs).toBeGreaterThanOrEqual(0);
       expect(retryAfterMs).toBeLessThanOrEqual(31_000);
     });
+    // Retries until the bounded ceiling, then rethrows.
+    expect(fetcher.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('uses HTTP-date Retry-After retry delay for 429 responses', async () => {
     const retryAt = new Date(Date.now() + 20_000).toUTCString();
-    const fetcher = jest.fn().mockResolvedValueOnce(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
-      Date: new Date().toUTCString(),
-      'Retry-After': retryAt,
-    }));
-    const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+    const fetcher = jest.fn().mockImplementation(() =>
+      Promise.resolve(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
+        Date: new Date().toUTCString(),
+        'Retry-After': retryAt,
+      })),
+    );
+    const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch, {
+      sleep: () => Promise.resolve(),
+    });
 
     await client.getUser().catch((error: unknown) => {
       expect(error).toBeInstanceOf(WaniKaniApiError);
@@ -146,12 +156,16 @@ describe('WaniKaniClient rate limits', () => {
     const localNowMs = serverNowMs + 60_000;
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(localNowMs);
     try {
-      const fetcher = jest.fn().mockResolvedValueOnce(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
-        Date: new Date(serverNowMs).toUTCString(),
-        'RateLimit-Remaining': '0',
-        'RateLimit-Reset': String(Math.ceil((serverNowMs + 30_000) / 1000)),
-      }));
-      const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch);
+      const fetcher = jest.fn().mockImplementation(() =>
+        Promise.resolve(jsonResponseWithHeaders(429, { error: 'Too Many Requests' }, {
+          Date: new Date(serverNowMs).toUTCString(),
+          'RateLimit-Remaining': '0',
+          'RateLimit-Reset': String(Math.ceil((serverNowMs + 30_000) / 1000)),
+        })),
+      );
+      const client = new WaniKaniClient('token', fetcher as unknown as typeof fetch, {
+        sleep: () => Promise.resolve(),
+      });
 
       await client.getUser().catch((error: unknown) => {
         expect(error).toBeInstanceOf(WaniKaniApiError);

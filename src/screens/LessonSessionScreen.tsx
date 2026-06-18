@@ -2,7 +2,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { AnswerCheckResult, checkAnswer, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
+import { AnswerCheckResult, checkAnswer, classifyAnswerResult, TaskType, SubjectAnswerData } from '../domain/answers/answerChecker';
 import { convertRomajiToKanaInput } from '../domain/answers/kanaInput';
 import { correctAnswerText, feedbackTitle } from '../domain/answers/feedbackMessages';
 import { openAppDatabase } from '../domain/db/database';
@@ -26,6 +26,7 @@ import { CenteredMessage, ScreenLayout, SessionHeader } from '../components/Scre
 import { ConfirmLeaveBanner } from '../components/ConfirmLeaveBanner';
 import { LessonActionPill } from '../components/LessonActionPill';
 import { useConfirmLeave } from '../hooks/useConfirmLeave';
+import { useGuidanceMessage } from '../hooks/useGuidanceMessage';
 import { SubjectHeroCard } from '../components/SubjectHeroCard';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/AppThemeProvider';
@@ -58,6 +59,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
   const [answer, setAnswer] = useState('');
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const { guidanceMessage, showGuidance, clearGuidance } = useGuidanceMessage();
   const [isContinuing, setIsContinuing] = useState(false);
 
   const sessionRef = useRef<ReviewSession | null>(null);
@@ -184,8 +186,18 @@ export function LessonSessionScreen({ navigation, route }: Props) {
       lookupSubject: (subjectId) => subjectLookup.get(subjectId),
       exactMatch: false,
     });
-    const correct = result.kind === 'precise' || result.kind === 'imprecise';
+    const outcome = classifyAnswerResult(result);
 
+    // Guidance results (wrong reading type, invalid characters, okurigana
+    // mismatch, reading typed for a meaning prompt) are not scored: show the
+    // hint and let the user answer again without recording a mistake.
+    if (outcome === 'retry') {
+      showGuidance(feedbackTitle(result));
+      return;
+    }
+
+    const correct = outcome === 'correct';
+    clearGuidance();
     const markResult = session.markAnswer(correct);
     setFeedback({
       correct,
@@ -218,6 +230,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
       setFeedback(null);
       setAnswer('');
+      clearGuidance();
       session.nextTask();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -227,6 +240,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
   };
 
   const changeAnswer = (text: string) => {
+    clearGuidance();
     setAnswer(taskType === 'reading' ? convertRomajiToKanaInput(text) : text);
   };
 
@@ -240,6 +254,7 @@ export function LessonSessionScreen({ navigation, route }: Props) {
     sessionRef.current = null;
     setAnswer('');
     setFeedback(null);
+    clearGuidance();
     setIntroIndex(0);
     setBatchIndex((value) => value + 1);
     setPhase('intro');
@@ -396,6 +411,10 @@ export function LessonSessionScreen({ navigation, route }: Props) {
 
       {error ? (
         <Text className="text-danger dark:text-danger-dark font-heavy">{error}</Text>
+      ) : null}
+
+      {guidanceMessage && !feedback ? (
+        <Text className="text-warning dark:text-warning-dark font-heavy">{guidanceMessage}</Text>
       ) : null}
 
     </ScreenLayout>
