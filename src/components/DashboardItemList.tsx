@@ -18,17 +18,17 @@ export function RecentItemList({
   }
 
   return (
-    <View style={styles.list}>
+    <View style={styles.grid}>
       {items.map((item) => (
         <Pressable
           key={item.subjectId}
           onPress={() => onPressItem?.(item.subjectId)}
           disabled={!onPressItem}
-          style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
         >
           <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} importantForAccessibility="no" />
-          <Text style={[styles.itemJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
-          <Text style={[styles.itemMeta, { color: colors.mutedText }]}>L{item.level}</Text>
+          <Text style={[styles.chipJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
+          <Text style={[styles.chipMeta, { color: colors.mutedText }]}>L{item.level}</Text>
         </Pressable>
       ))}
     </View>
@@ -49,18 +49,18 @@ export function LeechItemList({
   }
 
   return (
-    <View style={styles.list}>
+    <View style={styles.grid}>
       {items.map((item) => (
         <Pressable
           key={item.subjectId}
           onPress={() => onPressItem?.(item.subjectId)}
           disabled={!onPressItem}
-          style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
           accessibilityLabel={`${item.japanese || '?  '}, Level ${item.level}, ${item.score}% incorrect`}
         >
           <View style={[styles.typeDot, { backgroundColor: colorForSubjectType(colors, item.subjectType) }]} importantForAccessibility="no" />
-          <Text style={[styles.itemJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
-          <Text style={[styles.itemMeta, { color: colors.mutedText }]}>{item.score}%</Text>
+          <Text style={[styles.chipJapanese, { color: colors.text }]}>{item.japanese || '?'}</Text>
+          <Text style={[styles.chipMeta, { color: colors.mutedText }]}>{item.score}%</Text>
         </Pressable>
       ))}
     </View>
@@ -68,33 +68,36 @@ export function LeechItemList({
 }
 
 const styles = StyleSheet.create({
-  list: {
-    gap: 6,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   empty: {
     fontSize: 13,
     fontWeight: '700',
     paddingTop: 4,
   },
-  itemRow: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.08)',
+    gap: 7,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.18)',
   },
   typeDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 999,
   },
-  itemJapanese: {
-    flex: 1,
+  chipJapanese: {
     fontSize: 15,
     fontWeight: '800',
   },
-  itemMeta: {
+  chipMeta: {
     fontSize: 12,
     fontWeight: '700',
   },

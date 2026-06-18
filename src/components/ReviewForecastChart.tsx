@@ -2,6 +2,13 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { ReviewForecastHour } from '../domain/dashboard/dashboardRepository';
 
+function formatHour(date: Date): string {
+  const h = date.getHours();
+  const period = h < 12 ? 'AM' : 'PM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display} ${period}`;
+}
+
 export function ReviewForecastChart({
   hours,
   barColor,
@@ -15,101 +22,101 @@ export function ReviewForecastChart({
   mutedColor: string;
   trackColor: string;
 }) {
-  const visible = hours.slice(0, 25);
-  const currentHour = new Date().getHours();
+  const visible = hours.slice(0, 25).filter((h) => h.count > 0);
   const maxCount = Math.max(1, ...visible.map((h) => h.count));
-  const now = new Date();
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = String(now.getHours()).padStart(2, '0');
-  const nowIso = `${year}-${month}-${day}T${hour}:00:00`;
   const totalUpcoming = visible.reduce((sum, h) => sum + h.count, 0);
+
+  let cumulative = 0;
+  const rows = visible.map((entry) => {
+    cumulative += entry.count;
+    return {
+      hour: entry.hour,
+      label: formatHour(new Date(entry.hour)),
+      count: entry.count,
+      cumulative,
+      width: `${Math.round((entry.count / maxCount) * 100)}%` as `${number}%`,
+    };
+  });
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.summary, { color: mutedColor }]}>
-          {totalUpcoming} reviews in the next 24h
-        </Text>
-      </View>
-      <View style={styles.chart}>
-        {visible.map((hour, i) => {
-          const hourDate = new Date(hour.hour);
-          const h = hourDate.getHours();
-          const isNow = hour.hour === nowIso;
-          const barHeight = `${Math.round((hour.count / maxCount) * 100)}%` as `${number}%`;
-          const showLabel = i === 0 || h === 0 || i === visible.length - 1 || (h - currentHour) % 6 === 0;
-
-          return (
-            <View key={hour.hour} style={styles.barColumn}>
-              <Text style={[styles.barCount, { color: hour.count > 0 ? textColor : 'transparent' }]}>
-                {hour.count > 0 ? hour.count : ''}
+      <Text style={[styles.summary, { color: textColor }]}>
+        +{totalUpcoming} <Text style={{ color: mutedColor }}>in the next 24h</Text>
+      </Text>
+      {rows.length === 0 ? (
+        <Text style={[styles.empty, { color: mutedColor }]}>No reviews coming up.</Text>
+      ) : (
+        <View style={styles.rows}>
+          {rows.map((row) => (
+            <View key={row.hour} style={styles.row}>
+              <Text style={[styles.time, { color: mutedColor }]} numberOfLines={1}>
+                {row.label}
               </Text>
-              <View style={[styles.barTrack, { backgroundColor: trackColor }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    {
-                      backgroundColor: isNow ? barColor : barColor + '88',
-                      height: barHeight,
-                    },
-                  ]}
-                />
+              <View style={[styles.track, { backgroundColor: trackColor }]}>
+                <View style={[styles.fill, { width: row.width, backgroundColor: barColor }]} />
               </View>
-              <Text style={[styles.barLabel, { color: showLabel ? mutedColor : 'transparent' }]}>
-                {h === 0 ? '24' : String(h)}
+              <Text style={[styles.increment, { color: barColor }]} numberOfLines={1}>
+                +{row.count}
+              </Text>
+              <Text style={[styles.total, { color: mutedColor }]} numberOfLines={1}>
+                {row.cumulative}
               </Text>
             </View>
-          );
-        })}
-      </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 12,
   },
   summary: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  empty: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  rows: {
+    gap: 9,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  time: {
+    width: 48,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  track: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: '100%',
+    borderRadius: 6,
+    minWidth: 4,
+  },
+  increment: {
+    width: 44,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  total: {
+    width: 34,
+    textAlign: 'right',
     fontSize: 12,
     fontWeight: '700',
   },
-  chart: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 72,
-    gap: 2,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  barCount: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  barTrack: {
-    width: '100%',
-    flex: 1,
-    borderRadius: 3,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 3,
-    minHeight: 2,
-  },
-  barLabel: {
-    fontSize: 8,
-    fontWeight: '700',
-  },
 });
+

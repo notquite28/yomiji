@@ -106,8 +106,8 @@ export function DashboardScreen({ apiToken, navigation, onAuthError }: Props) {
           getReviewForecast(db, 24),
           getCurrentLevelProgress(db),
           getRecentMistakes(db, 5),
-          getLeechedItems(db, { apprenticeOnly: true, limit: 5 }),
-          getLeechedItems(db, { limit: 5 }),
+          getLeechedItems(db, { apprenticeOnly: true, limit: 12 }),
+          getLeechedItems(db, { limit: 12 }),
           getBurnedItemCount(db),
           getExcludedItemCount(db),
         ]);
