@@ -61,6 +61,8 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI_RELEASE_BUILD: "true"
+          # Build only real-device ABIs; skip emulator-only x86/x86_64 to cut native compile time.
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: "arm64-v8a,armeabi-v7a"
           KEYSTORE_FILE: ${{ github.workspace }}/android/app/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.YOMIJI_KEYSTORE_PASSWORD }}
           KEY_ALIAS: yomiji
